@@ -153,17 +153,29 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
   const handle = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
   const [scrapeResult, setScrapeResult] = useState<any>(null)
   const [estimateLoading, setEstimateLoading] = useState(false)
+  const [estimateError, setEstimateError] = useState('')
 
   useEffect(() => {
     const supported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
-    if (!supported || !form.url) { setScrapeResult(null); setEstimateLoading(false); return }
+    if (!supported || !form.url) { setScrapeResult(null); setEstimateLoading(false); setEstimateError(''); return }
     setEstimateLoading(true)
+    setEstimateError('')
     const timer = setTimeout(async () => {
       try {
         const res = await fetch('/api/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: form.url }) })
         const data = await res.json()
-        setScrapeResult(data.found && data.billable_weight_kg ? data : null)
-      } catch { setScrapeResult(null) }
+        console.log('[ShipIQ estimate] /api/scrape response:', data)
+        if (data.found && data.billable_weight_kg) {
+          setScrapeResult(data)
+        } else {
+          setScrapeResult(null)
+          setEstimateError(data.reason || data.error || 'Could not calculate estimate for this product.')
+        }
+      } catch (e: any) {
+        setScrapeResult(null)
+        setEstimateError(e?.message || 'Failed to reach the scrape API.')
+        console.error('[ShipIQ estimate] fetch error:', e)
+      }
       setEstimateLoading(false)
     }, 800)
     return () => clearTimeout(timer)
@@ -214,6 +226,11 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
         {estimateLoading && isUrlSupported && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 13px', background: 'rgba(201,168,76,0.04)', border: '1px solid rgba(201,168,76,0.15)', borderRadius: 8, fontSize: 12, color: 'var(--text-dim)', marginTop: -12, marginBottom: 16 }}>
             <span className={styles.spinner} style={{ width: 14, height: 14, borderColor: 'rgba(201,168,76,0.25)', borderTopColor: 'var(--gold)' }} /> Calculating shipping estimate...
+          </div>
+        )}
+        {estimateError && !estimateLoading && isUrlSupported && (
+          <div style={{ padding: '9px 13px', background: 'rgba(224,123,58,0.08)', border: '1px solid rgba(224,123,58,0.25)', borderRadius: 8, fontSize: 12, color: 'var(--orange)', marginTop: -12, marginBottom: 16 }}>
+            ⚠️ {estimateError}
           </div>
         )}
         {shippingEstimate && !estimateLoading && (
