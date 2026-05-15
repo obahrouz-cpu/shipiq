@@ -93,12 +93,17 @@ const response = await fetch(apiUrl, {
       }
 
       const data = await response.json()
+      console.log('[scrape] OpenWebNinja raw response:', JSON.stringify(data, null, 2))
+
       const info = data?.data?.product_information || {}
       const details = data?.data?.product_details || {}
+      console.log('[scrape] product_information keys:', Object.keys(info))
+      console.log('[scrape] product_details keys:', Object.keys(details))
 
       const rawWeight = info['Item Weight'] || info['Weight'] || details['Item Weight'] || details['Weight'] || null
       const rawDimensions = info['Product Dimensions'] || info['Package Dimensions'] || details['Product Dimensions'] || null
       const productName = data?.data?.product_title || 'Unknown Product'
+      console.log('[scrape] rawWeight:', rawWeight, '| rawDimensions:', rawDimensions, '| product:', productName)
 
       if (!rawWeight && !rawDimensions) {
         return NextResponse.json({ found: false, reason: 'Weight and dimensions not listed for this product. Enter manually.' })
