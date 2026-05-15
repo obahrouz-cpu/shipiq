@@ -164,7 +164,6 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
       try {
         const res = await fetch('/api/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: form.url }) })
         const data = await res.json()
-        console.log('[ShipIQ estimate] /api/scrape response:', data)
         if (data.found && data.billable_weight_kg) {
           setScrapeResult(data)
         } else {
@@ -174,7 +173,6 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
       } catch (e: any) {
         setScrapeResult(null)
         setEstimateError(e?.message || 'Failed to reach the scrape API.')
-        console.error('[ShipIQ estimate] fetch error:', e)
       }
       setEstimateLoading(false)
     }, 800)
@@ -183,6 +181,7 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
 
   const submit = async () => {
     if (!form.url || !form.description) { setError('URL and description are required'); return }
+    if (!form.url.startsWith('http')) { setError('URL must start with http:// or https://'); return }
     setLoading(true); setError('')
     const supabase = createClient()
     let photoUrl = null
@@ -250,6 +249,7 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
         <div className={styles.formGroup}>
           <label className={styles.label}>Description · الوصف *</label>
           <input className={styles.input} placeholder="e.g. Nike Air Max 270 - Size 42 - Black" value={form.description} onChange={e => handle('description', e.target.value)} />
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 5 }}>Include size, color, model number, and any variant details</div>
         </div>
         <div className={styles.grid2}>
           <div className={styles.formGroup}>
@@ -510,6 +510,7 @@ export default function Dashboard() {
   const [topUpUser, setTopUpUser] = useState<any>(null)
   const [orderFilter, setOrderFilter] = useState('all')
   const [toasts, setToasts] = useState<any[]>([])
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const toast = (message: string, type = 'success') => {
     const id = Date.now()
@@ -546,8 +547,10 @@ export default function Dashboard() {
   }
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div className={styles.spinner} style={{ width: 32, height: 32, borderWidth: 3 }} />
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16 }}>
+      <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--gold)', letterSpacing: -0.5 }}>ShipIQ</div>
+      <div style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'Tajawal, sans-serif', marginTop: -8 }}>خدمة الشحن الذكي</div>
+      <div className={styles.spinner} style={{ width: 28, height: 28, borderWidth: 2, marginTop: 8 }} />
     </div>
   )
 
@@ -579,7 +582,8 @@ export default function Dashboard() {
 
   return (
     <div className={styles.layout}>
-      <div className={styles.sidebar}>
+      {sidebarOpen && <div className={styles.sidebarOverlay} onClick={() => setSidebarOpen(false)} />}
+      <div className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
         <div className={styles.sidebarLogo}>
           <div className={styles.logoMark}>ShipIQ</div>
           <div className={`${styles.logoSub} ar`}>خدمة الشحن الذكي</div>
@@ -587,7 +591,7 @@ export default function Dashboard() {
         <div className={styles.sidebarNav}>
           <div className={styles.navSection}>{isAdmin ? 'Admin Panel' : 'Menu'}</div>
           {navItems.map(n => (
-            <div key={n.id} className={`${styles.navItem} ${page === n.id ? styles.navActive : ''}`} onClick={() => setPage(n.id)}>
+            <div key={n.id} className={`${styles.navItem} ${page === n.id ? styles.navActive : ''}`} onClick={() => { setPage(n.id); setSidebarOpen(false) }}>
               <span>{n.icon}</span>
               <span style={{ flex: 1 }}>{n.label}</span>
               {!!n.badge && (n.badge as number) > 0 && <span className={styles.navBadge}>{n.badge}</span>}
@@ -607,7 +611,10 @@ export default function Dashboard() {
 
       <div className={styles.main}>
         <div className={styles.topbar}>
-          <div className={styles.pageTitle}>{pageTitle[page]}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button className={styles.hamburger} onClick={() => setSidebarOpen(true)}>☰</button>
+            <div className={styles.pageTitle}>{pageTitle[page]}</div>
+          </div>
           <div className={styles.topbarActions}>
             {!isAdmin && (
               <div className={styles.balanceChip}>
@@ -655,9 +662,10 @@ export default function Dashboard() {
                 </div>
                 {orders.length === 0 ? (
                   <div className={styles.empty}>
-                    <div className={styles.emptyIcon}>📭</div>
-                    <div className={styles.emptyTitle}>No orders yet</div>
-                    <button className={styles.btnPrimary} style={{ marginTop: 16 }} onClick={() => { setPage('orders'); setShowNewOrder(true) }}>Submit First Order</button>
+                    <div className={styles.emptyIcon}>🚀</div>
+                    <div className={styles.emptyTitle}>Start your shipping journey</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>Submit your first order and we'll handle the rest</div>
+                    <button className={styles.btnPrimary} style={{ marginTop: 16 }} onClick={() => { setPage('orders'); setShowNewOrder(true) }}>+ New Order · طلب جديد</button>
                   </div>
                 ) : (
                   <table className={styles.table}>
@@ -691,18 +699,24 @@ export default function Dashboard() {
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 16 }}>
                     {region.flag} {region.country}
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
                     {region.stores.map(store => (
-                      <a key={store.name} href={store.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-                        <div
-                          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, cursor: 'pointer', transition: 'all 0.15s', textAlign: 'center' }}
-                          onMouseEnter={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = store.color; el.style.background = store.bg; el.style.transform = 'translateY(-2px)' }}
-                          onMouseLeave={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = 'var(--border)'; el.style.background = 'var(--surface)'; el.style.transform = 'translateY(0)' }}
-                        >
-                          <div style={{ fontSize: 32 }}>{store.logo}</div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{store.name}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>Open Store →</div>
+                      <a
+                        key={store.name}
+                        href={store.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.storeCard}
+                        style={{ borderColor: 'var(--border)' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = store.color; (e.currentTarget as HTMLAnchorElement).style.background = store.bg }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLAnchorElement).style.background = 'var(--surface)' }}
+                      >
+                        <div className={styles.storeCardBrand} style={{ background: store.color }}>
+                          {store.name.slice(0, 2).toUpperCase()}
                         </div>
+                        <div className={styles.storeCardName}>{store.name}</div>
+                        <div className={styles.storeCardUrl}>{new URL(store.url).hostname.replace('www.', '')}</div>
+                        <div className={styles.storeCardCta}>Shop Now →</div>
                       </a>
                     ))}
                   </div>
@@ -742,7 +756,13 @@ export default function Dashboard() {
               </div>
               <div className={styles.card} style={{ padding: 0, overflow: 'hidden' }}>
                 {filteredOrders.length === 0 ? (
-                  <div className={styles.empty}><div className={styles.emptyIcon}>✅</div><div className={styles.emptyTitle}>No orders here</div></div>
+                  <div className={styles.empty}>
+                    <div className={styles.emptyIcon}>📬</div>
+                    <div className={styles.emptyTitle}>No orders match this filter</div>
+                    {page === 'orders' && orderFilter === 'all' && (
+                      <button className={styles.btnPrimary} style={{ marginTop: 16 }} onClick={() => setShowNewOrder(true)}>+ Submit your first order</button>
+                    )}
+                  </div>
                 ) : (
                   <div style={{ overflowX: 'auto' }}>
                     <table className={styles.table}>
@@ -755,7 +775,16 @@ export default function Dashboard() {
                         {filteredOrders.map(o => (
                           <tr key={o.id} onClick={() => setSelectedOrder(o)} style={{ cursor: 'pointer' }}>
                             <td className={styles.tdMain}>{o.id}</td>
-                            {isAdmin && <td>{o.profiles?.full_name || '—'}</td>}
+                            {isAdmin && (
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <div className={styles.userAvatar} style={{ width: 26, height: 26, fontSize: 11, flexShrink: 0 }}>
+                                    {(o.profiles?.full_name?.[0] || '?').toUpperCase()}
+                                  </div>
+                                  <span>{o.profiles?.full_name || '—'}</span>
+                                </div>
+                              </td>
+                            )}
                             <td>
                               <div style={{ fontWeight: 500, color: 'var(--text)', fontSize: 13 }}>{o.description}</div>
                               <a className={styles.tdLink} href={o.url} target="_blank" onClick={e => e.stopPropagation()}>{o.url}</a>
@@ -767,7 +796,12 @@ export default function Dashboard() {
                               {o.shipping_price ? `${o.shipping_price.toLocaleString()} ${o.shipping_currency}` : '—'}
                             </td>
                             <td>{o.created_at?.split('T')[0]}</td>
-                            <td><Badge status={o.status} /></td>
+                            <td>
+                              <Badge status={o.status} />
+                              {o.status === 'pending' && (
+                                <button className={styles.processBadge} onClick={e => { e.stopPropagation(); setSelectedOrder(o) }}>→ Process</button>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -790,15 +824,34 @@ export default function Dashboard() {
                   <span className={styles.priceCurrency}>IQD</span>
                   <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-dim)' }}>≈ ${Math.round((profile?.balance || 0) / 1450)} USD</div>
                 </div>
-                <div className={styles.card} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 12 }}>
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>To add balance, contact the admin. Your balance will be updated within 24 hours.</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-dim)', padding: '10px 14px', background: 'var(--surface2)', borderRadius: 8 }}>📞 Contact admin to top up your balance</div>
+                <div className={styles.card} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 40, height: 40, background: 'rgba(37,211,102,0.12)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>💬</div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Top Up Your Balance · شحن الرصيد</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Contact us on WhatsApp — we'll top you up within a few hours</div>
+                    </div>
+                  </div>
+                  <a className={styles.btnWhatsApp} href="https://wa.me/964XXXXXXXXXX" target="_blank" rel="noopener noreferrer">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                      <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2.1 21.9l4.837-1.316A9.956 9.956 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.956 7.956 0 0 1-4.099-1.132l-.293-.174-3.044.828.852-3.004-.192-.31A7.953 7.953 0 0 1 4 12c0-4.418 3.582-8 8-8s8 3.582 8 8-3.582 8-8 8z"/>
+                    </svg>
+                    Chat on WhatsApp
+                  </a>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center' }}>
+                    +964 XXX XXX XXXX · Available Sat–Thu, 9am–9pm
+                  </div>
                 </div>
               </div>
               <div className={styles.card}>
                 <div className={styles.cardHeader}><span style={{ fontSize: 15, fontWeight: 700 }}>Transaction History · سجل المعاملات</span></div>
                 {transactions.length === 0 ? (
-                  <div className={styles.empty}><div className={styles.emptyIcon}>📋</div><div className={styles.emptyTitle}>No transactions yet</div></div>
+                  <div className={styles.empty}>
+                    <div className={styles.emptyIcon}>💸</div>
+                    <div className={styles.emptyTitle}>No transactions yet · لا توجد معاملات</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, maxWidth: 280 }}>Transactions appear here after your balance is topped up or an order is confirmed</div>
+                  </div>
                 ) : (
                   <table className={styles.table}>
                     <thead><tr><th>ID</th><th>Description</th><th>Date</th><th>Amount</th></tr></thead>

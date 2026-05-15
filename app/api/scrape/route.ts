@@ -21,6 +21,17 @@ const SITE_INFO: Record<string, { country: string; flag: string }> = {
   'jd.com':           { country: 'China',   flag: '🇨🇳' },
 }
 
+const WEIGHT_KEYS = [
+  'Item Weight', 'Weight', 'Package Weight', 'Shipping Weight',
+  'Item Weight ‏ ‎', 'Gross Weight',
+]
+
+const DIM_KEYS = [
+  'Product Dimensions', 'Package Dimensions',
+  'Item Dimensions LxWxH', 'Item Dimensions  LxWxH', 'Item Dimensions',
+  'Package Dimensions LxWxH', 'Dimensions',
+]
+
 function detectSite(url: string) {
   for (const [site, info] of Object.entries(SITE_INFO)) {
     if (url.toLowerCase().includes(site)) return { site, ...info }
@@ -29,8 +40,17 @@ function detectSite(url: string) {
 }
 
 function extractAsin(url: string): string | null {
-  const match = url.match(/\/dp\/([A-Z0-9]{10})|\/gp\/product\/([A-Z0-9]{10})|asin=([A-Z0-9]{10})/)
+  const match = url.match(/\/dp\/([A-Z0-9]{10})|\/gp\/product\/([A-Z0-9]{10})|asin=([A-Z0-9]{10})/i)
   return match ? (match[1] || match[2] || match[3]) : null
+}
+
+function findField(sources: Record<string, any>[], keys: string[]): string | null {
+  for (const key of keys) {
+    for (const source of sources) {
+      if (source[key]) return String(source[key])
+    }
+  }
+  return null
 }
 
 function parseWeightToKg(weightStr: string): number | null {
@@ -53,7 +73,6 @@ function parseDimensionsToCm(dimStr: string): { l: number; w: number; h: number 
   let w = parseFloat(match[2])
   let h = parseFloat(match[3])
   const unit = (match[4] || '').toLowerCase()
-  // Convert inches to cm if needed
   if (!unit || unit.includes('in') || unit === '"') {
     l = Math.round(l * 2.54 * 10) / 10
     w = Math.round(w * 2.54 * 10) / 10
@@ -70,43 +89,45 @@ export async function POST(req: NextRequest) {
     const siteInfo = detectSite(url)
     if (!siteInfo) return NextResponse.json({ found: false, reason: 'Unsupported site' }, { status: 400 })
 
-    // Amazon — use OpenWeb Ninja API
     if (siteInfo.site.includes('amazon')) {
       const asin = extractAsin(url)
-      if (!asin) return NextResponse.json({ found: false, reason: 'Could not extract ASIN from URL' })
+      if (!asin) return NextResponse.json({ found: false, reason: 'Could not extract product ID from URL. Make sure it is a direct product link.' })
 
-      // Detect Amazon country
       let country = 'US'
       if (url.includes('amazon.co.uk')) country = 'GB'
       else if (url.includes('amazon.de')) country = 'DE'
       else if (url.includes('amazon.ae')) country = 'AE'
       else if (url.includes('amazon.ca')) country = 'CA'
 
-const apiUrl = `https://api.openwebninja.com/realtime-amazon-data/product-details?asin=${asin}&country=${country}`
-const response = await fetch(apiUrl, {
-  headers: {
-    'x-api-key': OPENWEBNINJA_KEY,
-  }
-})
+      const apiUrl = `https://api.openwebninja.com/realtime-amazon-data/product-details?asin=${asin}&country=${country}`
+      const response = await fetch(apiUrl, { headers: { 'x-api-key': OPENWEBNINJA_KEY } })
+
       if (!response.ok) {
-        return NextResponse.json({ found: false, reason: 'Could not fetch product data from Amazon' })
+        return NextResponse.json({ found: false, reason: `Could not fetch product data (API ${response.status}). Try again or enter manually.` })
       }
 
       const data = await response.json()
-      console.log('[scrape] OpenWebNinja raw response:', JSON.stringify(data, null, 2))
 
-      const info = data?.data?.product_information || {}
-      const details = data?.data?.product_details || {}
-      console.log('[scrape] product_information keys:', Object.keys(info))
-      console.log('[scrape] product_details keys:', Object.keys(details))
+      if (!data?.data) {
+        return NextResponse.json({ found: false, reason: 'Product data unavailable for this listing. Enter weight manually.' })
+      }
 
-      const rawWeight = info['Item Weight'] || info['Weight'] || details['Item Weight'] || details['Weight'] || null
-      const rawDimensions = info['Product Dimensions'] || info['Package Dimensions'] || details['Product Dimensions'] || null
-      const productName = data?.data?.product_title || 'Unknown Product'
-      console.log('[scrape] rawWeight:', rawWeight, '| rawDimensions:', rawDimensions, '| product:', productName)
+      const sources = [
+        data.data.product_information || {},
+        data.data.product_details || {},
+        data.data.product_specifications || {},
+      ]
+
+      const rawWeight = findField(sources, WEIGHT_KEYS)
+      const rawDimensions = findField(sources, DIM_KEYS)
+      const productName = data.data.product_title || data.data.title || 'Unknown Product'
 
       if (!rawWeight && !rawDimensions) {
-        return NextResponse.json({ found: false, reason: 'Weight and dimensions not listed for this product. Enter manually.' })
+        return NextResponse.json({
+          found: false,
+          reason: 'Weight and dimensions not listed for this product. Please enter manually.',
+          product_name: productName,
+        })
       }
 
       const actualWeightKg = rawWeight ? parseWeightToKg(rawWeight) : null
@@ -131,8 +152,7 @@ const response = await fetch(apiUrl, {
       })
     }
 
-    // Other sites — manual for now
-    return NextResponse.json({ found: false, reason: 'Auto calculate for this site coming soon. Enter manually.' })
+    return NextResponse.json({ found: false, reason: 'Auto-calculate for this site is coming soon. Please enter details manually.' })
 
   } catch (e: any) {
     return NextResponse.json({ found: false, reason: e.message }, { status: 500 })
