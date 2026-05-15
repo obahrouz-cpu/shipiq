@@ -21,6 +21,16 @@ const SUPPORTED_SITES = [
   'aliexpress.com', 'taobao.com', '1688.com', 'jd.com'
 ]
 
+const SHIPPING_RATE_RANGES: Record<string, { min: number; max: number }> = {
+  'USA':     { min: 12000, max: 19000 },
+  'UK':      { min: 11000, max: 17000 },
+  'Germany': { min: 11000, max: 17000 },
+  'Canada':  { min: 10000, max: 16000 },
+  'UAE':     { min:  6000, max: 10000 },
+  'Turkey':  { min:  5000, max:  8000 },
+  'China':   { min:  8000, max: 14000 },
+}
+
 const SHOP_REGIONS = [
   {
     flag: '🇺🇸', country: 'United States', stores: [
@@ -141,6 +151,23 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const handle = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
+  const [scrapeResult, setScrapeResult] = useState<any>(null)
+  const [estimateLoading, setEstimateLoading] = useState(false)
+
+  useEffect(() => {
+    const supported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
+    if (!supported || !form.url) { setScrapeResult(null); setEstimateLoading(false); return }
+    setEstimateLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: form.url }) })
+        const data = await res.json()
+        setScrapeResult(data.found && data.billable_weight_kg ? data : null)
+      } catch { setScrapeResult(null) }
+      setEstimateLoading(false)
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [form.url])
 
   const submit = async () => {
     if (!form.url || !form.description) { setError('URL and description are required'); return }
@@ -167,6 +194,11 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
     onDone(); onClose()
   }
 
+  const isUrlSupported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
+  const rates = SHIPPING_RATE_RANGES[scrapeResult?.site?.country ?? ''] ?? { min: 10000, max: 18000 }
+  const totalKg = scrapeResult?.billable_weight_kg ? scrapeResult.billable_weight_kg * form.qty : 0
+  const shippingEstimate = totalKg > 0 ? { min: Math.round(rates.min * totalKg), max: Math.round(rates.max * totalKg), kg: totalKg } : null
+
   return (
     <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
       <div className={styles.modal}>
@@ -179,6 +211,25 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
           <label className={styles.label}>Product URL · رابط المنتج *</label>
           <input className={styles.input} placeholder="https://amazon.com/dp/..." value={form.url} onChange={e => handle('url', e.target.value)} />
         </div>
+        {estimateLoading && isUrlSupported && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 13px', background: 'rgba(201,168,76,0.04)', border: '1px solid rgba(201,168,76,0.15)', borderRadius: 8, fontSize: 12, color: 'var(--text-dim)', marginTop: -12, marginBottom: 16 }}>
+            <span className={styles.spinner} style={{ width: 14, height: 14, borderColor: 'rgba(201,168,76,0.25)', borderTopColor: 'var(--gold)' }} /> Calculating shipping estimate...
+          </div>
+        )}
+        {shippingEstimate && !estimateLoading && (
+          <div style={{ padding: '14px 16px', background: 'rgba(201,168,76,0.06)', border: '1px dashed rgba(201,168,76,0.35)', borderRadius: 10, marginTop: -12, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>≈ Shipping Estimate · تقدير الشحن</span>
+              <span style={{ fontSize: 10, color: 'var(--gold-dim)', background: 'rgba(201,168,76,0.12)', padding: '2px 8px', borderRadius: 20, border: '1px solid rgba(201,168,76,0.2)', fontWeight: 600, letterSpacing: '0.5px' }}>APPROXIMATE</span>
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', marginBottom: 6 }}>
+              {shippingEstimate.min.toLocaleString()} – {shippingEstimate.max.toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--gold-dim)' }}>IQD</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+              {shippingEstimate.kg} kg billable weight{form.qty > 1 ? ` × ${form.qty} items` : ''} · Final price confirmed by ShipIQ
+            </div>
+          </div>
+        )}
         <div className={styles.formGroup}>
           <label className={styles.label}>Description · الوصف *</label>
           <input className={styles.input} placeholder="e.g. Nike Air Max 270 - Size 42 - Black" value={form.description} onChange={e => handle('description', e.target.value)} />
