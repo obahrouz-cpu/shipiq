@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import styles from './dashboard.module.css'
+import ShopSection from './components/ShopSection'
 
 const CATEGORIES = ['Electronics','Clothing','Cosmetics','Books','Home & Kitchen','Toys','Sports','Other']
 
@@ -31,29 +32,6 @@ const SHIPPING_RATE_RANGES: Record<string, { min: number; max: number }> = {
   'China':   { min:  8000, max: 14000 },
 }
 
-const SHOP_REGIONS = [
-  {
-    flag: '🇺🇸', country: 'United States', stores: [
-      { name: 'Amazon', url: 'https://www.amazon.com', logo: '🛒', color: '#FF9900', bg: 'rgba(255,153,0,0.1)' },
-      { name: 'eBay', url: 'https://www.ebay.com', logo: '🏪', color: '#86B817', bg: 'rgba(134,184,23,0.1)' },
-      { name: 'B&H Photo', url: 'https://www.bhphotovideo.com', logo: '📷', color: '#5b9bd5', bg: 'rgba(91,155,213,0.1)' },
-      { name: 'Best Buy', url: 'https://www.bestbuy.com', logo: '💻', color: '#0046BE', bg: 'rgba(0,70,190,0.1)' },
-      { name: 'Newegg', url: 'https://www.newegg.com', logo: '🖥️', color: '#FF6600', bg: 'rgba(255,102,0,0.1)' },
-    ]
-  },
-  {
-    flag: '🇹🇷', country: 'Turkey', stores: [
-      { name: 'Trendyol', url: 'https://www.trendyol.com', logo: '👗', color: '#F27A1A', bg: 'rgba(242,122,26,0.1)' },
-      { name: 'Hepsiburada', url: 'https://www.hepsiburada.com', logo: '🛍️', color: '#FF6000', bg: 'rgba(255,96,0,0.1)' },
-    ]
-  },
-  {
-    flag: '🇨🇳', country: 'China', stores: [
-      { name: 'AliExpress', url: 'https://www.aliexpress.com', logo: '📦', color: '#FF4747', bg: 'rgba(255,71,71,0.1)' },
-      { name: 'Shein', url: 'https://www.shein.com', logo: '👔', color: '#C8473C', bg: 'rgba(200,71,60,0.1)' },
-    ]
-  },
-]
 
 function Badge({ status }: { status: string }) {
   const s = STATUS_CONFIG[status] || STATUS_CONFIG.pending
@@ -691,40 +669,10 @@ export default function Dashboard() {
               <div className={styles.pageHeader}>
                 <div>
                   <div className={styles.pageHeading}>Shop · تسوق</div>
-                  <div className={styles.pageSub}>Browse your favourite stores and submit orders</div>
+                  <div className={styles.pageSub}>Browse your favourite stores and get a shipping estimate</div>
                 </div>
               </div>
-              {SHOP_REGIONS.map(region => (
-                <div key={region.country} style={{ marginBottom: 32 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 16 }}>
-                    {region.flag} {region.country}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
-                    {region.stores.map(store => (
-                      <a
-                        key={store.name}
-                        href={store.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={styles.storeCard}
-                        style={{ borderColor: 'var(--border)' }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = store.color; (e.currentTarget as HTMLAnchorElement).style.background = store.bg }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLAnchorElement).style.background = 'var(--surface)' }}
-                      >
-                        <div className={styles.storeCardBrand} style={{ background: store.color }}>
-                          {store.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className={styles.storeCardName}>{store.name}</div>
-                        <div className={styles.storeCardUrl}>{new URL(store.url).hostname.replace('www.', '')}</div>
-                        <div className={styles.storeCardCta}>Shop Now →</div>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <div style={{ padding: '16px 20px', background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 12, fontSize: 13, color: 'var(--text-muted)' }}>
-                💡 Find a product you like? Copy the link and submit a new order — we handle the rest!
-              </div>
+              <ShopSection />
             </div>
           )}
 
