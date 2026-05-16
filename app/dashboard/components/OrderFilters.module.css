@@ -1,0 +1,263 @@
+/* ── Wrapper ─────────────────────────────────────────────────── */
+.wrap {
+  margin-bottom: 16px;
+}
+
+/* ── Top row ─────────────────────────────────────────────────── */
+.topRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+/* ── Filter button ────────────────────────────────────────────── */
+.filterBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  line-height: 1;
+}
+.filterBtn:hover { background: var(--surface2); color: var(--text); border-color: var(--text-dim); }
+
+.filterBtnOpen {
+  background: var(--surface2);
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+.filterBtnActive {
+  border-color: rgba(201,168,76,0.5);
+  color: var(--gold);
+}
+.filterBtnActive:hover {
+  border-color: var(--gold);
+  color: var(--gold-light);
+  background: rgba(201,168,76,0.06);
+}
+
+/* ── Count badge ──────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--gold);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* ── Chevron ──────────────────────────────────────────────────── */
+.chevron {
+  font-size: 17px;
+  line-height: 1;
+  color: var(--text-dim);
+  transition: transform 0.22s ease;
+  display: inline-block;
+  margin-left: 1px;
+}
+.chevronOpen { transform: rotate(90deg); }
+
+/* ── Clear all button ─────────────────────────────────────────── */
+.clearAllBtn {
+  padding: 7px 13px;
+  border-radius: 8px;
+  border: 1px solid rgba(201,168,76,0.25);
+  background: rgba(201,168,76,0.05);
+  color: var(--gold-dim);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.clearAllBtn:hover {
+  background: rgba(201,168,76,0.1);
+  color: var(--gold);
+  border-color: rgba(201,168,76,0.5);
+}
+
+/* ── Collapsible panel ────────────────────────────────────────── */
+.panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.panelOpen { max-height: 1200px; }
+
+.panelInner {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 10px;
+}
+
+/* ── Section ──────────────────────────────────────────────────── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+/* ── Pill group ───────────────────────────────────────────────── */
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.14s;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.pill:hover { background: var(--surface2); color: var(--text); }
+
+.pillActive {
+  background: rgba(201,168,76,0.12);
+  color: var(--gold-light);
+  border-color: rgba(201,168,76,0.35);
+}
+
+/* ── Text search input ────────────────────────────────────────── */
+.input {
+  width: 100%;
+  max-width: 320px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+}
+.input::placeholder { color: var(--text-dim); }
+
+/* ── Date range row ───────────────────────────────────────────── */
+.dateRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dateField {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dateLabel {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dateInput {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  color-scheme: dark;
+}
+.dateInput:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+}
+
+/* ── Active filter chips ──────────────────────────────────────── */
+.chipsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px 4px 11px;
+  border-radius: 20px;
+  background: rgba(201,168,76,0.08);
+  border: 1px solid rgba(201,168,76,0.22);
+  color: var(--gold-light);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chipRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(201,168,76,0.18);
+  color: var(--gold-dim);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.1s;
+  flex-shrink: 0;
+}
+.chipRemove:hover { background: rgba(201,168,76,0.35); color: var(--gold); }
+
+/* ── Mobile ───────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .panelInner { padding: 14px; gap: 14px; }
+  .input { max-width: 100%; }
+  .dateRow { gap: 8px; }
+  .dateInput { font-size: 12px; }
+}

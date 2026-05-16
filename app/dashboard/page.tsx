@@ -10,6 +10,24 @@ import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/li
 import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult } from '@/lib/types'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
+import OrderFilters, { OrderFiltersState, DEFAULT_FILTERS } from './components/OrderFilters'
+
+// ── URL → country-of-origin detection (used by admin filter) ──────────────────
+
+const COUNTRY_DOMAINS: Record<string, string[]> = {
+  'USA':    ['amazon.', 'ebay.', 'walmart.', 'target.', 'bestbuy.', 'newegg.', 'etsy.', 'macys.', 'nordstrom.', 'samsclub.'],
+  'Turkey': ['trendyol.', 'lcwaikiki.', 'hepsiburada.', 'n11.', 'ciceksepeti.'],
+  'China':  ['alibaba.', 'aliexpress.', 'taobao.', '1688.', 'jd.', 'shein.'],
+  'UAE':    ['noon.', 'namshi.', 'ounass.', 'sharafdg.', 'sivvi.'],
+}
+
+function detectOrderCountry(url: string): string {
+  const u = url.toLowerCase()
+  for (const [country, domains] of Object.entries(COUNTRY_DOMAINS)) {
+    if (domains.some(d => u.includes(d))) return country
+  }
+  return ''
+}
 
 // ── Small shared components ───────────────────────────────────────────────────
 
@@ -456,7 +474,7 @@ export default function Dashboard() {
   const [showNewOrder, setShowNewOrder] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [topUpUser, setTopUpUser]       = useState<Profile | null>(null)
-  const [orderFilter, setOrderFilter]   = useState('all')
+  const [filters, setFilters]           = useState<OrderFiltersState>(DEFAULT_FILTERS)
   const [toasts, setToasts]             = useState<Toast[]>([])
   const [sidebarOpen, setSidebarOpen]   = useState(false)
 
@@ -500,7 +518,32 @@ export default function Dashboard() {
   const isAdmin = profile?.role === 'admin'
   const pendingCount = orders.filter(o => o.status === 'pending').length
   const calculatedCount = orders.filter(o => o.status === 'calculated').length
-  const filteredOrders = orderFilter === 'all' ? orders : orders.filter(o => o.status === orderFilter)
+  const filteredOrders = (() => {
+    let result = [...orders]
+    if (filters.status !== 'all') result = result.filter(o => o.status === filters.status)
+    if (filters.category !== 'All') result = result.filter(o => o.category === filters.category)
+    if (filters.dateRange !== 'all') {
+      const days = ({ '7d': 7, '30d': 30, '3m': 90 } as Record<string, number>)[filters.dateRange] ?? 0
+      const cutoff = Date.now() - days * 86400000
+      result = result.filter(o => new Date(o.created_at).getTime() >= cutoff)
+    }
+    if (isAdmin) {
+      if (filters.dateFrom) result = result.filter(o => new Date(o.created_at).getTime() >= new Date(filters.dateFrom).getTime())
+      if (filters.dateTo)   result = result.filter(o => new Date(o.created_at).getTime() <= new Date(filters.dateTo + 'T23:59:59').getTime())
+      if (filters.country !== 'All') result = result.filter(o => detectOrderCountry(o.url) === filters.country)
+      if (filters.customerSearch.trim()) {
+        const q = filters.customerSearch.toLowerCase()
+        result = result.filter(o => o.profiles?.full_name?.toLowerCase().includes(q))
+      }
+      if (filters.urgency === 'urgent') result = result.filter(o => o.urgency)
+      if (filters.urgency === 'normal') result = result.filter(o => !o.urgency)
+    }
+    if (filters.sort === 'oldest')     result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    else if (filters.sort === 'price-high') result.sort((a, b) => (b.shipping_price ?? 0) - (a.shipping_price ?? 0))
+    else if (filters.sort === 'price-low')  result.sort((a, b) => (a.shipping_price ?? 0) - (b.shipping_price ?? 0))
+    else result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    return result
+  })()
 
   const navItems: NavItem[] = isAdmin
     ? [
@@ -660,19 +703,13 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
-              <div className={styles.tabs}>
-                {[['all','All'],['pending','Pending ⏳'],['calculated','Calculated 💰'],['confirmed','Confirmed ✅'],['shipped','Shipped 📦'],['rejected','Rejected ❌']].map(([v, l]) => (
-                  <button key={v} className={`${styles.tab} ${orderFilter === v ? styles.activeTab : ''}`} onClick={() => setOrderFilter(v as string)}>
-                    {l} <span style={{ opacity: 0.5, fontSize: 11 }}>({(v === 'all' ? orders : orders.filter(o => o.status === v)).length})</span>
-                  </button>
-                ))}
-              </div>
+              <OrderFilters isAdmin={isAdmin} value={filters} onChange={setFilters} />
               <div className={styles.card} style={{ padding: 0, overflow: 'hidden' }}>
                 {filteredOrders.length === 0 ? (
                   <div className={styles.empty}>
                     <div className={styles.emptyIcon}>📬</div>
                     <div className={styles.emptyTitle}>No orders match this filter</div>
-                    {page === 'orders' && orderFilter === 'all' && (
+                    {page === 'orders' && orders.length === 0 && (
                       <button className={styles.btnPrimary} style={{ marginTop: 16 }} onClick={() => setShowNewOrder(true)}>+ Submit your first order</button>
                     )}
                   </div>
