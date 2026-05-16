@@ -18,6 +18,7 @@ import AdminExport from './components/AdminExport'
 import TrendyolWeightEstimator from './components/TrendyolWeightEstimator'
 import ExchangeRateTicker from './components/ExchangeRateTicker'
 import WalletTopUp from './components/WalletTopUp'
+import BoutiqaatWeightEstimator from './components/BoutiqaatWeightEstimator'
 
 // ── URL → country-of-origin detection (used by admin filter) ──────────────────
 
@@ -70,7 +71,8 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
 
   const isSupported = SUPPORTED_SITES.some(site => url.toLowerCase().includes(site))
   const detectedSite = SUPPORTED_SITES.find(site => url.toLowerCase().includes(site))
-  const isTrendyol = url.toLowerCase().includes('trendyol.com')
+  const isTrendyol          = url.toLowerCase().includes('trendyol.com')
+  const isBoutiqaatOrNoon   = url.toLowerCase().includes('boutiqaat.com') || url.toLowerCase().includes('noon.com')
 
   const calculate = async () => {
     setLoading(true); setError(''); setResult(null)
@@ -129,6 +131,11 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
               onWeightSelect={kg => onResult(`${kg} kg (estimated)`, '')}
             />
           )}
+          {isBoutiqaatOrNoon && !result?.found && (
+            <BoutiqaatWeightEstimator
+              onWeightSelect={kg => onResult(`${kg} kg (estimated)`, '')}
+            />
+          )}
         </>
       ) : (
         <div style={{ marginBottom: 16, padding: '10px 14px', background: 'rgba(224,123,58,0.08)', border: '1px solid rgba(224,123,58,0.2)', borderRadius: 8, fontSize: 13, color: 'var(--orange)' }}>
@@ -174,16 +181,21 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
   const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null)
   const [estimateLoading, setEstimateLoading] = useState(false)
   const [estimateError, setEstimateError] = useState('')
-  const [trendyolKg, setTrendyolKg] = useState<number | null>(null)
+  const [trendyolKg, setTrendyolKg]     = useState<number | null>(null)
+  const [boutiqaatKg, setBoutiqaatKg]   = useState<number | null>(null)
   const [thumbUrl, setThumbUrl] = useState<string | null>(null)
   const [thumbLoading, setThumbLoading] = useState(false)
 
   const handle = <K extends keyof OrderForm>(k: K, v: OrderForm[K]) => setForm(p => ({ ...p, [k]: v }))
 
-  const isTrendyolUrl = form.url.toLowerCase().includes('trendyol.com')
+  const isTrendyolUrl     = form.url.toLowerCase().includes('trendyol.com')
+  const isBoutiqaatUrl    = form.url.toLowerCase().includes('boutiqaat.com')
+  const isNoonUrl         = form.url.toLowerCase().includes('noon.com')
+  const isUaeEstimatorUrl = isBoutiqaatUrl || isNoonUrl
 
   useEffect(() => {
     setTrendyolKg(null)
+    setBoutiqaatKg(null)
     const supported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
     if (!supported || !form.url) { setScrapeResult(null); setEstimateLoading(false); setEstimateError(''); return }
     setEstimateLoading(true)
@@ -234,7 +246,8 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
   }
 
   const isUrlSupported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
-  const rates = SHIPPING_RATES[scrapeResult?.site?.country ?? ''] ?? { min: 10000, max: 18000 }
+  const uaeCategoryKey = scrapeResult?.category ? `UAE_${scrapeResult.category}` : null
+  const rates = (uaeCategoryKey ? SHIPPING_RATES[uaeCategoryKey] : null) ?? SHIPPING_RATES[scrapeResult?.site?.country ?? ''] ?? { min: 10000, max: 18000 }
   const totalKg = scrapeResult?.billable_weight_kg ? scrapeResult.billable_weight_kg * form.qty : 0
   const shippingEstimate = totalKg > 0 ? { min: Math.round(rates.min * totalKg), max: Math.round(rates.max * totalKg), kg: totalKg } : null
 
@@ -244,7 +257,12 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
   const trendyolEstimate = !shippingEstimate && trendyolTotalKg > 0
     ? { min: Math.round(turkeyRates.min * trendyolTotalKg), max: Math.round(turkeyRates.max * trendyolTotalKg), kg: trendyolTotalKg }
     : null
-  const activeEstimate = shippingEstimate || trendyolEstimate
+  const uaeEstimatorRates = SHIPPING_RATES['UAE_Cosmetics'] ?? { min: 10513, max: 10513 }
+  const boutiqaatTotalKg  = boutiqaatKg ? boutiqaatKg * form.qty : 0
+  const boutiqaatEstimate = !shippingEstimate && !trendyolEstimate && boutiqaatTotalKg > 0
+    ? { min: Math.round(uaeEstimatorRates.min * boutiqaatTotalKg), max: Math.round(uaeEstimatorRates.max * boutiqaatTotalKg), kg: boutiqaatTotalKg }
+    : null
+  const activeEstimate = shippingEstimate || trendyolEstimate || boutiqaatEstimate
 
   return (
     <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
@@ -282,7 +300,7 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
           </div>
         )}
         {/* Error only for non-Trendyol URLs */}
-        {estimateError && !estimateLoading && isUrlSupported && !isTrendyolUrl && (
+        {estimateError && !estimateLoading && isUrlSupported && !isTrendyolUrl && !isUaeEstimatorUrl && (
           <div style={{ padding: '9px 13px', background: 'rgba(224,123,58,0.08)', border: '1px solid rgba(224,123,58,0.25)', borderRadius: 8, fontSize: 12, color: 'var(--orange)', marginTop: -12, marginBottom: 16 }}>
             ⚠️ {estimateError}
           </div>
@@ -291,6 +309,12 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
         {isTrendyolUrl && !estimateLoading && !scrapeResult && form.url && (
           <div style={{ marginTop: -12, marginBottom: 16 }}>
             <TrendyolWeightEstimator onWeightSelect={kg => setTrendyolKg(kg)} />
+          </div>
+        )}
+        {/* Noon / Boutiqaat weight estimator */}
+        {isUaeEstimatorUrl && !estimateLoading && !scrapeResult && form.url && (
+          <div style={{ marginTop: -12, marginBottom: 16 }}>
+            <BoutiqaatWeightEstimator onWeightSelect={kg => setBoutiqaatKg(kg)} />
           </div>
         )}
         {activeEstimate && !estimateLoading && (

@@ -103,6 +103,7 @@ export interface ScrapeResult {
   found: boolean
   site?: ScrapeResultSite
   product_name?: string
+  category?: string
   actual_weight_kg?: number | null
   length_cm?: number | null
   width_cm?: number | null

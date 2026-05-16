@@ -21,6 +21,14 @@ function detectSite(url: string) {
   return null
 }
 
+function detectNoonCategory(cat: string): string {
+  const c = cat.toLowerCase()
+  if (/perfume|makeup|skincare|beauty|cosmetic|fragrance|lipstick|mascara|foundation|serum/.test(c)) return 'Cosmetics'
+  if (/supplement|vitamin|protein|health|wellness|nutrition/.test(c)) return 'Supplements'
+  if (/clothing|fashion|dress|shirt|shoes|footwear|apparel|trouser|pant/.test(c)) return 'Clothing'
+  return 'Accessories'
+}
+
 function extractAsin(url: string): string | null {
   const match = url.match(/\/dp\/([A-Z0-9]{10})|\/gp\/product\/([A-Z0-9]{10})|asin=([A-Z0-9]{10})/i)
   return match ? (match[1] || match[2] || match[3]) : null
@@ -325,6 +333,249 @@ export async function POST(req: NextRequest) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
         console.log('[Trendyol] Unexpected error:', msg)
         return NextResponse.json({ found: false, reason: `Trendyol scrape failed: ${msg}` })
+      }
+    }
+
+    if (siteInfo.site === 'noon.com') {
+      try {
+        console.log('[Noon] Starting scrape for URL:', url)
+
+        // Extract product ID — pattern: /{ID}/p/ e.g. /N79004521V/p/
+        const productIdMatch = url.match(/\/([A-Z][A-Z0-9]{6,18})\/p(?:\/|$)/i)
+        const productId = productIdMatch ? productIdMatch[1].toUpperCase() : null
+        console.log('[Noon] Extracted productId:', productId)
+
+        let weightKg: number | null = null
+        let productName = 'Noon Product'
+        let category: string | null = null
+        let apiSuccess = false
+
+        if (productId) {
+          const apiUrl = `https://www.noon.com/api/v2/pdp/product/${productId}?country=UAE`
+          console.log('[Noon] Trying product API:', apiUrl)
+          try {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 8000)
+            const apiRes = await fetch(apiUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+                'Accept': 'application/json',
+              },
+              signal: controller.signal,
+            })
+            clearTimeout(timeout)
+            console.log('[Noon] API status:', apiRes.status)
+            if (apiRes.ok) {
+              const data = await apiRes.json()
+              console.log('[Noon] API response keys:', JSON.stringify(Object.keys(data || {})))
+              console.log('[Noon] Full API response (truncated):', JSON.stringify(data).slice(0, 2000))
+
+              const product = data?.catalog_product || data?.product || data?.model || data?.item || data
+              productName = product?.name || product?.title || product?.product_title || productName
+
+              const catRaw = String(
+                product?.category_name || product?.category?.name ||
+                data?.catalog?.category?.name ||
+                (Array.isArray(product?.categories) ? product.categories[product.categories.length - 1]?.name : null) || ''
+              )
+              if (catRaw) { category = detectNoonCategory(catRaw); console.log('[Noon] Raw category:', catRaw, '→', category) }
+
+              const attrs: Array<Record<string, unknown>> = product?.attributes || product?.specifications || product?.details || []
+              if (Array.isArray(attrs)) {
+                for (const attr of attrs) {
+                  const name = String(attr.name || attr.key || attr.label || '').toLowerCase()
+                  const value = String(attr.value || attr.val || attr.text || '')
+                  console.log('[Noon] Attr:', name, '=', value)
+                  if (/weight/i.test(name) && value && !weightKg) {
+                    weightKg = parseWeightToKg(value)
+                    console.log('[Noon] Found weight from attr:', weightKg, 'kg from', value)
+                  }
+                }
+              }
+              if (!weightKg) {
+                const direct = product?.weight || product?.shipping_weight || product?.item_weight
+                if (direct) { weightKg = parseWeightToKg(String(direct)); console.log('[Noon] Direct weight field:', weightKg) }
+              }
+              apiSuccess = true
+            }
+          } catch (apiErr) {
+            console.log('[Noon] API failed:', apiErr instanceof Error ? apiErr.message : apiErr)
+          }
+        }
+
+        // Fallback: scrape product page HTML
+        if (!apiSuccess || (!weightKg && !category)) {
+          console.log('[Noon] Falling back to HTML scrape...')
+          try {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 8000)
+            const htmlRes = await fetch(url, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+              },
+              signal: controller.signal,
+            })
+            clearTimeout(timeout)
+            console.log('[Noon] HTML status:', htmlRes.status)
+            if (htmlRes.ok) {
+              const html = await htmlRes.text()
+              console.log('[Noon] HTML length:', html.length)
+
+              const nameMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/)
+                || html.match(/<title>([^<]+)<\/title>/)
+              if (nameMatch) productName = nameMatch[1].replace(/\s*[|\-–]\s*noon.*$/i, '').trim()
+
+              const catMatch = html.match(/"categoryName"\s*:\s*"([^"]+)"/)
+                || html.match(/<meta[^>]+property=["']product:category["'][^>]+content=["']([^"']+)["']/)
+              if (catMatch && !category) { category = detectNoonCategory(catMatch[1]); console.log('[Noon] HTML category:', catMatch[1], '→', category) }
+
+              if (!weightKg) {
+                const wMatch = html.match(/[Ww]eight[^:]*:\s*<[^>]*>([^<]+)/)
+                  || html.match(/"weight"\s*:\s*"([^"]+)"/i)
+                if (wMatch) { weightKg = parseWeightToKg(wMatch[1]); console.log('[Noon] HTML weight:', weightKg, 'from', wMatch[1]) }
+              }
+
+              // JSON-LD
+              const jsonLdTags = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || []
+              for (const tag of jsonLdTags) {
+                try {
+                  const json = JSON.parse(tag.replace(/<script[^>]*>|<\/script>/gi, ''))
+                  console.log('[Noon] JSON-LD type:', json?.['@type'])
+                  if (!category && json?.category) category = detectNoonCategory(String(json.category))
+                  if (!weightKg && json?.weight) { weightKg = parseWeightToKg(String(json.weight)); console.log('[Noon] JSON-LD weight:', weightKg) }
+                  if (!productName || productName === 'Noon Product') productName = json?.name || productName
+                } catch { /* skip */ }
+              }
+            }
+          } catch (htmlErr) {
+            console.log('[Noon] HTML scrape failed:', htmlErr instanceof Error ? htmlErr.message : htmlErr)
+          }
+        }
+
+        const finalCategory = category || 'Accessories'
+        console.log('[Noon] Final — weight:', weightKg, '| category:', finalCategory, '| name:', productName)
+
+        if (!weightKg) {
+          return NextResponse.json({
+            found: false,
+            reason: 'Could not extract weight from Noon. Please select an estimated weight below.',
+            product_name: productName,
+            category: finalCategory,
+          })
+        }
+
+        return NextResponse.json({
+          found: true,
+          site: siteInfo,
+          product_name: productName,
+          category: finalCategory,
+          actual_weight_kg: weightKg,
+          length_cm: null,
+          width_cm: null,
+          height_cm: null,
+          dimensional_weight_kg: null,
+          billable_weight_kg: weightKg,
+        })
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Scrape error'
+        console.log('[Noon] Unexpected error:', msg)
+        return NextResponse.json({ found: false, reason: `Noon scrape failed: ${msg}` })
+      }
+    }
+
+    if (siteInfo.site === 'boutiqaat.com') {
+      try {
+        console.log('[Boutiqaat] Starting scrape for URL:', url)
+
+        let weightKg: number | null = null
+        let productName = 'Boutiqaat Product'
+        const category = 'Cosmetics'
+
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 8000)
+        const htmlRes = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          signal: controller.signal,
+        })
+        clearTimeout(timeout)
+        console.log('[Boutiqaat] HTML status:', htmlRes.status)
+
+        if (!htmlRes.ok) {
+          return NextResponse.json({
+            found: false,
+            reason: `Boutiqaat returned HTTP ${htmlRes.status}. Please select estimated weight below.`,
+            category,
+          })
+        }
+
+        const html = await htmlRes.text()
+        console.log('[Boutiqaat] HTML length:', html.length)
+
+        const nameMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/)
+          || html.match(/<h1[^>]*>([^<]+)<\/h1>/)
+          || html.match(/<title>([^<]+)<\/title>/)
+        if (nameMatch) productName = nameMatch[1].replace(/\s*[|\-–]\s*(boutiqaat|بوتيكات).*$/i, '').trim()
+        console.log('[Boutiqaat] Product name:', productName)
+
+        // Weight from various patterns
+        const weightPatterns = [
+          /[Ww]eight[^:]*:\s*<[^>]*>([^<]+)/,
+          /[Ww]eight[^:]*:([^<\n,]{1,20})/,
+          /"(?:net_?|shipping_?)?weight"\s*:\s*"([^"]+)"/i,
+          /"(?:net_?|shipping_?)?weight"\s*:\s*([\d.]+)/i,
+        ]
+        for (const p of weightPatterns) {
+          const m = html.match(p)
+          if (m) {
+            const parsed = parseWeightToKg(m[1])
+            if (parsed) { weightKg = parsed; console.log('[Boutiqaat] Weight:', weightKg, 'kg from', m[1]); break }
+          }
+        }
+
+        // JSON-LD
+        const jsonLdTags = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || []
+        for (const tag of jsonLdTags) {
+          try {
+            const json = JSON.parse(tag.replace(/<script[^>]*>|<\/script>/gi, ''))
+            console.log('[Boutiqaat] JSON-LD:', JSON.stringify(json).slice(0, 500))
+            if (!productName || productName === 'Boutiqaat Product') productName = json?.name || productName
+            if (!weightKg && json?.weight) { weightKg = parseWeightToKg(String(json.weight)); console.log('[Boutiqaat] JSON-LD weight:', weightKg) }
+          } catch { /* skip */ }
+        }
+
+        console.log('[Boutiqaat] Final — weight:', weightKg, '| category:', category, '| name:', productName)
+
+        if (!weightKg) {
+          return NextResponse.json({
+            found: false,
+            reason: 'Could not extract weight from Boutiqaat. Please select an estimated weight below.',
+            product_name: productName,
+            category,
+          })
+        }
+
+        return NextResponse.json({
+          found: true,
+          site: siteInfo,
+          product_name: productName,
+          category,
+          actual_weight_kg: weightKg,
+          length_cm: null,
+          width_cm: null,
+          height_cm: null,
+          dimensional_weight_kg: null,
+          billable_weight_kg: weightKg,
+        })
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Scrape error'
+        console.log('[Boutiqaat] Unexpected error:', msg)
+        return NextResponse.json({ found: false, reason: `Boutiqaat scrape failed: ${msg}`, category: 'Cosmetics' })
       }
     }
 

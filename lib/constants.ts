@@ -15,6 +15,8 @@ export const SITE_INFO: Record<string, { country: string; flag: string }> = {
   'trendyol.com':     { country: 'Turkey', flag: '🇹🇷' },
   'hepsiburada.com':  { country: 'Turkey', flag: '🇹🇷' },
   'n11.com':          { country: 'Turkey', flag: '🇹🇷' },
+  'noon.com':          { country: 'UAE',    flag: '🇦🇪' },
+  'boutiqaat.com':     { country: 'UAE',    flag: '🇦🇪' },
   'aliexpress.com':   { country: 'China',  flag: '🇨🇳' },
   'taobao.com':       { country: 'China',  flag: '🇨🇳' },
   '1688.com':         { country: 'China',  flag: '🇨🇳' },
@@ -30,9 +32,13 @@ export const SHIPPING_RATES: Record<string, ShippingRate> = {
   UK:      { min: 11000, max: 17000 },
   Germany: { min: 11000, max: 17000 },
   Canada:  { min: 10000, max: 16000 },
-  UAE:     { min:  6000, max: 10000 },
-  Turkey:  { min:  5000, max:  8000 },
-  China:   { min:  8000, max: 14000 },
+  UAE:              { min:  6000, max: 10000 },
+  UAE_Cosmetics:    { min: 10513, max: 10513 },
+  UAE_Supplements:  { min: 50750, max: 50750 },
+  UAE_Clothing:     { min:  5075, max:  5075 },
+  UAE_Accessories:  { min:  5075, max:  5075 },
+  Turkey:           { min:  5000, max:  8000 },
+  China:            { min:  8000, max: 14000 },
 }
 
 // ── Order status display config ───────────────────────────────────────────────
