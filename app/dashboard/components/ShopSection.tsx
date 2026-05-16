@@ -4,6 +4,7 @@ import type { Store, ScrapeResult } from '@/lib/types'
 import { STORES, COUNTRY_FILTERS, CATEGORY_FILTERS, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
 import styles from './ShopSection.module.css'
 import DealsSection from './DealsSection'
+import TrendyolWeightEstimator from './TrendyolWeightEstimator'
 
 // ── Brand logo: Clearbit → gstatic → emoji ───────────────────────────────────
 
@@ -62,12 +63,15 @@ function StorePanel({ store, onClose }: { store: Store; onClose: () => void }) {
   const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null)
   const [scrapeLoading, setScrapeLoading] = useState(false)
   const [scrapeError, setScrapeError] = useState('')
+  const [trendyolKg, setTrendyolKg] = useState<number | null>(null)
 
   const detectedStore = url ? STORES.find(s => url.toLowerCase().includes(s.domain)) ?? null : null
   const displayStore = detectedStore ?? store
   const isSupported = SUPPORTED_SITES.some(s => url.toLowerCase().includes(s))
+  const isTrendyolUrl = url.toLowerCase().includes('trendyol.com')
 
   useEffect(() => {
+    setTrendyolKg(null)
     if (!url || !isSupported) {
       setScrapeResult(null)
       setScrapeError('')
@@ -103,6 +107,12 @@ function StorePanel({ store, onClose }: { store: Store; onClose: () => void }) {
   const totalKg = scrapeResult?.billable_weight_kg ?? 0
   const estimate = totalKg > 0
     ? { min: Math.round(rates.min * totalKg), max: Math.round(rates.max * totalKg), kg: totalKg }
+    : null
+
+  // Estimate computed from the Trendyol estimator selection
+  const turkeyRates = SHIPPING_RATES['Turkey'] ?? { min: 5000, max: 8000 }
+  const trendyolEstimate = !estimate && trendyolKg && trendyolKg > 0
+    ? { min: Math.round(turkeyRates.min * trendyolKg), max: Math.round(turkeyRates.max * trendyolKg), kg: trendyolKg }
     : null
 
   return (
@@ -173,10 +183,17 @@ function StorePanel({ store, onClose }: { store: Store; onClose: () => void }) {
             </div>
           )}
 
-          {scrapeError && !scrapeLoading && url && (
+          {/* Non-Trendyol error */}
+          {scrapeError && !scrapeLoading && url && !isTrendyolUrl && (
             <div className={styles.estimateError}>⚠️ {scrapeError}</div>
           )}
 
+          {/* Trendyol weight estimator (shown when no weight data returned) */}
+          {isTrendyolUrl && !scrapeLoading && !scrapeResult && url && (
+            <TrendyolWeightEstimator onWeightSelect={kg => setTrendyolKg(kg)} />
+          )}
+
+          {/* Estimate from scraper */}
           {estimate && !scrapeLoading && (
             <div className={styles.estimateBox}>
               <div className={styles.estimateHeader}>
@@ -193,6 +210,23 @@ function StorePanel({ store, onClose }: { store: Store; onClose: () => void }) {
               {scrapeResult?.product_name && (
                 <div className={styles.estimateProduct}>📦 {scrapeResult.product_name}</div>
               )}
+            </div>
+          )}
+
+          {/* Estimate from Trendyol estimator selection */}
+          {trendyolEstimate && !scrapeLoading && (
+            <div className={styles.estimateBox}>
+              <div className={styles.estimateHeader}>
+                <span className={styles.estimateLabel}>≈ Shipping Estimate · تقدير الشحن</span>
+                <span className={styles.estimateBadge}>APPROXIMATE</span>
+              </div>
+              <div className={styles.estimateRange}>
+                {trendyolEstimate.min.toLocaleString()} – {trendyolEstimate.max.toLocaleString()}
+                <span className={styles.estimateCurrency}> IQD</span>
+              </div>
+              <div className={styles.estimateSub}>
+                {trendyolEstimate.kg} kg estimated weight · Final price confirmed by ShipIQ
+              </div>
             </div>
           )}
 

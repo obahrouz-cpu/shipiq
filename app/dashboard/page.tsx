@@ -15,6 +15,7 @@ import OrderFilters, { OrderFiltersState, DEFAULT_FILTERS } from './components/O
 import FAQChatbot from './components/FAQChatbot'
 import AccountSettings from './components/AccountSettings'
 import AdminExport from './components/AdminExport'
+import TrendyolWeightEstimator from './components/TrendyolWeightEstimator'
 
 // ── URL → country-of-origin detection (used by admin filter) ──────────────────
 
@@ -67,6 +68,7 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
 
   const isSupported = SUPPORTED_SITES.some(site => url.toLowerCase().includes(site))
   const detectedSite = SUPPORTED_SITES.find(site => url.toLowerCase().includes(site))
+  const isTrendyol = url.toLowerCase().includes('trendyol.com')
 
   const calculate = async () => {
     setLoading(true); setError(''); setResult(null)
@@ -97,7 +99,7 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
           <button className={styles.btnPrimary} style={{ width: '100%', marginBottom: 16 }} onClick={calculate} disabled={loading}>
             {loading ? <><span className={styles.spinner} /> Fetching product info...</> : '🤖 Auto Calculate from URL'}
           </button>
-          {error && <div className={styles.errorBox}>{error}</div>}
+          {error && !isTrendyol && <div className={styles.errorBox}>{error}</div>}
           {result?.found && (
             <div className={styles.infoBox} style={{ marginBottom: 16 }}>
               <div style={{ fontWeight: 700, marginBottom: 12 }}>✅ {result.product_name}</div>
@@ -118,6 +120,12 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
                 </div>
               )}
             </div>
+          )}
+          {/* Trendyol estimator — shown always for Trendyol, used as starting point */}
+          {isTrendyol && !result?.found && (
+            <TrendyolWeightEstimator
+              onWeightSelect={kg => onResult(`${kg} kg (estimated)`, '')}
+            />
           )}
         </>
       ) : (
@@ -164,10 +172,14 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
   const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null)
   const [estimateLoading, setEstimateLoading] = useState(false)
   const [estimateError, setEstimateError] = useState('')
+  const [trendyolKg, setTrendyolKg] = useState<number | null>(null)
 
   const handle = <K extends keyof OrderForm>(k: K, v: OrderForm[K]) => setForm(p => ({ ...p, [k]: v }))
 
+  const isTrendyolUrl = form.url.toLowerCase().includes('trendyol.com')
+
   useEffect(() => {
+    setTrendyolKg(null)
     const supported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
     if (!supported || !form.url) { setScrapeResult(null); setEstimateLoading(false); setEstimateError(''); return }
     setEstimateLoading(true)
@@ -206,6 +218,14 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
   const totalKg = scrapeResult?.billable_weight_kg ? scrapeResult.billable_weight_kg * form.qty : 0
   const shippingEstimate = totalKg > 0 ? { min: Math.round(rates.min * totalKg), max: Math.round(rates.max * totalKg), kg: totalKg } : null
 
+  // Estimate from Trendyol estimator when scraper finds no weight
+  const turkeyRates = SHIPPING_RATES['Turkey'] ?? { min: 5000, max: 8000 }
+  const trendyolTotalKg = trendyolKg ? trendyolKg * form.qty : 0
+  const trendyolEstimate = !shippingEstimate && trendyolTotalKg > 0
+    ? { min: Math.round(turkeyRates.min * trendyolTotalKg), max: Math.round(turkeyRates.max * trendyolTotalKg), kg: trendyolTotalKg }
+    : null
+  const activeEstimate = shippingEstimate || trendyolEstimate
+
   return (
     <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
       <div className={styles.modal}>
@@ -223,22 +243,29 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
             <span className={styles.spinner} style={{ width: 14, height: 14, borderColor: 'rgba(201,168,76,0.25)', borderTopColor: 'var(--gold)' }} /> Calculating shipping estimate...
           </div>
         )}
-        {estimateError && !estimateLoading && isUrlSupported && (
+        {/* Error only for non-Trendyol URLs */}
+        {estimateError && !estimateLoading && isUrlSupported && !isTrendyolUrl && (
           <div style={{ padding: '9px 13px', background: 'rgba(224,123,58,0.08)', border: '1px solid rgba(224,123,58,0.25)', borderRadius: 8, fontSize: 12, color: 'var(--orange)', marginTop: -12, marginBottom: 16 }}>
             ⚠️ {estimateError}
           </div>
         )}
-        {shippingEstimate && !estimateLoading && (
+        {/* Trendyol weight estimator */}
+        {isTrendyolUrl && !estimateLoading && !scrapeResult && form.url && (
+          <div style={{ marginTop: -12, marginBottom: 16 }}>
+            <TrendyolWeightEstimator onWeightSelect={kg => setTrendyolKg(kg)} />
+          </div>
+        )}
+        {activeEstimate && !estimateLoading && (
           <div style={{ padding: '14px 16px', background: 'rgba(201,168,76,0.06)', border: '1px dashed rgba(201,168,76,0.35)', borderRadius: 10, marginTop: -12, marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>≈ Shipping Estimate · تقدير الشحن</span>
               <span style={{ fontSize: 10, color: 'var(--gold-dim)', background: 'rgba(201,168,76,0.12)', padding: '2px 8px', borderRadius: 20, border: '1px solid rgba(201,168,76,0.2)', fontWeight: 600, letterSpacing: '0.5px' }}>APPROXIMATE</span>
             </div>
             <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', marginBottom: 6 }}>
-              {shippingEstimate.min.toLocaleString()} – {shippingEstimate.max.toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--gold-dim)' }}>IQD</span>
+              {activeEstimate.min.toLocaleString()} – {activeEstimate.max.toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--gold-dim)' }}>IQD</span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-              {shippingEstimate.kg} kg billable weight{form.qty > 1 ? ` × ${form.qty} items` : ''} · Final price confirmed by ShipIQ
+              {activeEstimate.kg} kg {trendyolEstimate ? 'estimated' : 'billable'} weight{form.qty > 1 ? ` × ${form.qty} items` : ''} · Final price confirmed by ShipIQ
             </div>
           </div>
         )}
