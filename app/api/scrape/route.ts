@@ -134,6 +134,87 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    if (siteInfo.site === 'trendyol.com') {
+      try {
+        const res = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept-Language': 'tr-TR,tr;q=0.9,en;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml,application/xhtml;q=0.9,*/*;q=0.8',
+          },
+        })
+        if (!res.ok) return NextResponse.json({ found: false, reason: `Trendyol returned ${res.status}. Try entering manually.` })
+        const html = await res.text()
+
+        // Product name from og:title or <title>
+        const nameMatch = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/)
+          || html.match(/<title>([^<]+)<\/title>/)
+        const productName = nameMatch ? nameMatch[1].replace(/ \| Trendyol.*$/, '').trim() : 'Trendyol Product'
+
+        // Trendyol embeds product attributes in a JSON blob inside a <script> tag
+        // Look for "attributes" array with name/value pairs
+        const attrBlockMatch = html.match(/"attributes"\s*:\s*(\[[\s\S]*?\])\s*,\s*"(?:brand|contentDescriptions)"/)
+        let weightKg: number | null = null
+        let dims: { l: number; w: number; h: number } | null = null
+
+        if (attrBlockMatch) {
+          try {
+            const attrs: Array<{ key?: string; name?: string; value?: string; attributeValue?: string }> = JSON.parse(attrBlockMatch[1])
+            for (const attr of attrs) {
+              const key = (attr.key || attr.name || '').toLowerCase()
+              const val = attr.value || attr.attributeValue || ''
+              if (/ağırlık|weight/i.test(key) && val) {
+                weightKg = parseWeightToKg(val)
+              }
+              if (/boyut|dimension|ölçü|en x boy/i.test(key) && val) {
+                dims = parseDimensionsToCm(val.replace(/\s*x\s*/gi, ' x '))
+              }
+            }
+          } catch { /* ignore JSON parse errors */ }
+        }
+
+        // Fallback: scan for weight/dimension patterns in the raw HTML
+        if (!weightKg) {
+          const wMatch = html.match(/[Aa]ğırlık[^:]*:\s*<[^>]*>([^<]+)|"Ağırlık"\s*,\s*"value"\s*:\s*"([^"]+)"/)
+          if (wMatch) weightKg = parseWeightToKg(wMatch[1] || wMatch[2])
+        }
+        if (!dims) {
+          const dMatch = html.match(/(\d+(?:[.,]\d+)?)\s*[Xx]\s*(\d+(?:[.,]\d+)?)\s*[Xx]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm)?/)
+          if (dMatch) {
+            let l = parseFloat(dMatch[1].replace(',', '.'))
+            let w = parseFloat(dMatch[2].replace(',', '.'))
+            let h = parseFloat(dMatch[3].replace(',', '.'))
+            if ((dMatch[4] || '').toLowerCase() === 'mm') { l /= 10; w /= 10; h /= 10 }
+            dims = { l: Math.round(l * 10) / 10, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 }
+          }
+        }
+
+        if (!weightKg && !dims) {
+          return NextResponse.json({ found: false, reason: 'Could not extract weight/dimensions from Trendyol. Enter manually.', product_name: productName })
+        }
+
+        const dimensionalWeightKg = dims ? Math.round((dims.l * dims.w * dims.h) / 5000 * 100) / 100 : null
+        const billableWeightKg = weightKg && dimensionalWeightKg
+          ? Math.max(weightKg, dimensionalWeightKg)
+          : (weightKg || dimensionalWeightKg)
+
+        return NextResponse.json({
+          found: true,
+          site: siteInfo,
+          product_name: productName,
+          actual_weight_kg: weightKg,
+          length_cm: dims?.l || null,
+          width_cm: dims?.w || null,
+          height_cm: dims?.h || null,
+          dimensional_weight_kg: dimensionalWeightKg,
+          billable_weight_kg: billableWeightKg,
+        })
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Scrape error'
+        return NextResponse.json({ found: false, reason: `Trendyol scrape failed: ${msg}` })
+      }
+    }
+
     return NextResponse.json({ found: false, reason: 'Auto-calculate for this site is coming soon. Please enter details manually.' })
 
   } catch (e: unknown) {
