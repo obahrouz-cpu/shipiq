@@ -900,7 +900,7 @@ export default function Dashboard() {
                       <thead><tr>
                         <th>{t('orders', 'id')}</th>
                         {isAdmin && <th>{t('orders', 'customer')}</th>}
-                        <th>{t('orders', 'description')}</th><th>{t('orders', 'category')}</th><th>{t('orders', 'itemPrice')}</th><th>{t('orders', 'shipping')}</th><th>{t('orders', 'date')}</th><th>{t('orders', 'status')}</th>
+                        <th>{t('orders', 'description')}</th><th>{t('orders', 'itemPrice')}</th><th>{t('orders', 'shipping')}</th><th>{t('orders', 'date')}</th><th>{t('orders', 'status')}</th>
                       </tr></thead>
                       <tbody>
                         {filteredOrders.map(o => (
@@ -917,21 +917,22 @@ export default function Dashboard() {
                               </td>
                             )}
                             <td>
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                                <div style={{ width: 40, height: 40, borderRadius: 6, background: 'var(--surface2)', border: '1px solid var(--border)', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', fontSize: 18 }}>
-                                  {o.photo_url
-                                    ? <img src={o.photo_url} alt="" style={{ width: 40, height: 40, objectFit: 'cover' }} onError={e => { const el = e.currentTarget as HTMLImageElement; el.style.display = 'none'; const sp = document.createElement('span'); sp.textContent = '🛍️'; el.parentElement?.appendChild(sp) }} />
-                                    : <span>🛍️</span>
-                                  }
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ width: 44, height: 44, borderRadius: 6, background: 'var(--surface2)', border: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', fontSize: 18, position: 'relative' }}>
+                                  <span style={{ position: 'absolute' }}>🛍️</span>
+                                  {o.photo_url && (
+                                    <img src={o.photo_url} alt="" style={{ width: 44, height: 44, objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                                  )}
                                 </div>
                                 <div>
-                                  <div style={{ fontWeight: 500, color: 'var(--text)', fontSize: 13 }}>{o.description}</div>
-                                  <a className={styles.tdLink} href={o.url} target="_blank" onClick={e => e.stopPropagation()}>{o.url}</a>
-                                  {o.urgency && <span style={{ fontSize: 10, color: 'var(--orange)' }}> ⚡ Urgent</span>}
+                                  <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: 13, marginBottom: 3 }}>{o.description}</div>
+                                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <span style={{ fontSize: 10, color: 'var(--text-dim)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 6px' }}>{o.category}</span>
+                                    {o.urgency && <span style={{ fontSize: 10, color: 'var(--orange)' }}>⚡ Urgent</span>}
+                                  </div>
                                 </div>
                               </div>
                             </td>
-                            <td>{o.category}</td>
                             <td>{o.item_price ? `${o.item_price} ${o.item_price_currency}` : '—'}</td>
                             <td style={{ color: o.shipping_price ? 'var(--gold)' : 'var(--text-dim)', fontWeight: o.shipping_price ? 700 : 400 }}>
                               {o.shipping_price ? `${o.shipping_price.toLocaleString()} ${o.shipping_currency}` : '—'}
