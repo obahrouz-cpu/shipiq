@@ -11,6 +11,7 @@ import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResu
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
 import OrderFilters, { OrderFiltersState, DEFAULT_FILTERS } from './components/OrderFilters'
+import FAQChatbot from './components/FAQChatbot'
 
 // ── URL → country-of-origin detection (used by admin filter) ──────────────────
 
@@ -864,6 +865,7 @@ export default function Dashboard() {
       {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} />}
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}
       <Toast toasts={toasts} />
+      <FAQChatbot />
     </div>
   )
 }
