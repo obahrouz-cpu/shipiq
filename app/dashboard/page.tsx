@@ -12,6 +12,7 @@ import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
 import OrderFilters, { OrderFiltersState, DEFAULT_FILTERS } from './components/OrderFilters'
 import FAQChatbot from './components/FAQChatbot'
+import AccountSettings from './components/AccountSettings'
 
 // ── URL → country-of-origin detection (used by admin filter) ──────────────────
 
@@ -477,7 +478,8 @@ export default function Dashboard() {
   const [topUpUser, setTopUpUser]       = useState<Profile | null>(null)
   const [filters, setFilters]           = useState<OrderFiltersState>(DEFAULT_FILTERS)
   const [toasts, setToasts]             = useState<Toast[]>([])
-  const [sidebarOpen, setSidebarOpen]   = useState(false)
+  const [sidebarOpen, setSidebarOpen]     = useState(false)
+  const [settingsOpen, setSettingsOpen]   = useState(false)
 
   const toast = (message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
@@ -586,11 +588,11 @@ export default function Dashboard() {
           ))}
         </div>
         <div className={styles.sidebarFooter}>
-          <div className={styles.userCard} onClick={logout}>
+          <div className={styles.userCard} onClick={() => setSettingsOpen(true)}>
             <div className={styles.userAvatar}>{profile?.full_name?.[0] || '?'}</div>
             <div>
               <div className={styles.userName}>{profile?.full_name}</div>
-              <div className={styles.userRole}>{isAdmin ? '🔧 Admin' : '👤 Customer'} · Sign Out</div>
+              <div className={styles.userRole}>{isAdmin ? '🔧 Admin' : '👤 Customer'} · Settings</div>
             </div>
           </div>
         </div>
@@ -866,6 +868,15 @@ export default function Dashboard() {
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}
       <Toast toasts={toasts} />
       <FAQChatbot />
+      {settingsOpen && profile && (
+        <AccountSettings
+          profile={profile}
+          orders={orders}
+          onClose={() => setSettingsOpen(false)}
+          onProfileUpdate={updated => setProfile(p => p ? { ...p, ...updated } : p)}
+          onSignOut={logout}
+        />
+      )}
     </div>
   )
 }
