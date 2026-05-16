@@ -136,61 +136,172 @@ export async function POST(req: NextRequest) {
 
     if (siteInfo.site === 'trendyol.com') {
       try {
-        const res = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept-Language': 'tr-TR,tr;q=0.9,en;q=0.8',
-            'Accept': 'text/html,application/xhtml+xml,application/xhtml;q=0.9,*/*;q=0.8',
-          },
-        })
-        if (!res.ok) return NextResponse.json({ found: false, reason: `Trendyol returned ${res.status}. Try entering manually.` })
-        const html = await res.text()
+        console.log('[Trendyol] Starting scrape for URL:', url)
 
-        // Product name from og:title or <title>
-        const nameMatch = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/)
-          || html.match(/<title>([^<]+)<\/title>/)
-        const productName = nameMatch ? nameMatch[1].replace(/ \| Trendyol.*$/, '').trim() : 'Trendyol Product'
+        // Extract productId from URL: brand/name-p-{productId}
+        const productIdMatch = url.match(/-p-(\d+)/)
+        const productId = productIdMatch ? productIdMatch[1] : null
+        console.log('[Trendyol] Extracted productId:', productId)
 
-        // Trendyol embeds product attributes in a JSON blob inside a <script> tag
-        // Look for "attributes" array with name/value pairs
-        const attrBlockMatch = html.match(/"attributes"\s*:\s*(\[[\s\S]*?\])\s*,\s*"(?:brand|contentDescriptions)"/)
         let weightKg: number | null = null
         let dims: { l: number; w: number; h: number } | null = null
+        let productName = 'Trendyol Product'
+        let category: string | null = null
+        let apiSuccess = false
 
-        if (attrBlockMatch) {
+        // Step 1: Try the Trendyol public product API
+        if (productId) {
+          const apiUrl = `https://public.trendyol.com/discovery-web-productgw-service/api/productDetail/${productId}`
+          console.log('[Trendyol] Trying public API:', apiUrl)
           try {
-            const attrs: Array<{ key?: string; name?: string; value?: string; attributeValue?: string }> = JSON.parse(attrBlockMatch[1])
-            for (const attr of attrs) {
-              const key = (attr.key || attr.name || '').toLowerCase()
-              const val = attr.value || attr.attributeValue || ''
-              if (/ağırlık|weight/i.test(key) && val) {
-                weightKg = parseWeightToKg(val)
-              }
-              if (/boyut|dimension|ölçü|en x boy/i.test(key) && val) {
-                dims = parseDimensionsToCm(val.replace(/\s*x\s*/gi, ' x '))
+            const apiRes = await fetch(apiUrl, {
+              headers: {
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'tr-TR,tr;q=0.9,en-US,en;q=0.8',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Origin': 'https://www.trendyol.com',
+                'Referer': 'https://www.trendyol.com/',
+              },
+            })
+            console.log('[Trendyol] Public API status:', apiRes.status)
+            if (apiRes.ok) {
+              const apiData = await apiRes.json()
+              console.log('[Trendyol] API response keys:', Object.keys(apiData || {}))
+              const product = apiData?.result?.product || apiData?.result || apiData?.product || apiData
+              if (product) {
+                productName = product.name || product.productName || productName
+                category = product.categoryName || product.category?.name || null
+                console.log('[Trendyol] Product name:', productName, '| Category:', category)
+
+                // Parse attributes array — two common shapes
+                const attrs: Array<Record<string, unknown>> = [
+                  ...(product.attributes || []),
+                  ...(product.productDetailAttributes || []),
+                  ...(product.allVariants?.[0]?.attributes || []),
+                ]
+                console.log('[Trendyol] Total attributes found:', attrs.length)
+                for (const attr of attrs) {
+                  // Shape A: { attributeName, attributeValue }
+                  // Shape B: { key: { name }, value: { name } }
+                  // Shape C: { name, value }
+                  const attrName = String(
+                    attr.attributeName ||
+                    (attr.key as Record<string,unknown>)?.name ||
+                    attr.name || ''
+                  ).toLowerCase()
+                  const attrVal = String(
+                    attr.attributeValue ||
+                    (attr.value as Record<string,unknown>)?.name ||
+                    attr.value || ''
+                  )
+                  console.log('[Trendyol] Attr:', attrName, '=', attrVal)
+                  if (/ağırlık|weight/i.test(attrName) && attrVal && !weightKg) {
+                    weightKg = parseWeightToKg(attrVal)
+                    console.log('[Trendyol] Parsed weight:', weightKg, 'kg from', attrVal)
+                  }
+                  if (/boyut|dimension|ölçü|en x boy|ebat/i.test(attrName) && attrVal && !dims) {
+                    dims = parseDimensionsToCm(attrVal.replace(/\s*x\s*/gi, ' x '))
+                    console.log('[Trendyol] Parsed dims:', dims, 'from', attrVal)
+                  }
+                }
+                apiSuccess = true
               }
             }
-          } catch { /* ignore JSON parse errors */ }
-        }
-
-        // Fallback: scan for weight/dimension patterns in the raw HTML
-        if (!weightKg) {
-          const wMatch = html.match(/[Aa]ğırlık[^:]*:\s*<[^>]*>([^<]+)|"Ağırlık"\s*,\s*"value"\s*:\s*"([^"]+)"/)
-          if (wMatch) weightKg = parseWeightToKg(wMatch[1] || wMatch[2])
-        }
-        if (!dims) {
-          const dMatch = html.match(/(\d+(?:[.,]\d+)?)\s*[Xx]\s*(\d+(?:[.,]\d+)?)\s*[Xx]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm)?/)
-          if (dMatch) {
-            let l = parseFloat(dMatch[1].replace(',', '.'))
-            let w = parseFloat(dMatch[2].replace(',', '.'))
-            let h = parseFloat(dMatch[3].replace(',', '.'))
-            if ((dMatch[4] || '').toLowerCase() === 'mm') { l /= 10; w /= 10; h /= 10 }
-            dims = { l: Math.round(l * 10) / 10, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 }
+          } catch (apiErr) {
+            console.log('[Trendyol] Public API failed:', apiErr instanceof Error ? apiErr.message : apiErr)
           }
         }
 
+        // Step 2: Fallback — fetch product HTML with mobile iPhone UA
+        if (!apiSuccess || (!weightKg && !dims)) {
+          console.log('[Trendyol] Falling back to HTML scrape...')
+          const htmlRes = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+              'Accept-Language': 'tr-TR,tr;q=0.9,en;q=0.8',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Referer': 'https://www.trendyol.com',
+            },
+          })
+          console.log('[Trendyol] HTML response status:', htmlRes.status)
+          if (!htmlRes.ok) {
+            return NextResponse.json({ found: false, reason: `Trendyol returned HTTP ${htmlRes.status}. Try entering manually.` })
+          }
+          const html = await htmlRes.text()
+          console.log('[Trendyol] HTML length:', html.length)
+          console.log('[Trendyol] HTML preview (first 500):', html.slice(0, 500))
+
+          // Product name from og:title or <title>
+          const nameMatch = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/)
+            || html.match(/<title>([^<]+)<\/title>/)
+          if (nameMatch) productName = nameMatch[1].replace(/ \| Trendyol.*$/, '').trim()
+
+          // Category from breadcrumb or JSON-LD pattern
+          const catMatch = html.match(/"pattern"\s*:\s*"([^"]+)"/)
+            || html.match(/"categoryName"\s*:\s*"([^"]+)"/)
+          if (catMatch && !category) category = catMatch[1]
+
+          // Try to extract attributes from embedded JSON (shape with nested key/value objects)
+          // Trendyol embeds: "attributes":[{"key":{"id":N,"name":"..."},"value":{"id":N,"name":"..."}}]
+          const attrRegex = /"attributes"\s*:\s*(\[[^\]]{0,4000}\])/g
+          let attrMatch: RegExpExecArray | null
+          while ((attrMatch = attrRegex.exec(html)) !== null) {
+            const m = attrMatch
+            try {
+              const attrs: Array<Record<string, unknown>> = JSON.parse(m[1])
+              for (const attr of attrs) {
+                const attrName = String(
+                  attr.attributeName ||
+                  (attr.key as Record<string,unknown>)?.name ||
+                  attr.name || ''
+                ).toLowerCase()
+                const attrVal = String(
+                  attr.attributeValue ||
+                  (attr.value as Record<string,unknown>)?.name ||
+                  attr.value || ''
+                )
+                if (/ağırlık|weight/i.test(attrName) && attrVal && !weightKg) {
+                  weightKg = parseWeightToKg(attrVal)
+                  console.log('[Trendyol] HTML attr weight:', weightKg, 'from', attrVal)
+                }
+                if (/boyut|dimension|ölçü|en x boy|ebat/i.test(attrName) && attrVal && !dims) {
+                  dims = parseDimensionsToCm(attrVal.replace(/\s*x\s*/gi, ' x '))
+                  console.log('[Trendyol] HTML attr dims:', dims, 'from', attrVal)
+                }
+              }
+            } catch { /* skip bad JSON */ }
+          }
+
+          // Fallback weight/dim text patterns in raw HTML
+          if (!weightKg) {
+            const wMatch = html.match(/[Aa]ğırlık[^:]*:\s*<[^>]*>([^<]+)|"Ağırlık"\s*,\s*"value"\s*:\s*"([^"]+)"|"attributeName"\s*:\s*"Ağırlık"\s*,\s*"attributeValue"\s*:\s*"([^"]+)"/)
+            if (wMatch) {
+              const raw = wMatch[1] || wMatch[2] || wMatch[3]
+              weightKg = parseWeightToKg(raw)
+              console.log('[Trendyol] Text weight match:', raw, '->', weightKg)
+            }
+          }
+          if (!dims) {
+            const dMatch = html.match(/(\d+(?:[.,]\d+)?)\s*[Xx]\s*(\d+(?:[.,]\d+)?)\s*[Xx]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm)/)
+            if (dMatch) {
+              let l = parseFloat(dMatch[1].replace(',', '.'))
+              let w = parseFloat(dMatch[2].replace(',', '.'))
+              let h = parseFloat(dMatch[3].replace(',', '.'))
+              if ((dMatch[4] || '').toLowerCase() === 'mm') { l /= 10; w /= 10; h /= 10 }
+              dims = { l: Math.round(l * 10) / 10, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 }
+              console.log('[Trendyol] Text dims match:', dims)
+            }
+          }
+        }
+
+        console.log('[Trendyol] Final result — weight:', weightKg, '| dims:', dims, '| name:', productName)
+
         if (!weightKg && !dims) {
-          return NextResponse.json({ found: false, reason: 'Could not extract weight/dimensions from Trendyol. Enter manually.', product_name: productName })
+          return NextResponse.json({
+            found: false,
+            reason: 'Could not extract weight/dimensions from Trendyol. Trendyol does not always include shipping specs — please enter manually.',
+            product_name: productName,
+          })
         }
 
         const dimensionalWeightKg = dims ? Math.round((dims.l * dims.w * dims.h) / 5000 * 100) / 100 : null
@@ -202,6 +313,7 @@ export async function POST(req: NextRequest) {
           found: true,
           site: siteInfo,
           product_name: productName,
+          category,
           actual_weight_kg: weightKg,
           length_cm: dims?.l || null,
           width_cm: dims?.w || null,
@@ -211,6 +323,7 @@ export async function POST(req: NextRequest) {
         })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
+        console.log('[Trendyol] Unexpected error:', msg)
         return NextResponse.json({ found: false, reason: `Trendyol scrape failed: ${msg}` })
       }
     }
