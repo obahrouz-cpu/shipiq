@@ -258,16 +258,21 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
           <label className={styles.label}>Product URL · رابط المنتج *</label>
           <input className={styles.input} placeholder="https://amazon.com/dp/..." value={form.url} onChange={e => handle('url', e.target.value)} />
           {(thumbLoading || thumbUrl) && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, padding: '7px 10px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7 }}>
-              {thumbLoading
-                ? <div style={{ width: 44, height: 44, borderRadius: 6, background: 'var(--surface3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <span className={styles.spinner} style={{ width: 14, height: 14, borderTopColor: 'var(--gold)' }} />
-                  </div>
-                : <img src={thumbUrl!} alt="" style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0 }} onError={() => setThumbUrl(null)} />
-              }
-              <span style={{ fontSize: 12, color: thumbLoading ? 'var(--text-dim)' : 'var(--green)' }}>
-                {thumbLoading ? 'Loading product image...' : '✓ Product image detected'}
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, padding: '10px 12px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8 }}>
+              <div style={{ width: 80, height: 80, borderRadius: 8, background: 'var(--surface3)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                {thumbLoading
+                  ? <span className={styles.spinner} style={{ width: 18, height: 18, borderTopColor: 'var(--gold)' }} />
+                  : <img src={thumbUrl!} alt="" style={{ width: 80, height: 80, objectFit: 'contain' }} onError={() => setThumbUrl(null)} />
+                }
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: thumbLoading ? 'var(--text-dim)' : 'var(--green)', marginBottom: 3 }}>
+                  {thumbLoading ? 'Fetching product image...' : '✓ Product image found'}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                  {thumbLoading ? 'This may take a moment' : 'Image will be saved with your order'}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -427,7 +432,7 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order
               <div style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                 <img
                   src={order.photo_url} alt={order.description}
-                  style={{ width: 80, height: 80, borderRadius: 10, objectFit: 'cover', border: '1px solid var(--border)', background: 'var(--surface2)', flexShrink: 0 }}
+                  style={{ width: 120, height: 120, borderRadius: 10, objectFit: 'cover', border: '1px solid var(--border)', background: 'var(--surface2)', flexShrink: 0 }}
                   onError={e => { (e.currentTarget as HTMLImageElement).parentElement!.style.display = 'none' }}
                 />
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', paddingTop: 4, lineHeight: 1.5 }}>
@@ -889,13 +894,12 @@ export default function Dashboard() {
                             )}
                             <td>
                               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                                {o.photo_url && (
-                                  <img
-                                    src={o.photo_url} alt=""
-                                    style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0, marginTop: 1 }}
-                                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                                  />
-                                )}
+                                <div style={{ width: 40, height: 40, borderRadius: 6, background: 'var(--surface2)', border: '1px solid var(--border)', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', fontSize: 18 }}>
+                                  {o.photo_url
+                                    ? <img src={o.photo_url} alt="" style={{ width: 40, height: 40, objectFit: 'cover' }} onError={e => { const el = e.currentTarget as HTMLImageElement; el.style.display = 'none'; const sp = document.createElement('span'); sp.textContent = '🛍️'; el.parentElement?.appendChild(sp) }} />
+                                    : <span>🛍️</span>
+                                  }
+                                </div>
                                 <div>
                                   <div style={{ fontWeight: 500, color: 'var(--text)', fontSize: 13 }}>{o.description}</div>
                                   <a className={styles.tdLink} href={o.url} target="_blank" onClick={e => e.stopPropagation()}>{o.url}</a>
