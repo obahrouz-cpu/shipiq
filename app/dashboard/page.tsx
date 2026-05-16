@@ -16,6 +16,7 @@ import FAQChatbot from './components/FAQChatbot'
 import AccountSettings from './components/AccountSettings'
 import AdminExport from './components/AdminExport'
 import TrendyolWeightEstimator from './components/TrendyolWeightEstimator'
+import ExchangeRateTicker from './components/ExchangeRateTicker'
 
 // ── URL → country-of-origin detection (used by admin filter) ──────────────────
 
@@ -702,6 +703,7 @@ export default function Dashboard() {
           </div>
         </div>
 
+        <ExchangeRateTicker />
         <div className={styles.body}>
 
           {page === 'dashboard' && (
