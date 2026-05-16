@@ -69,13 +69,12 @@ export async function topUpBalance(
   userId: string,
   currentBalance: number,
   amount: number,
-  currency: string
+  currency: string,
+  note = 'Balance top-up by admin'
 ): Promise<void> {
   const supabase = createClient()
   await supabase.from('profiles').update({ balance: currentBalance + amount }).eq('id', userId)
-  await supabase.from('transactions').insert({
-    user_id: userId, amount, currency, note: 'Balance top-up by admin',
-  })
+  await supabase.from('transactions').insert({ user_id: userId, amount, currency, note })
 }
 
 // ── Orders ────────────────────────────────────────────────────────────────────

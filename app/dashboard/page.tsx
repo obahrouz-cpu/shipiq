@@ -17,6 +17,7 @@ import AccountSettings from './components/AccountSettings'
 import AdminExport from './components/AdminExport'
 import TrendyolWeightEstimator from './components/TrendyolWeightEstimator'
 import ExchangeRateTicker from './components/ExchangeRateTicker'
+import WalletTopUp from './components/WalletTopUp'
 
 // ── URL → country-of-origin detection (used by admin filter) ──────────────────
 
@@ -501,14 +502,23 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order
 
 // ── TopUpModal ────────────────────────────────────────────────────────────────
 
+const TOP_UP_REASONS = [
+  'FIB Payment (manual verify)',
+  'Qi Card Payment (manual verify)',
+  'Cash Payment',
+  'Adjustment/Correction',
+  'Promotional Credit',
+]
+
 function TopUpModal({ user, onClose, onDone }: { user: Profile; onClose: () => void; onDone: () => void }) {
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('IQD')
+  const [reason, setReason] = useState(TOP_UP_REASONS[0])
   const [loading, setLoading] = useState(false)
 
   const submit = async () => {
     setLoading(true)
-    await topUpBalance(user.id, user.balance, parseInt(amount), currency)
+    await topUpBalance(user.id, user.balance, parseInt(amount), currency, reason)
     setLoading(false); onDone(); onClose()
   }
 
@@ -538,6 +548,12 @@ function TopUpModal({ user, onClose, onDone }: { user: Profile; onClose: () => v
             </select>
           </div>
         </div>
+        <div className={styles.formGroup}>
+          <label className={styles.label}>Reason · السبب</label>
+          <select className={styles.input} value={reason} onChange={e => setReason(e.target.value)}>
+            {TOP_UP_REASONS.map(r => <option key={r}>{r}</option>)}
+          </select>
+        </div>
         <button className={styles.btnPrimary} style={{ width: '100%' }} onClick={submit} disabled={loading || !amount}>
           {loading ? <Spinner /> : 'Add Balance · إضافة الرصيد'}
         </button>
@@ -565,6 +581,7 @@ export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen]     = useState(false)
   const [settingsOpen, setSettingsOpen]   = useState(false)
   const [showExport, setShowExport]       = useState(false)
+  const [txnFilter, setTxnFilter]         = useState<'all' | 'topup' | 'deduction'>('all')
 
   const toast = (message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
@@ -863,6 +880,7 @@ export default function Dashboard() {
                   <span className={styles.priceBig}>{profile?.balance?.toLocaleString()}</span>
                   <span className={styles.priceCurrency}>IQD</span>
                   <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-dim)' }}>≈ ${Math.round((profile?.balance || 0) / 1450)} USD</div>
+                  {profile && <WalletTopUp userId={profile.id} onSuccess={fetchData} />}
                 </div>
                 <div className={styles.card} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -885,30 +903,103 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className={styles.card}>
-                <div className={styles.cardHeader}><span style={{ fontSize: 15, fontWeight: 700 }}>{t('balance', 'history')}</span></div>
+                <div className={styles.cardHeader}>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{t('balance', 'history')}</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {(['all', 'topup', 'deduction'] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setTxnFilter(f)}
+                        style={{
+                          padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                          cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                          background: txnFilter === f ? 'rgba(201,168,76,0.15)' : 'transparent',
+                          color: txnFilter === f ? 'var(--gold)' : 'var(--text-dim)',
+                          border: txnFilter === f ? '1px solid rgba(201,168,76,0.35)' : '1px solid transparent',
+                        }}
+                      >
+                        {f === 'all' ? 'All' : f === 'topup' ? '↑ Top-ups' : '↓ Deductions'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {transactions.length === 0 ? (
                   <div className={styles.empty}>
                     <div className={styles.emptyIcon}>💸</div>
                     <div className={styles.emptyTitle}>{t('balance', 'noTxns')}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, maxWidth: 280 }}>{t('balance', 'noTxnsSub')}</div>
                   </div>
-                ) : (
-                  <table className={styles.table}>
-                    <thead><tr><th>{t('balance', 'id')}</th><th>{t('balance', 'desc')}</th><th>{t('balance', 'date')}</th><th>{t('balance', 'amount')}</th></tr></thead>
-                    <tbody>
-                      {transactions.map(t => (
-                        <tr key={t.id}>
-                          <td className={styles.tdMain}>{t.id}</td>
-                          <td>{t.note}</td>
-                          <td>{t.created_at?.split('T')[0]}</td>
-                          <td style={{ color: t.amount > 0 ? 'var(--green)' : 'var(--red)', fontWeight: 700 }}>
-                            {t.amount > 0 ? '+' : ''}{t.amount?.toLocaleString()} {t.currency}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                ) : (() => {
+                  // Compute running balance (transactions newest-first, so walk forward = subtract going back)
+                  let runBal = profile?.balance ?? 0
+                  const withBal = transactions.map(txn => {
+                    const after = runBal
+                    runBal -= txn.amount
+                    return { ...txn, afterBalance: after }
+                  })
+                  const filtered = withBal.filter(txn => {
+                    if (txnFilter === 'topup') return txn.amount > 0
+                    if (txnFilter === 'deduction') return txn.amount < 0
+                    return true
+                  })
+                  const getIcon = (note: string) => {
+                    if (/fib/i.test(note)) return '🏦'
+                    if (/qi\s*card/i.test(note)) return '💳'
+                    if (/cash/i.test(note)) return '💵'
+                    if (/promo/i.test(note)) return '🎁'
+                    if (/adjust|correct/i.test(note)) return '⚙️'
+                    if (/shipping|confirmed/i.test(note)) return '📦'
+                    return '💰'
+                  }
+                  if (filtered.length === 0) return (
+                    <div className={styles.empty} style={{ padding: '32px 20px' }}>
+                      <div className={styles.emptyTitle} style={{ fontSize: 13 }}>No {txnFilter === 'topup' ? 'top-up' : 'deduction'} transactions yet</div>
+                    </div>
+                  )
+                  return (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            <th style={{ width: 36 }}></th>
+                            <th>Date · التاريخ</th>
+                            <th>Description · الوصف</th>
+                            <th>Amount · المبلغ</th>
+                            <th>Balance · الرصيد</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.map(txn => (
+                            <tr key={txn.id}>
+                              <td style={{ textAlign: 'center', fontSize: 16 }}>
+                                {getIcon(txn.note || '')}
+                              </td>
+                              <td style={{ whiteSpace: 'nowrap', color: 'var(--text-dim)', fontSize: 12 }}>
+                                {txn.created_at?.split('T')[0]}
+                              </td>
+                              <td style={{ maxWidth: 200 }}>
+                                <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {txn.note || '—'}
+                                </div>
+                                {txn.order_id && (
+                                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
+                                    {txn.order_id}
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ whiteSpace: 'nowrap', fontWeight: 700, color: txn.amount > 0 ? 'var(--green)' : 'var(--red)' }}>
+                                {txn.amount > 0 ? '+' : ''}{txn.amount?.toLocaleString()} {txn.currency}
+                              </td>
+                              <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: 13 }}>
+                                {txn.afterBalance.toLocaleString()} IQD
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           )}
