@@ -36,6 +36,9 @@ const ADMIN_WHATSAPP = '964XXXXXXXXXX'
 interface Props {
   userId: string
   onSuccess?: () => void
+  /** Controlled mode — pass open+onClose from parent instead of using the built-in button */
+  open?: boolean
+  onClose?: () => void
 }
 
 function Dot() {
@@ -48,8 +51,11 @@ function Dot() {
   )
 }
 
-export default function WalletTopUp({ userId, onSuccess }: Props) {
-  const [open, setOpen] = useState(false)
+export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, onClose: controlledOnClose }: Props) {
+  const isControlled = controlledOpen !== undefined
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = isControlled ? controlledOpen! : internalOpen
+
   const [step, setStep] = useState<Step>('method')
   const [method, setMethod] = useState<Method | null>(null)
   const [amountInput, setAmountInput] = useState('')
@@ -64,8 +70,15 @@ export default function WalletTopUp({ userId, onSuccess }: Props) {
       .catch(() => {})
   }, [open])
 
-  const reset = () => { setStep('method'); setMethod(null); setAmountInput(''); setProcessing(false) }
-  const close = () => { setOpen(false); setTimeout(reset, 300) }
+  // Reset wizard state when modal closes
+  useEffect(() => {
+    if (!open) setTimeout(() => { setStep('method'); setMethod(null); setAmountInput(''); setProcessing(false) }, 300)
+  }, [open])
+
+  const close = () => {
+    if (isControlled) { controlledOnClose?.() }
+    else { setInternalOpen(false) }
+  }
 
   const usd = parseFloat(amountInput) || 0
   const iqd = Math.round(usd * iqdRate)
@@ -90,21 +103,23 @@ export default function WalletTopUp({ userId, onSuccess }: Props) {
 
   return (
     <>
-      {/* Top Up Button */}
-      <button
-        onClick={() => setOpen(true)}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          width: '100%', marginTop: 20, padding: '12px 20px',
-          background: 'var(--gold)', color: 'var(--bg)',
-          border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700,
-          cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-        }}
-        onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--gold-light)'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)' }}
-        onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--gold)'; (e.currentTarget as HTMLButtonElement).style.transform = 'none' }}
-      >
-        ⚡ Top Up · شحن الرصيد
-      </button>
+      {/* Built-in trigger — only rendered in uncontrolled mode */}
+      {!isControlled && (
+        <button
+          onClick={() => setInternalOpen(true)}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            width: '100%', marginTop: 20, padding: '12px 20px',
+            background: 'var(--gold)', color: 'var(--bg)',
+            border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+          }}
+          onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--gold-light)'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)' }}
+          onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--gold)'; (e.currentTarget as HTMLButtonElement).style.transform = 'none' }}
+        >
+          💳 Top Up · شحن الرصيد
+        </button>
+      )}
 
       {/* Modal */}
       {open && (

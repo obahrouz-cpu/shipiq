@@ -582,6 +582,7 @@ export default function Dashboard() {
   const [settingsOpen, setSettingsOpen]   = useState(false)
   const [showExport, setShowExport]       = useState(false)
   const [txnFilter, setTxnFilter]         = useState<'all' | 'topup' | 'deduction'>('all')
+  const [showTopUp, setShowTopUp]         = useState(false)
 
   const toast = (message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
@@ -709,9 +710,15 @@ export default function Dashboard() {
           </div>
           <div className={styles.topbarActions}>
             {!isAdmin && (
-              <div className={styles.balanceChip}>
+              <div
+                className={styles.balanceChip}
+                onClick={() => setShowTopUp(true)}
+                title="Top up wallet"
+                style={{ cursor: 'pointer' }}
+              >
                 <span>💳</span>
                 <span>{profile?.balance?.toLocaleString()} IQD</span>
+                <span style={{ fontSize: 10, color: 'var(--gold-dim)', marginLeft: 2 }}>＋</span>
               </div>
             )}
             {!isAdmin && page === 'orders' && (
@@ -873,6 +880,13 @@ export default function Dashboard() {
             <div className="fade-up">
               <div className={styles.pageHeader}>
                 <div><div className={styles.pageHeading}>{t('balance', 'title')}</div></div>
+                <button
+                  className={styles.btnPrimary}
+                  style={{ fontSize: 15, padding: '11px 24px', gap: 10 }}
+                  onClick={() => setShowTopUp(true)}
+                >
+                  💳 Top Up · شحن الرصيد
+                </button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
                 <div className={styles.card} style={{ textAlign: 'center', padding: '36px 24px' }}>
@@ -880,7 +894,13 @@ export default function Dashboard() {
                   <span className={styles.priceBig}>{profile?.balance?.toLocaleString()}</span>
                   <span className={styles.priceCurrency}>IQD</span>
                   <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-dim)' }}>≈ ${Math.round((profile?.balance || 0) / 1450)} USD</div>
-                  {profile && <WalletTopUp userId={profile.id} onSuccess={fetchData} />}
+                  <button
+                    className={styles.btnPrimary}
+                    style={{ width: '100%', marginTop: 20, fontSize: 14 }}
+                    onClick={() => setShowTopUp(true)}
+                  >
+                    ⚡ Top Up Wallet · شحن المحفظة
+                  </button>
                 </div>
                 <div className={styles.card} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1042,6 +1062,7 @@ export default function Dashboard() {
       </div>
 
       {showNewOrder && profile && <SubmitOrderModal userId={profile.id} onClose={() => setShowNewOrder(false)} onDone={() => { fetchData(); toast('Order submitted! · تم إرسال الطلب') }} />}
+      {profile && <WalletTopUp userId={profile.id} open={showTopUp} onClose={() => setShowTopUp(false)} onSuccess={() => { fetchData(); toast('Top-up request sent! · تم إرسال طلب الشحن') }} />}
       {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} />}
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}
       {showExport && isAdmin && <AdminExport orders={orders} onClose={() => setShowExport(false)} />}
