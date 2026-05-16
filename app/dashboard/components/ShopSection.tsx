@@ -5,24 +5,42 @@ import { STORES, COUNTRY_FILTERS, CATEGORY_FILTERS, SUPPORTED_SITES, SHIPPING_RA
 import styles from './ShopSection.module.css'
 import DealsSection from './DealsSection'
 
-// ── Brand logo with emoji fallback ────────────────────────────────────────────
+// ── Brand logo: Clearbit → gstatic → emoji ───────────────────────────────────
 
 function StoreLogo({
-  domain, emoji, size = 48, emojiClass,
+  domain, emoji, size = 56, emojiClass,
 }: {
   domain: string; emoji: string; size?: number; emojiClass?: string
 }) {
+  const [imgSrc, setImgSrc] = useState(
+    `https://logo.clearbit.com/${domain}?size=80`
+  )
   const [failed, setFailed] = useState(false)
+
   if (failed) return <div className={emojiClass ?? styles.storeEmoji}>{emoji}</div>
+
   return (
     <img
-      src={`https://logo.clearbit.com/${domain}`}
+      src={imgSrc}
       alt=""
-      width={size}
-      height={size}
+      width={56}
+      height={56}
       className={styles.storeLogo}
-      style={{ width: size, height: size }}
-      onError={() => setFailed(true)}
+      style={{
+        width: size,
+        height: size,
+        objectFit: 'contain',
+        padding: 8,
+        background: 'white',
+        borderRadius: 12,
+      }}
+      onError={() => {
+        if (imgSrc.includes('clearbit.com')) {
+          setImgSrc(`https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=64`)
+        } else {
+          setFailed(true)
+        }
+      }}
     />
   )
 }
@@ -95,7 +113,7 @@ function StorePanel({ store, onClose }: { store: Store; onClose: () => void }) {
         {/* ── Header ── */}
         <div className={styles.panelHeader}>
           <div className={styles.panelStoreInfo}>
-            <StoreLogo domain={displayStore.domain} emoji={displayStore.emoji} size={44} emojiClass={styles.panelEmoji} />
+            <StoreLogo domain={displayStore.domain} emoji={displayStore.emoji} size={32} emojiClass={styles.panelEmoji} />
             <div>
               <div className={styles.panelStoreName}>{displayStore.name}</div>
               <div className={styles.panelStoreCountry}>
@@ -298,7 +316,7 @@ export default function ShopSection() {
                   el.style.background  = 'var(--surface)'
                 }}
               >
-                <StoreLogo domain={store.domain} emoji={store.emoji} size={48} />
+                <StoreLogo domain={store.domain} emoji={store.emoji} size={32} />
                 <div className={styles.storeName}>{store.name}</div>
                 <div className={styles.storeTags}>
                   <span
