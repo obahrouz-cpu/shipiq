@@ -1,0 +1,217 @@
+/* ── Wrapper ────────────────────────────────────────────────── */
+.wrap {
+  margin-bottom: 24px;
+}
+
+/* ── Carousel hover zone (pauses auto-scroll) ───────────────── */
+.carouselWrap {
+  margin-bottom: 4px;
+}
+
+/* ── Overflow clip ──────────────────────────────────────────── */
+.carouselOuter {
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ── Sliding track ──────────────────────────────────────────── */
+.track {
+  display: flex;
+  transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Individual card ────────────────────────────────────────── */
+.card {
+  flex: 0 0 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 26px 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 156px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle inner glow to make cards feel premium */
+.card::after {
+  content: '';
+  position: absolute;
+  top: -40%;
+  right: -10%;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  pointer-events: none;
+}
+
+.cardEmoji {
+  font-size: 34px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.cardTitle {
+  font-size: 19px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+}
+
+.cardSub {
+  font-size: 13px;
+  color: rgba(255,255,255,0.78);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.cardCta {
+  align-self: flex-start;
+  margin-top: 10px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.25);
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.cardCta:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+/* ── Dots ────────────────────────────────────────────────────── */
+.dotsRow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 0 14px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  border: none;
+  padding: 0;
+  background: var(--border);
+  cursor: pointer;
+  transition: all 0.25s;
+}
+
+.dotActive {
+  background: var(--gold);
+  width: 20px;
+}
+
+/* ── Recently Visited ────────────────────────────────────────── */
+.recentSection {
+  margin-bottom: 20px;
+}
+
+.recentHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.recentLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+.clearBtn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+
+.clearBtn:hover {
+  background: var(--surface2);
+  color: var(--text-muted);
+  border-color: var(--text-dim);
+}
+
+.recentRow {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  /* hide scrollbar */
+  scrollbar-width: none;
+}
+
+.recentRow::-webkit-scrollbar { display: none; }
+
+.recentCard {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.recentCard:hover {
+  background: var(--surface2);
+  transform: translateY(-1px);
+}
+
+.recentLogo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.9);
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.recentEmoji {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.recentName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* ── Mobile ──────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .card { padding: 20px 18px 18px; min-height: 140px; }
+  .cardTitle { font-size: 17px; }
+  .cardEmoji { font-size: 28px; }
+}
