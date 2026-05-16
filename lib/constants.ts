@@ -38,11 +38,15 @@ export const SHIPPING_RATES: Record<string, ShippingRate> = {
 // ── Order status display config ───────────────────────────────────────────────
 
 export const STATUS_CONFIG: Record<string, StatusConfigEntry> = {
-  pending:    { label: 'Pending',    labelAr: 'قيد الانتظار', cls: 'pending',    icon: '⏳' },
-  calculated: { label: 'Calculated', labelAr: 'تم الحساب',   cls: 'calculated', icon: '💰' },
-  confirmed:  { label: 'Confirmed',  labelAr: 'مؤكد',        cls: 'confirmed',  icon: '✅' },
-  shipped:    { label: 'Shipped',    labelAr: 'تم الشحن',    cls: 'shipped',    icon: '📦' },
-  rejected:   { label: 'Rejected',   labelAr: 'مرفوض',       cls: 'rejected',   icon: '❌' },
+  pending:    { label: 'Pending',        labelAr: 'قيد الانتظار',  cls: 'pending',    icon: '⏳' },
+  calculated: { label: 'Calculated',     labelAr: 'تم الحساب',     cls: 'calculated', icon: '💰' },
+  confirmed:  { label: 'Confirmed',      labelAr: 'مؤكد',          cls: 'confirmed',  icon: '✅' },
+  ordered:    { label: 'Ordered',        labelAr: 'تم الطلب',      cls: 'ordered',    icon: '🛒' },
+  warehouse:  { label: 'At Warehouse',   labelAr: 'في المستودع',   cls: 'warehouse',  icon: '🏭' },
+  transit:    { label: 'In Transit',     labelAr: 'في الطريق',     cls: 'transit',    icon: '✈️' },
+  arrived:    { label: 'Arrived in City',labelAr: 'وصل للمدينة',   cls: 'arrived',    icon: '🏙️' },
+  delivered:  { label: 'Delivered',      labelAr: 'تم التوصيل',    cls: 'delivered',  icon: '📬' },
+  rejected:   { label: 'Rejected',       labelAr: 'مرفوض',         cls: 'rejected',   icon: '❌' },
 }
 
 // ── Order form categories ─────────────────────────────────────────────────────

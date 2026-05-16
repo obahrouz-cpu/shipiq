@@ -1,6 +1,6 @@
 // ── Domain types ─────────────────────────────────────────────────────────────
 
-export type OrderStatus = 'pending' | 'calculated' | 'confirmed' | 'shipped' | 'rejected'
+export type OrderStatus = 'pending' | 'calculated' | 'confirmed' | 'ordered' | 'warehouse' | 'transit' | 'arrived' | 'delivered' | 'rejected'
 
 export interface StatusConfigEntry {
   label: string

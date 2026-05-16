@@ -5,7 +5,7 @@ import styles from './OrderFilters.module.css'
 // ── Public types ──────────────────────────────────────────────────────────────
 
 export interface OrderFiltersState {
-  status: string        // 'all' | 'pending' | 'calculated' | 'confirmed' | 'shipped' | 'rejected'
+  status: string        // 'all' | 'pending' | 'calculated' | 'confirmed' | 'ordered' | 'warehouse' | 'transit' | 'arrived' | 'delivered' | 'rejected'
   category: string      // 'All' | specific category
   dateRange: string     // 'all' | '7d' | '30d' | '3m'
   sort: string          // 'newest' | 'oldest' | 'price-high' | 'price-low'
@@ -31,12 +31,16 @@ export const DEFAULT_FILTERS: OrderFiltersState = {
 // ── Option lists ──────────────────────────────────────────────────────────────
 
 const STATUS_OPTS = [
-  { v: 'all', l: 'All' },
-  { v: 'pending', l: '⏳ Pending' },
-  { v: 'calculated', l: '💰 Calculated' },
+  { v: 'all',       l: 'All' },
+  { v: 'pending',   l: '⏳ Pending' },
+  { v: 'calculated',l: '💰 Calculated' },
   { v: 'confirmed', l: '✅ Confirmed' },
-  { v: 'shipped', l: '📦 Shipped' },
-  { v: 'rejected', l: '❌ Rejected' },
+  { v: 'ordered',   l: '🛒 Ordered' },
+  { v: 'warehouse', l: '🏭 At Warehouse' },
+  { v: 'transit',   l: '✈️ In Transit' },
+  { v: 'arrived',   l: '🏙️ Arrived' },
+  { v: 'delivered', l: '📬 Delivered' },
+  { v: 'rejected',  l: '❌ Rejected' },
 ]
 
 const CATEGORY_OPTS = ['All', 'Electronics', 'Clothing', 'Cosmetics', 'Home', 'Gaming', 'Shoes', 'Sports', 'Other']

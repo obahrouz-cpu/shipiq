@@ -127,6 +127,26 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
   )
 }
 
+// ── Shipping progress constants ───────────────────────────────────────────────
+
+const PROGRESS_STEPS = ['pending', 'calculated', 'confirmed', 'ordered', 'warehouse', 'transit', 'arrived', 'delivered']
+
+const NEXT_STATUS: Record<string, string> = {
+  confirmed: 'ordered',
+  ordered:   'warehouse',
+  warehouse: 'transit',
+  transit:   'arrived',
+  arrived:   'delivered',
+}
+
+const NEXT_LABEL: Record<string, string> = {
+  confirmed: 'Mark as Ordered 🛒',
+  ordered:   'Mark as At Warehouse 🏭',
+  warehouse: 'Mark as In Transit ✈️',
+  transit:   'Mark as Arrived in City 🏙️',
+  arrived:   'Mark as Delivered 📬',
+}
+
 // ── SubmitOrderModal ──────────────────────────────────────────────────────────
 
 function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose: () => void; onDone: () => void }) {
@@ -320,15 +340,47 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order
           <button className={styles.modalClose} onClick={onClose}>✕</button>
         </div>
         {isAdmin && (
-          <div className={styles.tabs}>
-            <button className={`${styles.tab} ${view === 'detail' ? styles.activeTab : ''}`} onClick={() => setView('detail')}>Details</button>
-            {order.status === 'pending' && <button className={`${styles.tab} ${view === 'calculate' ? styles.activeTab : ''}`} onClick={() => setView('calculate')}>Calculate Shipping</button>}
-            {['pending', 'calculated'].includes(order.status) && <button className={`${styles.tab} ${view === 'reject' ? styles.activeTab : ''}`} onClick={() => setView('reject')}>Reject</button>}
-            {order.status === 'confirmed' && <button className={styles.tab} onClick={() => applyUpdate({ status: 'shipped' })}>Mark Shipped 📦</button>}
-          </div>
+          <>
+            <div className={styles.tabs}>
+              <button className={`${styles.tab} ${view === 'detail' ? styles.activeTab : ''}`} onClick={() => setView('detail')}>Details</button>
+              {order.status === 'pending' && <button className={`${styles.tab} ${view === 'calculate' ? styles.activeTab : ''}`} onClick={() => setView('calculate')}>Calculate Shipping</button>}
+              {['pending', 'calculated'].includes(order.status) && <button className={`${styles.tab} ${view === 'reject' ? styles.activeTab : ''}`} onClick={() => setView('reject')}>Reject</button>}
+            </div>
+            {NEXT_STATUS[order.status] && (
+              <div style={{ padding: '0 0 16px' }}>
+                <button className={styles.btnPrimary} style={{ width: '100%' }} onClick={() => applyUpdate({ status: NEXT_STATUS[order.status] })} disabled={loading}>
+                  {loading ? <Spinner /> : NEXT_LABEL[order.status]}
+                </button>
+              </div>
+            )}
+            {order.status === 'delivered' && (
+              <div style={{ textAlign: 'center', padding: '8px 0 16px', fontSize: 15, color: 'var(--green)', fontWeight: 700 }}>Order Complete ✅</div>
+            )}
+          </>
         )}
         {view === 'detail' && (
           <div>
+            {!isAdmin && order.status !== 'rejected' && (
+              <div className={styles.progressTimeline}>
+                {PROGRESS_STEPS.map((step, i) => {
+                  const cfg = STATUS_CONFIG[step]
+                  const currentIdx = PROGRESS_STEPS.indexOf(order.status)
+                  const isDone = i < currentIdx
+                  const isCurrent = i === currentIdx
+                  return (
+                    <div key={step} style={{ display: 'flex', alignItems: 'flex-start', flex: i < PROGRESS_STEPS.length - 1 ? '1' : undefined }}>
+                      <div className={`${styles.progressStep} ${isDone ? styles.progressDone : ''} ${isCurrent ? styles.progressCurrent : ''}`}>
+                        <div className={styles.progressDot}>{isDone ? '✓' : cfg.icon}</div>
+                        <div className={styles.progressLabel}>{cfg.label}</div>
+                      </div>
+                      {i < PROGRESS_STEPS.length - 1 && (
+                        <div className={`${styles.progressConnector} ${isDone ? styles.progressConnectorDone : ''}`} />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
             {([
               ['Product URL', order.url, true],
               ['Description', order.description],
@@ -626,7 +678,7 @@ export default function Dashboard() {
                   { label: 'Balance · الرصيد', value: `${profile?.balance?.toLocaleString()} IQD`, icon: '💳', color: '#c9a84c', bg: 'rgba(201,168,76,0.1)' },
                   { label: 'Pending · معلق', value: orders.filter(o => o.status === 'pending').length, icon: '⏳', color: '#e07b3a', bg: 'rgba(224,123,58,0.1)' },
                   { label: 'Calculated · محسوب', value: orders.filter(o => o.status === 'calculated').length, icon: '💰', color: '#5b9bd5', bg: 'rgba(91,155,213,0.1)' },
-                  { label: 'Shipped · مشحون', value: orders.filter(o => o.status === 'shipped').length, icon: '📦', color: '#4caf7a', bg: 'rgba(76,175,122,0.1)' },
+                  { label: 'Delivered · تم التسليم', value: orders.filter(o => o.status === 'delivered').length, icon: '📬', color: '#16a34a', bg: 'rgba(34,197,94,0.1)' },
                 ].map((s, i) => (
                   <div key={i} className={styles.statCard} style={{ animationDelay: `${i * 80}ms` }}>
                     <div className={styles.statIcon} style={{ background: s.bg, color: s.color }}>{s.icon}</div>
