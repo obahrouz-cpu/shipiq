@@ -5,14 +5,61 @@ import { googleSignIn, emailSignIn, emailSignUp } from '@/lib/api'
 import type { AuthForm } from '@/lib/types'
 import styles from './auth.module.css'
 
+// ── Phone helpers ─────────────────────────────────────────────────────────────
+
+function formatIraqiPhone(raw: string): string {
+  let digits = raw.replace(/\D/g, '')
+  // Strip country code if user pastes a full number
+  if (digits.startsWith('964')) digits = digits.slice(3)
+  if (digits.startsWith('0'))   digits = digits.slice(1)
+  digits = digits.slice(0, 10)
+  // Format: 7XX XXX XXXX
+  if (digits.length <= 3) return digits
+  if (digits.length <= 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`
+  return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`
+}
+
+function isValidIraqiPhone(phone: string): boolean {
+  return /^\+9647\d{9}$/.test(phone)
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function AuthPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'login' | 'register'>('login')
-  const [form, setForm] = useState<AuthForm>({ name: '', email: '', phone: '', password: '' })
+  const [tab, setTab]         = useState<'login' | 'register'>('login')
+  const [form, setForm]       = useState<AuthForm>({ name: '', email: '', phone: '', password: '' })
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError]     = useState('')
+
+  // Phone field local state
+  const [phoneDisplay, setPhoneDisplay] = useState('')
+  const [phoneError, setPhoneError]     = useState('')
+  const [phoneTouched, setPhoneTouched] = useState(false)
 
   const handle = (k: keyof AuthForm, v: string) => setForm(p => ({ ...p, [k]: v }))
+
+  function validatePhone(display: string): boolean {
+    const digits = display.replace(/\D/g, '')
+    if (!digits) {
+      setPhoneError('Phone number is required · الهاتف مطلوب')
+      return false
+    }
+    if (digits.length !== 10 || !digits.startsWith('7')) {
+      setPhoneError('Please enter a valid Iraqi phone number · الرجاء إدخال رقم هاتف عراقي صحيح')
+      return false
+    }
+    setPhoneError('')
+    return true
+  }
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatIraqiPhone(e.target.value)
+    setPhoneDisplay(formatted)
+    const digits = formatted.replace(/\D/g, '')
+    handle('phone', digits.length === 10 ? `+964${digits}` : '')
+    if (phoneTouched) validatePhone(formatted)
+  }
 
   const login = async () => {
     setLoading(true); setError('')
@@ -27,6 +74,8 @@ export default function AuthPage() {
   }
 
   const register = async () => {
+    setPhoneTouched(true)
+    if (!validatePhone(phoneDisplay)) return
     setLoading(true); setError('')
     const { error: err } = await emailSignUp(form.email, form.password, form.name, form.phone)
     if (err) { setError(err); setLoading(false); return }
@@ -84,15 +133,25 @@ export default function AuthPage() {
               <label className={styles.label}>Full Name · الاسم الكامل</label>
               <input className={styles.input} placeholder="Ahmed Hassan" value={form.name} onChange={e => handle('name', e.target.value)} />
             </div>
-            <div className={styles.grid2}>
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Email · البريد</label>
-                <input className={styles.input} type="email" placeholder="email@example.com" value={form.email} onChange={e => handle('email', e.target.value)} />
+            <div className={styles.formGroup}>
+              <label className={styles.label}>Email · البريد الإلكتروني</label>
+              <input className={styles.input} type="email" placeholder="email@example.com" value={form.email} onChange={e => handle('email', e.target.value)} />
+            </div>
+            <div className={styles.formGroup}>
+              <label className={styles.label}>Phone · الهاتف</label>
+              <div className={`${styles.phoneGroup} ${phoneError ? styles.phoneGroupError : ''}`}>
+                <span className={styles.phonePrefix}>+964</span>
+                <input
+                  className={styles.phoneInput}
+                  type="tel"
+                  placeholder="770 123 4567"
+                  value={phoneDisplay}
+                  onChange={handlePhoneChange}
+                  onBlur={() => { setPhoneTouched(true); validatePhone(phoneDisplay) }}
+                  maxLength={12}
+                />
               </div>
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Phone · الهاتف</label>
-                <input className={styles.input} placeholder="+964 7XX XXX XXXX" value={form.phone} onChange={e => handle('phone', e.target.value)} />
-              </div>
+              {phoneError && <div className={styles.fieldError}>{phoneError}</div>}
             </div>
             <div className={styles.formGroup}>
               <label className={styles.label}>Password · كلمة المرور</label>

@@ -158,3 +158,55 @@
 }
 .divider::before { left: 0; }
 .divider::after  { right: 0; }
+
+/* ── Phone prefix field ───────────────────────────────────────── */
+.phoneGroup {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.phoneGroup:focus-within {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+}
+.phoneGroupError {
+  border-color: var(--red);
+}
+.phoneGroupError:focus-within {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(217,83,79,0.1);
+}
+.phonePrefix {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--surface3);
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+.phoneInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+  min-width: 0;
+}
+.phoneInput::placeholder { color: var(--text-dim); }
+.fieldError {
+  font-size: 11px;
+  color: var(--red);
+  margin-top: 5px;
+}
