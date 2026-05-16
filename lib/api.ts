@@ -101,7 +101,8 @@ export async function getUserOrders(userId: string): Promise<Order[]> {
 export async function createOrder(
   userId: string,
   form: OrderForm,
-  photo: File | null
+  photo: File | null,
+  autoImageUrl?: string | null
 ): Promise<{ error: string | null }> {
   const supabase = createClient()
   let photoUrl: string | null = null
@@ -128,7 +129,7 @@ export async function createOrder(
     item_price_currency: form.itemPriceCurrency,
     note: form.note,
     urgency: form.urgency,
-    photo_url: photoUrl,
+    photo_url: photoUrl ?? autoImageUrl ?? null,
     status: 'pending',
   })
 

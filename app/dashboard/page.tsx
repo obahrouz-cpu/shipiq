@@ -175,6 +175,8 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
   const [estimateLoading, setEstimateLoading] = useState(false)
   const [estimateError, setEstimateError] = useState('')
   const [trendyolKg, setTrendyolKg] = useState<number | null>(null)
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null)
+  const [thumbLoading, setThumbLoading] = useState(false)
 
   const handle = <K extends keyof OrderForm>(k: K, v: OrderForm[K]) => setForm(p => ({ ...p, [k]: v }))
 
@@ -205,11 +207,27 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
     return () => clearTimeout(timer)
   }, [form.url])
 
+  useEffect(() => {
+    setThumbUrl(null)
+    setThumbLoading(false)
+    if (!form.url || !form.url.startsWith('http')) return
+    setThumbLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/product-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: form.url }) })
+        const data = await res.json()
+        setThumbUrl(data.image_url || null)
+      } catch { setThumbUrl(null) }
+      setThumbLoading(false)
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [form.url])
+
   const submit = async () => {
     if (!form.url || !form.description) { setError('URL and description are required'); return }
     if (!form.url.startsWith('http')) { setError('URL must start with http:// or https://'); return }
     setLoading(true); setError('')
-    const { error: err } = await createOrder(userId, form, photo)
+    const { error: err } = await createOrder(userId, form, photo, thumbUrl)
     setLoading(false)
     if (err) { setError(err); return }
     onDone(); onClose()
@@ -239,6 +257,19 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
         <div className={styles.formGroup}>
           <label className={styles.label}>Product URL · رابط المنتج *</label>
           <input className={styles.input} placeholder="https://amazon.com/dp/..." value={form.url} onChange={e => handle('url', e.target.value)} />
+          {(thumbLoading || thumbUrl) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, padding: '7px 10px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7 }}>
+              {thumbLoading
+                ? <div style={{ width: 44, height: 44, borderRadius: 6, background: 'var(--surface3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span className={styles.spinner} style={{ width: 14, height: 14, borderTopColor: 'var(--gold)' }} />
+                  </div>
+                : <img src={thumbUrl!} alt="" style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0 }} onError={() => setThumbUrl(null)} />
+              }
+              <span style={{ fontSize: 12, color: thumbLoading ? 'var(--text-dim)' : 'var(--green)' }}>
+                {thumbLoading ? 'Loading product image...' : '✓ Product image detected'}
+              </span>
+            </div>
+          )}
         </div>
         {estimateLoading && isUrlSupported && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 13px', background: 'rgba(201,168,76,0.04)', border: '1px solid rgba(201,168,76,0.15)', borderRadius: 8, fontSize: 12, color: 'var(--text-dim)', marginTop: -12, marginBottom: 16 }}>
@@ -392,6 +423,19 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order
         )}
         {view === 'detail' && (
           <div>
+            {order.photo_url && (
+              <div style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <img
+                  src={order.photo_url} alt={order.description}
+                  style={{ width: 80, height: 80, borderRadius: 10, objectFit: 'cover', border: '1px solid var(--border)', background: 'var(--surface2)', flexShrink: 0 }}
+                  onError={e => { (e.currentTarget as HTMLImageElement).parentElement!.style.display = 'none' }}
+                />
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', paddingTop: 4, lineHeight: 1.5 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{order.description}</div>
+                  <a href={order.photo_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none' }}>View full image ↗</a>
+                </div>
+              </div>
+            )}
             {!isAdmin && order.status !== 'rejected' && (
               <div className={styles.progressTimeline}>
                 {PROGRESS_STEPS.map((step, i) => {
@@ -435,12 +479,6 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order
                   }
                 </div>
               ))}
-            {order.photo_url && (
-              <div className={styles.detailRow}>
-                <span className={styles.detailKey}>Photo</span>
-                <a href={order.photo_url} target="_blank" className={styles.detailLink}>View Photo 🖼️</a>
-              </div>
-            )}
             {order.shipping_price && (
               <div className={styles.priceBox}>
                 <div className={styles.priceLabel}>Estimated Shipping Cost</div>
@@ -850,9 +888,20 @@ export default function Dashboard() {
                               </td>
                             )}
                             <td>
-                              <div style={{ fontWeight: 500, color: 'var(--text)', fontSize: 13 }}>{o.description}</div>
-                              <a className={styles.tdLink} href={o.url} target="_blank" onClick={e => e.stopPropagation()}>{o.url}</a>
-                              {o.urgency && <span style={{ fontSize: 10, color: 'var(--orange)' }}> ⚡ Urgent</span>}
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                {o.photo_url && (
+                                  <img
+                                    src={o.photo_url} alt=""
+                                    style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0, marginTop: 1 }}
+                                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                                  />
+                                )}
+                                <div>
+                                  <div style={{ fontWeight: 500, color: 'var(--text)', fontSize: 13 }}>{o.description}</div>
+                                  <a className={styles.tdLink} href={o.url} target="_blank" onClick={e => e.stopPropagation()}>{o.url}</a>
+                                  {o.urgency && <span style={{ fontSize: 10, color: 'var(--orange)' }}> ⚡ Urgent</span>}
+                                </div>
+                              </div>
                             </td>
                             <td>{o.category}</td>
                             <td>{o.item_price ? `${o.item_price} ${o.item_price_currency}` : '—'}</td>
