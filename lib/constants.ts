@@ -93,6 +93,7 @@ export const STORES: Store[] = [
   { name: 'Namshi',          emoji: '👗', country: 'UAE', flag: '🇦🇪', category: 'Clothing',    domain: 'namshi.com',      color: '#9c6fe4', bg: 'rgba(156,111,228,0.1)' },
   { name: 'Sharaf DG',       emoji: '📱', country: 'UAE', flag: '🇦🇪', category: 'Electronics', domain: 'sharafdg.com',    color: '#e31e25', bg: 'rgba(227,30,37,0.1)' },
   { name: 'Brands for Less', emoji: '🏷️', country: 'UAE', flag: '🇦🇪', category: 'Clothing',    domain: 'brandsforless.ae',color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
+  { name: 'Boutiqaat',      emoji: '💄', country: 'UAE', flag: '🇦🇪', category: 'Beauty',      domain: 'boutiqaat.com',   color: '#c2185b', bg: 'rgba(194,24,91,0.1)'  },
   // ── Turkey ────────────────────────────────────────────────────────────────
   { name: 'Trendyol',    emoji: '🛍️', country: 'Turkey', flag: '🇹🇷', category: 'Clothing',    domain: 'trendyol.com',   color: '#F27A1A', bg: 'rgba(242,122,26,0.1)' },
   { name: 'Hepsiburada', emoji: '🛒', country: 'Turkey', flag: '🇹🇷', category: 'Electronics', domain: 'hepsiburada.com',color: '#FF6000', bg: 'rgba(255,96,0,0.1)' },
