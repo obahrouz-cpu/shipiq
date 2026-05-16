@@ -1,37 +1,17 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
+import {
+  getSession, getProfile, getAdminOrders, getUserOrders,
+  getCustomers, getUserTransactions, createOrder,
+  updateOrder, confirmOrder, topUpBalance, signOut,
+} from '@/lib/api'
+import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
+import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult } from '@/lib/types'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
 
-const CATEGORIES = ['Electronics','Clothing','Cosmetics','Books','Home & Kitchen','Toys','Sports','Other']
-
-const STATUS_CONFIG: Record<string, { label: string; labelAr: string; cls: string; icon: string }> = {
-  pending:    { label: 'Pending',    labelAr: 'قيد الانتظار', cls: 'pending',    icon: '⏳' },
-  calculated: { label: 'Calculated', labelAr: 'تم الحساب',   cls: 'calculated', icon: '💰' },
-  confirmed:  { label: 'Confirmed',  labelAr: 'مؤكد',        cls: 'confirmed',  icon: '✅' },
-  shipped:    { label: 'Shipped',    labelAr: 'تم الشحن',    cls: 'shipped',    icon: '📦' },
-  rejected:   { label: 'Rejected',   labelAr: 'مرفوض',       cls: 'rejected',   icon: '❌' },
-}
-
-const SUPPORTED_SITES = [
-  'amazon.com', 'amazon.co.uk', 'amazon.de', 'amazon.ae', 'amazon.ca',
-  'bhphotovideo.com', 'newegg.com', 'bestbuy.com', 'ebay.com',
-  'trendyol.com', 'hepsiburada.com', 'n11.com',
-  'aliexpress.com', 'taobao.com', '1688.com', 'jd.com'
-]
-
-const SHIPPING_RATE_RANGES: Record<string, { min: number; max: number }> = {
-  'USA':     { min: 12000, max: 19000 },
-  'UK':      { min: 11000, max: 17000 },
-  'Germany': { min: 11000, max: 17000 },
-  'Canada':  { min: 10000, max: 16000 },
-  'UAE':     { min:  6000, max: 10000 },
-  'Turkey':  { min:  5000, max:  8000 },
-  'China':   { min:  8000, max: 14000 },
-}
-
+// ── Small shared components ───────────────────────────────────────────────────
 
 function Badge({ status }: { status: string }) {
   const s = STATUS_CONFIG[status] || STATUS_CONFIG.pending
@@ -42,7 +22,7 @@ function Spinner() {
   return <span className={styles.spinner} />
 }
 
-function Toast({ toasts }: { toasts: { id: number; message: string; type: string }[] }) {
+function Toast({ toasts }: { toasts: Toast[] }) {
   return (
     <div className={styles.toastContainer}>
       {toasts.map(t => (
@@ -55,9 +35,11 @@ function Toast({ toasts }: { toasts: { id: number; message: string; type: string
   )
 }
 
+// ── AutoCalculate ─────────────────────────────────────────────────────────────
+
 function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: string, dims: string) => void }) {
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<ScrapeResult | null>(null)
   const [error, setError] = useState('')
 
   const isSupported = SUPPORTED_SITES.some(site => url.toLowerCase().includes(site))
@@ -69,13 +51,16 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
       const response = await fetch('/api/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        body: JSON.stringify({ url }),
       })
-      const data = await response.json()
+      const data: ScrapeResult = await response.json()
       if (!data.found) { setError(data.reason || data.error || 'Could not find info. Enter manually.'); setLoading(false); return }
       setResult(data)
-      onResult(`${data.billable_weight_kg} kg`, `${data.length_cm} x ${data.width_cm} x ${data.height_cm} cm`)
-    } catch (e) { setError('Could not fetch. Enter manually.') }
+      onResult(
+        `${data.billable_weight_kg} kg`,
+        `${data.length_cm} x ${data.width_cm} x ${data.height_cm} cm`,
+      )
+    } catch { setError('Could not fetch. Enter manually.') }
     setLoading(false)
   }
 
@@ -122,16 +107,22 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
   )
 }
 
+// ── SubmitOrderModal ──────────────────────────────────────────────────────────
+
 function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose: () => void; onDone: () => void }) {
-  const [form, setForm] = useState({ url: '', description: '', category: 'Electronics', qty: 1, itemPrice: '', itemPriceCurrency: 'USD', note: '', urgency: false })
+  const [form, setForm] = useState<OrderForm>({
+    url: '', description: '', category: 'Electronics', qty: 1,
+    itemPrice: '', itemPriceCurrency: 'USD', note: '', urgency: false,
+  })
   const [photo, setPhoto] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
-  const handle = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
-  const [scrapeResult, setScrapeResult] = useState<any>(null)
+  const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null)
   const [estimateLoading, setEstimateLoading] = useState(false)
   const [estimateError, setEstimateError] = useState('')
+
+  const handle = <K extends keyof OrderForm>(k: K, v: OrderForm[K]) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => {
     const supported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
@@ -141,16 +132,16 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
     const timer = setTimeout(async () => {
       try {
         const res = await fetch('/api/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: form.url }) })
-        const data = await res.json()
+        const data: ScrapeResult = await res.json()
         if (data.found && data.billable_weight_kg) {
           setScrapeResult(data)
         } else {
           setScrapeResult(null)
           setEstimateError(data.reason || data.error || 'Could not calculate estimate for this product.')
         }
-      } catch (e: any) {
+      } catch (e) {
         setScrapeResult(null)
-        setEstimateError(e?.message || 'Failed to reach the scrape API.')
+        setEstimateError(e instanceof Error ? e.message : 'Failed to reach the scrape API.')
       }
       setEstimateLoading(false)
     }, 800)
@@ -161,30 +152,14 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
     if (!form.url || !form.description) { setError('URL and description are required'); return }
     if (!form.url.startsWith('http')) { setError('URL must start with http:// or https://'); return }
     setLoading(true); setError('')
-    const supabase = createClient()
-    let photoUrl = null
-    if (photo) {
-      const ext = photo.name.split('.').pop()
-      const fileName = `${userId}/${Date.now()}.${ext}`
-      const { data, error: uploadError } = await supabase.storage.from('order-photos').upload(fileName, photo)
-      if (!uploadError && data) {
-        const { data: urlData } = supabase.storage.from('order-photos').getPublicUrl(fileName)
-        photoUrl = urlData.publicUrl
-      }
-    }
-    const { error: insertError } = await supabase.from('orders').insert({
-      user_id: userId, url: form.url, description: form.description, category: form.category,
-      qty: form.qty, item_price: form.itemPrice ? parseFloat(form.itemPrice) : null,
-      item_price_currency: form.itemPriceCurrency, note: form.note, urgency: form.urgency,
-      photo_url: photoUrl, status: 'pending',
-    })
+    const { error: err } = await createOrder(userId, form, photo)
     setLoading(false)
-    if (insertError) { setError(insertError.message); return }
+    if (err) { setError(err); return }
     onDone(); onClose()
   }
 
   const isUrlSupported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
-  const rates = SHIPPING_RATE_RANGES[scrapeResult?.site?.country ?? ''] ?? { min: 10000, max: 18000 }
+  const rates = SHIPPING_RATES[scrapeResult?.site?.country ?? ''] ?? { min: 10000, max: 18000 }
   const totalKg = scrapeResult?.billable_weight_kg ? scrapeResult.billable_weight_kg * form.qty : 0
   const shippingEstimate = totalKg > 0 ? { min: Math.round(rates.min * totalKg), max: Math.round(rates.max * totalKg), kg: totalKg } : null
 
@@ -287,38 +262,30 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
   )
 }
 
-function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: any; isAdmin: boolean; onClose: () => void; onRefresh: () => void }) {
+// ── OrderDetailModal ──────────────────────────────────────────────────────────
+
+function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order; isAdmin: boolean; onClose: () => void; onRefresh: () => void }) {
   const [view, setView] = useState<'detail' | 'calculate' | 'reject'>('detail')
   const [shipping, setShipping] = useState({ price: '', currency: 'IQD', weight: '' })
   const [rejectReason, setRejectReason] = useState('')
   const [loading, setLoading] = useState(false)
   const s = STATUS_CONFIG[order.status]
 
-  const updateOrder = async (updates: any) => {
+  const applyUpdate = async (updates: Record<string, unknown>) => {
     setLoading(true)
-    const supabase = createClient()
-    await supabase.from('orders').update(updates).eq('id', order.id)
+    await updateOrder(order.id, updates)
     setLoading(false); onRefresh(); onClose()
   }
 
-  const handleCalculate = () => updateOrder({
-    status: 'calculated', shipping_price: parseInt(shipping.price),
-    shipping_currency: shipping.currency, weight: shipping.weight,
+  const handleCalculate = () => applyUpdate({
+    status: 'calculated',
+    shipping_price: parseInt(shipping.price),
+    shipping_currency: shipping.currency,
+    weight: shipping.weight,
   })
 
   const handleConfirm = async () => {
-    const supabase = createClient()
-    await supabase.from('orders').update({ status: 'confirmed' }).eq('id', order.id)
-    if (order.shipping_price) {
-      const { data: profile } = await supabase.from('profiles').select('balance, id').eq('id', order.user_id).single()
-      if (profile) {
-        await supabase.from('profiles').update({ balance: profile.balance - order.shipping_price }).eq('id', profile.id)
-        await supabase.from('transactions').insert({
-          user_id: order.user_id, amount: -order.shipping_price, currency: order.shipping_currency,
-          note: `Shipping confirmed for ${order.id}`, order_id: order.id,
-        })
-      }
-    }
+    await confirmOrder(order)
     onRefresh(); onClose()
   }
 
@@ -337,12 +304,12 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: any; 
             <button className={`${styles.tab} ${view === 'detail' ? styles.activeTab : ''}`} onClick={() => setView('detail')}>Details</button>
             {order.status === 'pending' && <button className={`${styles.tab} ${view === 'calculate' ? styles.activeTab : ''}`} onClick={() => setView('calculate')}>Calculate Shipping</button>}
             {['pending', 'calculated'].includes(order.status) && <button className={`${styles.tab} ${view === 'reject' ? styles.activeTab : ''}`} onClick={() => setView('reject')}>Reject</button>}
-            {order.status === 'confirmed' && <button className={styles.tab} onClick={() => updateOrder({ status: 'shipped' })}>Mark Shipped 📦</button>}
+            {order.status === 'confirmed' && <button className={styles.tab} onClick={() => applyUpdate({ status: 'shipped' })}>Mark Shipped 📦</button>}
           </div>
         )}
         {view === 'detail' && (
           <div>
-            {[
+            {([
               ['Product URL', order.url, true],
               ['Description', order.description],
               ['Category', order.category],
@@ -353,15 +320,17 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: any; 
               order.weight ? ['Weight', order.weight] : null,
               ['Submitted', order.created_at?.split('T')[0]],
               order.reject_reason ? ['Rejection Reason', order.reject_reason] : null,
-            ].filter(Boolean).map(([k, v, isLink]: any, i) => (
-              <div key={i} className={styles.detailRow}>
-                <span className={styles.detailKey}>{k}</span>
-                {isLink
-                  ? <a href={v} target="_blank" className={styles.detailLink}>{v}</a>
-                  : <span className={styles.detailVal} style={k === 'Rejection Reason' ? { color: 'var(--red)' } : k === 'Urgency' ? { color: 'var(--orange)' } : {}}>{v}</span>
-                }
-              </div>
-            ))}
+            ] as ([string, string | number, boolean?] | null)[])
+              .filter((r): r is [string, string | number, boolean?] => r !== null)
+              .map(([k, v, isLink], i) => (
+                <div key={i} className={styles.detailRow}>
+                  <span className={styles.detailKey}>{k}</span>
+                  {isLink
+                    ? <a href={String(v)} target="_blank" className={styles.detailLink}>{v}</a>
+                    : <span className={styles.detailVal} style={k === 'Rejection Reason' ? { color: 'var(--red)' } : k === 'Urgency' ? { color: 'var(--orange)' } : {}}>{v}</span>
+                  }
+                </div>
+              ))}
             {order.photo_url && (
               <div className={styles.detailRow}>
                 <span className={styles.detailKey}>Photo</span>
@@ -386,7 +355,7 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: any; 
         )}
         {view === 'calculate' && (
           <div>
-            <AutoCalculate url={order.url} onResult={(weight: string, dims: string) => {
+            <AutoCalculate url={order.url} onResult={(weight: string) => {
               setShipping(p => ({ ...p, weight }))
             }} />
             <div className={styles.grid2}>
@@ -417,7 +386,7 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: any; 
               <label className={styles.label}>Rejection Reason</label>
               <textarea className={styles.textarea} placeholder="e.g. Item not available..." value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
             </div>
-            <button className={styles.btnDanger} style={{ width: '100%' }} onClick={() => updateOrder({ status: 'rejected', reject_reason: rejectReason })}>
+            <button className={styles.btnDanger} style={{ width: '100%' }} onClick={() => applyUpdate({ status: 'rejected', reject_reason: rejectReason })}>
               Reject Order
             </button>
           </div>
@@ -427,17 +396,16 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: any; 
   )
 }
 
-function TopUpModal({ user, onClose, onDone }: { user: any; onClose: () => void; onDone: () => void }) {
+// ── TopUpModal ────────────────────────────────────────────────────────────────
+
+function TopUpModal({ user, onClose, onDone }: { user: Profile; onClose: () => void; onDone: () => void }) {
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('IQD')
   const [loading, setLoading] = useState(false)
 
   const submit = async () => {
     setLoading(true)
-    const supabase = createClient()
-    const add = parseInt(amount)
-    await supabase.from('profiles').update({ balance: user.balance + add }).eq('id', user.id)
-    await supabase.from('transactions').insert({ user_id: user.id, amount: add, currency, note: 'Balance top-up by admin' })
+    await topUpBalance(user.id, user.balance, parseInt(amount), currency)
     setLoading(false); onDone(); onClose()
   }
 
@@ -475,43 +443,41 @@ function TopUpModal({ user, onClose, onDone }: { user: any; onClose: () => void;
   )
 }
 
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
   const router = useRouter()
-  const [profile, setProfile] = useState<any>(null)
-  const [orders, setOrders] = useState<any[]>([])
-  const [users, setUsers] = useState<any[]>([])
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [page, setPage] = useState('dashboard')
-  const [loading, setLoading] = useState(true)
+  const [profile, setProfile]           = useState<Profile | null>(null)
+  const [orders, setOrders]             = useState<Order[]>([])
+  const [users, setUsers]               = useState<Profile[]>([])
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [page, setPage]                 = useState('dashboard')
+  const [loading, setLoading]           = useState(true)
   const [showNewOrder, setShowNewOrder] = useState(false)
-  const [selectedOrder, setSelectedOrder] = useState<any>(null)
-  const [topUpUser, setTopUpUser] = useState<any>(null)
-  const [orderFilter, setOrderFilter] = useState('all')
-  const [toasts, setToasts] = useState<any[]>([])
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [topUpUser, setTopUpUser]       = useState<Profile | null>(null)
+  const [orderFilter, setOrderFilter]   = useState('all')
+  const [toasts, setToasts]             = useState<Toast[]>([])
+  const [sidebarOpen, setSidebarOpen]   = useState(false)
 
-  const toast = (message: string, type = 'success') => {
+  const toast = (message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
     setToasts(p => [...p, { id, message, type }])
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500)
   }
 
   const fetchData = async () => {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
+    const session = await getSession()
     if (!session) { window.location.href = '/auth'; return }
-    const user = session.user
-    const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    const prof = await getProfile(session.user.id)
     if (!prof) { setLoading(false); return }
     setProfile(prof)
     if (prof.role === 'admin') {
-      const { data: allOrders } = await supabase.from('orders').select('*, profiles(full_name, email)').order('created_at', { ascending: false })
-      const { data: allUsers } = await supabase.from('profiles').select('*').eq('role', 'customer').order('created_at', { ascending: false })
-      setOrders(allOrders || []); setUsers(allUsers || [])
+      const [allOrders, allUsers] = await Promise.all([getAdminOrders(), getCustomers()])
+      setOrders(allOrders); setUsers(allUsers)
     } else {
-      const { data: myOrders } = await supabase.from('orders').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
-      const { data: txns } = await supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
-      setOrders(myOrders || []); setTransactions(txns || [])
+      const [myOrders, txns] = await Promise.all([getUserOrders(session.user.id), getUserTransactions(session.user.id)])
+      setOrders(myOrders); setTransactions(txns)
     }
     setLoading(false)
   }
@@ -519,8 +485,7 @@ export default function Dashboard() {
   useEffect(() => { fetchData() }, [])
 
   const logout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await signOut()
     router.push('/auth')
   }
 
@@ -537,7 +502,7 @@ export default function Dashboard() {
   const calculatedCount = orders.filter(o => o.status === 'calculated').length
   const filteredOrders = orderFilter === 'all' ? orders : orders.filter(o => o.status === orderFilter)
 
-  const navItems = isAdmin
+  const navItems: NavItem[] = isAdmin
     ? [
         { id: 'admin-orders', icon: '📋', label: 'All Orders · جميع الطلبات', badge: pendingCount },
         { id: 'admin-customers', icon: '👥', label: 'Customers · العملاء' },
@@ -572,7 +537,7 @@ export default function Dashboard() {
             <div key={n.id} className={`${styles.navItem} ${page === n.id ? styles.navActive : ''}`} onClick={() => { setPage(n.id); setSidebarOpen(false) }}>
               <span>{n.icon}</span>
               <span style={{ flex: 1 }}>{n.label}</span>
-              {!!n.badge && (n.badge as number) > 0 && <span className={styles.navBadge}>{n.badge}</span>}
+              {n.badge !== undefined && n.badge > 0 && <span className={styles.navBadge}>{n.badge}</span>}
             </div>
           ))}
         </div>

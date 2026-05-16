@@ -1,25 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { SITE_INFO } from '@/lib/constants'
 
 const OPENWEBNINJA_KEY = 'ak_ih50qdl5j9zcal1fcrt9373dkzzbu7ahvizay953wvnxin7'
-
-const SITE_INFO: Record<string, { country: string; flag: string }> = {
-  'amazon.com':       { country: 'USA',     flag: '🇺🇸' },
-  'amazon.co.uk':     { country: 'UK',      flag: '🇬🇧' },
-  'amazon.de':        { country: 'Germany', flag: '🇩🇪' },
-  'amazon.ae':        { country: 'UAE',     flag: '🇦🇪' },
-  'amazon.ca':        { country: 'Canada',  flag: '🇨🇦' },
-  'bhphotovideo.com': { country: 'USA',     flag: '🇺🇸' },
-  'newegg.com':       { country: 'USA',     flag: '🇺🇸' },
-  'bestbuy.com':      { country: 'USA',     flag: '🇺🇸' },
-  'ebay.com':         { country: 'USA',     flag: '🇺🇸' },
-  'trendyol.com':     { country: 'Turkey',  flag: '🇹🇷' },
-  'hepsiburada.com':  { country: 'Turkey',  flag: '🇹🇷' },
-  'n11.com':          { country: 'Turkey',  flag: '🇹🇷' },
-  'aliexpress.com':   { country: 'China',   flag: '🇨🇳' },
-  'taobao.com':       { country: 'China',   flag: '🇨🇳' },
-  '1688.com':         { country: 'China',   flag: '🇨🇳' },
-  'jd.com':           { country: 'China',   flag: '🇨🇳' },
-}
 
 const WEIGHT_KEYS = [
   'Item Weight', 'Weight', 'Package Weight', 'Shipping Weight',
@@ -44,7 +26,7 @@ function extractAsin(url: string): string | null {
   return match ? (match[1] || match[2] || match[3]) : null
 }
 
-function findField(sources: Record<string, any>[], keys: string[]): string | null {
+function findField(sources: Record<string, unknown>[], keys: string[]): string | null {
   for (const key of keys) {
     for (const source of sources) {
       if (source[key]) return String(source[key])
@@ -154,7 +136,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ found: false, reason: 'Auto-calculate for this site is coming soon. Please enter details manually.' })
 
-  } catch (e: any) {
-    return NextResponse.json({ found: false, reason: e.message }, { status: 500 })
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    return NextResponse.json({ found: false, reason: message }, { status: 500 })
   }
 }
