@@ -110,6 +110,11 @@ function StorePanel({ store, onClose }: { store: Store; onClose: () => void }) {
       <div className={styles.panelOverlay} onClick={onClose} />
       <div className={styles.panel}>
 
+        {/* ── Drag handle (visible on mobile only) ── */}
+        <div className={styles.dragHandle}>
+          <div className={styles.dragHandleBar} />
+        </div>
+
         {/* ── Header ── */}
         <div className={styles.panelHeader}>
           <div className={styles.panelStoreInfo}>

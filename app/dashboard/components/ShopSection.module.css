@@ -361,12 +361,48 @@
   flex-shrink: 0; margin-top: 1px;
 }
 
-/* ── Mobile ────────────────────────────────────────────────── */
+/* ── Drag handle (mobile only) ─────────────────────────────── */
+.dragHandle {
+  display: none;
+  justify-content: center;
+  padding: 10px 0 4px;
+  flex-shrink: 0;
+}
+.dragHandleBar {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+/* ── Mobile: grid & pill tweaks (≤ 600px) ─────────────────── */
 @media (max-width: 600px) {
-  .panel { width: 100vw; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .grid  { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
   .pills { gap: 6px; }
-  .pill { font-size: 12px; padding: 6px 12px; }
-  .panelHeader { padding: 18px 16px 14px; }
+  .pill  { font-size: 12px; padding: 6px 12px; }
+}
+
+/* ── Mobile: bottom-sheet panel (≤ 768px) ─────────────────── */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 70dvh;
+    border-radius: 20px 20px 0 0;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -16px 60px rgba(0,0,0,0.65);
+    animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .dragHandle   { display: flex; }
+  .panelHeader  { padding: 2px 16px 14px; }
   .panelSection { padding: 16px; }
 }
