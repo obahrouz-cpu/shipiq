@@ -13,6 +13,7 @@ import ShopSection from './components/ShopSection'
 import OrderFilters, { OrderFiltersState, DEFAULT_FILTERS } from './components/OrderFilters'
 import FAQChatbot from './components/FAQChatbot'
 import AccountSettings from './components/AccountSettings'
+import AdminExport from './components/AdminExport'
 
 // ── URL → country-of-origin detection (used by admin filter) ──────────────────
 
@@ -532,6 +533,7 @@ export default function Dashboard() {
   const [toasts, setToasts]             = useState<Toast[]>([])
   const [sidebarOpen, setSidebarOpen]     = useState(false)
   const [settingsOpen, setSettingsOpen]   = useState(false)
+  const [showExport, setShowExport]       = useState(false)
 
   const toast = (message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
@@ -756,6 +758,7 @@ export default function Dashboard() {
                     <div className={styles.pageHeading}>All Orders</div>
                     <div className={styles.pageSub}>Manage and process customer orders</div>
                   </div>
+                  <button className={styles.btnGhost} onClick={() => setShowExport(true)}>📤 Export Orders</button>
                 </div>
               )}
               <OrderFilters isAdmin={isAdmin} value={filters} onChange={setFilters} />
@@ -918,6 +921,7 @@ export default function Dashboard() {
       {showNewOrder && profile && <SubmitOrderModal userId={profile.id} onClose={() => setShowNewOrder(false)} onDone={() => { fetchData(); toast('Order submitted! · تم إرسال الطلب') }} />}
       {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} />}
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}
+      {showExport && isAdmin && <AdminExport orders={orders} onClose={() => setShowExport(false)} />}
       <Toast toasts={toasts} />
       <FAQChatbot />
       {settingsOpen && profile && (

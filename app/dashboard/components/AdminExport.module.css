@@ -1,0 +1,115 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(3px);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: 540px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+  animation: popUp 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes popUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+.title { font-size: 16px; font-weight: 700; color: var(--text); }
+.close {
+  width: 30px; height: 30px;
+  border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-muted);
+  cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; font-family: inherit;
+}
+.close:hover { background: var(--surface2); color: var(--text); }
+
+.body { padding: 20px 24px 24px; }
+
+.filterGroup { margin-bottom: 20px; }
+.filterLabel {
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px;
+}
+
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill {
+  padding: 5px 12px; border-radius: 20px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-muted); font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s; font-family: inherit; white-space: nowrap;
+}
+.pill:hover { background: var(--surface2); color: var(--text); }
+.pillActive {
+  background: rgba(201,168,76,0.12);
+  color: var(--gold-light);
+  border-color: rgba(201,168,76,0.35);
+}
+
+.dateRow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dateField { display: flex; flex-direction: column; gap: 4px; }
+.dateLabel { font-size: 11px; color: var(--text-dim); }
+.dateInput {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px;
+  font-size: 13px; color: var(--text); font-family: inherit; outline: none;
+  transition: border-color 0.15s;
+}
+.dateInput:focus { border-color: var(--gold); }
+
+.count {
+  margin: 20px 0 16px;
+  padding: 12px 16px;
+  background: var(--surface2);
+  border-radius: 8px;
+  font-size: 13px; font-weight: 600; color: var(--text-muted);
+  text-align: center;
+}
+.countHighlight { color: var(--gold); }
+
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.btnCSV {
+  padding: 13px; border-radius: 8px;
+  border: 1px solid rgba(76,175,122,0.3);
+  background: rgba(76,175,122,0.08); color: var(--green);
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  font-family: inherit; transition: all 0.15s;
+}
+.btnCSV:hover:not(:disabled) { background: rgba(76,175,122,0.15); transform: translateY(-1px); }
+.btnCSV:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btnPDF {
+  padding: 13px; border-radius: 8px;
+  border: 1px solid rgba(91,155,213,0.3);
+  background: rgba(91,155,213,0.08); color: var(--blue);
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  font-family: inherit; transition: all 0.15s;
+}
+.btnPDF:hover:not(:disabled) { background: rgba(91,155,213,0.15); transform: translateY(-1px); }
+.btnPDF:disabled { opacity: 0.4; cursor: not-allowed; }
