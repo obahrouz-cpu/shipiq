@@ -169,6 +169,11 @@ export async function confirmOrder(order: Order): Promise<void> {
   }
 }
 
+export async function updateLanguage(userId: string, language: 'en' | 'ar'): Promise<void> {
+  const supabase = createClient()
+  await supabase.from('profiles').update({ language }).eq('id', userId)
+}
+
 // ── Transactions ──────────────────────────────────────────────────────────────
 
 export async function getUserTransactions(userId: string): Promise<Transaction[]> {

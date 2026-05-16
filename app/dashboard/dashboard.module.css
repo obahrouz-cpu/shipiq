@@ -302,3 +302,28 @@
   .topbar { padding: 0 16px; }
   .balanceChip { font-size: 12px; padding: 5px 10px; }
 }
+
+/* ── RTL layout overrides ────────────────────────────────── */
+:global([dir="rtl"]) .sidebar {
+  left: auto;
+  right: 0;
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+:global([dir="rtl"]) .main { margin-left: 0; margin-right: 260px; }
+:global([dir="rtl"]) .navBadge { margin-left: 0; margin-right: auto; }
+:global([dir="rtl"]) .processBadge { margin-left: 0; margin-right: 8px; }
+:global([dir="rtl"]) .detailKey { margin-right: 0; margin-left: 16px; }
+:global([dir="rtl"]) .detailVal { text-align: left; }
+:global([dir="rtl"]) .detailLink { text-align: left; }
+:global([dir="rtl"]) .toastContainer { right: auto; left: 24px; }
+:global([dir="rtl"]) .toast_success { border-left: none; border-right: 3px solid var(--green); }
+:global([dir="rtl"]) .toast_error   { border-left: none; border-right: 3px solid var(--red); }
+:global([dir="rtl"]) .toast_info    { border-left: none; border-right: 3px solid var(--gold); }
+:global([dir="rtl"]) .table th { text-align: right; }
+
+@media (max-width: 768px) {
+  :global([dir="rtl"]) .sidebar     { right: -260px; left: auto; }
+  :global([dir="rtl"]) .sidebarOpen { right: 0 !important; left: auto !important; }
+  :global([dir="rtl"]) .main        { margin-right: 0; }
+}

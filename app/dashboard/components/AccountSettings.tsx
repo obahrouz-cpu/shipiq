@@ -1,7 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
+import { updateLanguage } from '@/lib/api'
 import type { Profile, Order } from '@/lib/types'
+import { useLanguage } from '@/lib/useLanguage'
 import styles from './AccountSettings.module.css'
 
 // ── Phone helpers (same rules as signup) ──────────────────────────────────────
@@ -29,14 +31,14 @@ function displayPhone(phone?: string | null): string {
 // ── Notification prefs (persisted to localStorage) ────────────────────────────
 
 const NOTIF_KEY = 'shipiq_notif_prefs'
-interface NotifPrefs { orders: boolean; balance: boolean; promos: boolean; language: 'en' | 'ar' | 'both' }
+interface NotifPrefs { orders: boolean; balance: boolean; promos: boolean }
 
 function loadNotifPrefs(): NotifPrefs {
   try {
     const raw = localStorage.getItem(NOTIF_KEY)
     if (raw) return JSON.parse(raw) as NotifPrefs
   } catch {}
-  return { orders: true, balance: true, promos: true, language: 'both' }
+  return { orders: true, balance: true, promos: true }
 }
 
 // ── Small shared sub-components ───────────────────────────────────────────────
@@ -72,6 +74,7 @@ interface Props {
 
 export default function AccountSettings({ profile, orders, onClose, onProfileUpdate, onSignOut }: Props) {
   const supabase = createClient()
+  const { language, t, setLanguage: applyLang } = useLanguage()
 
   // ── Profile: name ──────────────────────────────────────────────────────────
   const [editingName, setEditingName]   = useState(false)
@@ -90,7 +93,6 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
   const [notifOrders, setNotifOrders]   = useState(true)
   const [notifBalance, setNotifBalance] = useState(true)
   const [notifPromos, setNotifPromos]   = useState(true)
-  const [language, setLanguage]         = useState<'en' | 'ar' | 'both'>('both')
   const [notifLoading, setNotifLoading] = useState(false)
   const [notifMsg, setNotifMsg]         = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -107,7 +109,6 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
     setNotifOrders(prefs.orders)
     setNotifBalance(prefs.balance)
     setNotifPromos(prefs.promos)
-    setLanguage(prefs.language)
   }, [])
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -159,14 +160,22 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
   function saveNotifPrefs() {
     setNotifLoading(true)
     try {
-      const prefs: NotifPrefs = { orders: notifOrders, balance: notifBalance, promos: notifPromos, language }
+      const prefs: NotifPrefs = { orders: notifOrders, balance: notifBalance, promos: notifPromos }
       localStorage.setItem(NOTIF_KEY, JSON.stringify(prefs))
-      setNotifMsg({ ok: true, text: 'Preferences saved!' })
+      setNotifMsg({ ok: true, text: t('settings', 'prefsSaved') })
     } catch {
-      setNotifMsg({ ok: false, text: 'Could not save preferences.' })
+      setNotifMsg({ ok: false, text: t('settings', 'prefsError') })
     }
     setNotifLoading(false)
     setTimeout(() => setNotifMsg(null), 2500)
+  }
+
+  async function handleLangChange(lang: 'en' | 'ar') {
+    applyLang(lang)
+    try {
+      await updateLanguage(profile.id, lang)
+      onProfileUpdate({ language: lang })
+    } catch {}
   }
 
   async function changePassword() {
@@ -206,8 +215,8 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
         {/* ── Header ── */}
         <div className={styles.header}>
           <div>
-            <div className={styles.headerTitle}>Account Settings · الإعدادات</div>
-            <div className={styles.headerSub}>Manage your profile and preferences</div>
+            <div className={styles.headerTitle}>{t('settings', 'title')}</div>
+            <div className={styles.headerSub}>{t('settings', 'sub')}</div>
           </div>
           <button className={styles.closeBtn} onClick={onClose} aria-label="Close">✕</button>
         </div>
@@ -217,7 +226,7 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
 
           {/* ── 1. PROFILE ── */}
           <div className={styles.section}>
-            <div className={styles.sectionTitle}>Profile</div>
+            <div className={styles.sectionTitle}>{t('settings', 'profile')}</div>
             <div className={styles.card}>
 
               {/* Avatar row */}
@@ -242,19 +251,19 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
                   />
                   <div className={styles.editBtns}>
                     <button className={styles.btnSave} onClick={saveName} disabled={nameLoading}>
-                      {nameLoading ? <Spinner /> : 'Save'}
+                      {nameLoading ? <Spinner /> : t('settings', 'save')}
                     </button>
                     <button className={styles.btnCancel} onClick={() => { setEditingName(false); setName(profile.full_name); setNameMsg(null) }}>
-                      Cancel
+                      {t('settings', 'cancel')}
                     </button>
                   </div>
                   {nameMsg && <Feedback ok={nameMsg.ok} text={nameMsg.text} />}
                 </div>
               ) : (
                 <div className={styles.fieldRow}>
-                  <span className={styles.fieldKey}>Name</span>
+                  <span className={styles.fieldKey}>{t('settings', 'name')}</span>
                   <span className={styles.fieldVal}>{profile.full_name}</span>
-                  <button className={styles.editBtn} onClick={() => setEditingName(true)}>Edit</button>
+                  <button className={styles.editBtn} onClick={() => setEditingName(true)}>{t('settings', 'edit')}</button>
                 </div>
               )}
 
@@ -276,25 +285,25 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
                   {phoneError && <div className={styles.fieldError}>{phoneError}</div>}
                   <div className={styles.editBtns}>
                     <button className={styles.btnSave} onClick={savePhone} disabled={phoneLoading}>
-                      {phoneLoading ? <Spinner /> : 'Save'}
+                      {phoneLoading ? <Spinner /> : t('settings', 'save')}
                     </button>
                     <button className={styles.btnCancel} onClick={() => { setEditingPhone(false); setPhoneDisplay(formatIraqiPhone(profile.phone || '')); setPhoneError(''); setPhoneMsg(null) }}>
-                      Cancel
+                      {t('settings', 'cancel')}
                     </button>
                   </div>
                   {phoneMsg && <Feedback ok={phoneMsg.ok} text={phoneMsg.text} />}
                 </div>
               ) : (
                 <div className={styles.fieldRow}>
-                  <span className={styles.fieldKey}>Phone</span>
+                  <span className={styles.fieldKey}>{t('settings', 'phone')}</span>
                   <span className={styles.fieldVal}>{displayPhone(profile.phone)}</span>
-                  <button className={styles.editBtn} onClick={() => setEditingPhone(true)}>Edit</button>
+                  <button className={styles.editBtn} onClick={() => setEditingPhone(true)}>{t('settings', 'edit')}</button>
                 </div>
               )}
 
               {/* Email (read-only) */}
               <div className={styles.fieldRow}>
-                <span className={styles.fieldKey}>Email</span>
+                <span className={styles.fieldKey}>{t('settings', 'email')}</span>
                 <span className={styles.fieldVal}>{profile.email}</span>
               </div>
 
@@ -303,51 +312,36 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
 
           {/* ── 2. NOTIFICATIONS ── */}
           <div className={styles.section}>
-            <div className={styles.sectionTitle}>Notifications · الإشعارات</div>
+            <div className={styles.sectionTitle}>{t('settings', 'notifications')}</div>
             <div className={styles.card}>
 
               <div className={styles.toggleRow}>
                 <div>
-                  <div className={styles.toggleLabel}>Order status updates</div>
-                  <div className={styles.toggleSub}>Get notified when your order status changes</div>
+                  <div className={styles.toggleLabel}>{t('settings', 'orderUpdates')}</div>
+                  <div className={styles.toggleSub}>{t('settings', 'orderUpdatesSub')}</div>
                 </div>
                 <Toggle checked={notifOrders} onChange={setNotifOrders} />
               </div>
 
               <div className={styles.toggleRow}>
                 <div>
-                  <div className={styles.toggleLabel}>Balance updates</div>
-                  <div className={styles.toggleSub}>Notifications when balance is added or deducted</div>
+                  <div className={styles.toggleLabel}>{t('settings', 'balanceUpdates')}</div>
+                  <div className={styles.toggleSub}>{t('settings', 'balanceUpdatesSub')}</div>
                 </div>
                 <Toggle checked={notifBalance} onChange={setNotifBalance} />
               </div>
 
               <div className={styles.toggleRow}>
                 <div>
-                  <div className={styles.toggleLabel}>Promotions & announcements</div>
-                  <div className={styles.toggleSub}>New stores, features and ShipIQ news</div>
+                  <div className={styles.toggleLabel}>{t('settings', 'promos')}</div>
+                  <div className={styles.toggleSub}>{t('settings', 'promosSub')}</div>
                 </div>
                 <Toggle checked={notifPromos} onChange={setNotifPromos} />
               </div>
 
-              <div className={styles.langRow}>
-                <span className={styles.toggleLabel}>Language · اللغة</span>
-                <div className={styles.langOptions}>
-                  {(['en', 'ar', 'both'] as const).map(l => (
-                    <button
-                      key={l}
-                      className={`${styles.langBtn} ${language === l ? styles.langBtnActive : ''}`}
-                      onClick={() => setLanguage(l)}
-                    >
-                      {l === 'en' ? 'EN' : l === 'ar' ? 'عر' : 'Both'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               <div className={styles.saveRow}>
                 <button className={styles.btnSave} onClick={saveNotifPrefs} disabled={notifLoading}>
-                  {notifLoading ? <Spinner /> : 'Save preferences'}
+                  {notifLoading ? <Spinner /> : t('settings', 'savePrefs')}
                 </button>
                 {notifMsg && <Feedback ok={notifMsg.ok} text={notifMsg.text} />}
               </div>
@@ -355,9 +349,29 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
             </div>
           </div>
 
+          {/* ── 2b. SITE LANGUAGE ── */}
+          <div className={styles.section}>
+            <div className={styles.sectionTitle}>{t('settings', 'siteLanguage')}</div>
+            <div className={styles.card}>
+              <div className={styles.langRow}>
+                <div className={styles.langOptions}>
+                  {(['en', 'ar'] as const).map(l => (
+                    <button
+                      key={l}
+                      className={`${styles.langBtn} ${language === l ? styles.langBtnActive : ''}`}
+                      onClick={() => handleLangChange(l)}
+                    >
+                      {l === 'en' ? '🇬🇧 English' : '🇮🇶 العربية'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* ── 3. SECURITY ── */}
           <div className={styles.section}>
-            <div className={styles.sectionTitle}>Security · الأمان</div>
+            <div className={styles.sectionTitle}>{t('settings', 'security')}</div>
             <div className={styles.card}>
 
               <div className={styles.editForm} style={{ borderBottom: 'none' }}>
@@ -384,7 +398,7 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
                   onKeyDown={e => e.key === 'Enter' && changePassword()}
                 />
                 <button className={styles.btnSave} onClick={changePassword} disabled={pwLoading}>
-                  {pwLoading ? <Spinner /> : 'Change Password · تغيير كلمة المرور'}
+                  {pwLoading ? <Spinner /> : t('settings', 'changePw')}
                 </button>
                 {pwMsg && <Feedback ok={pwMsg.ok} text={pwMsg.text} />}
               </div>
@@ -394,25 +408,25 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
 
           {/* ── 4. ACCOUNT INFO ── */}
           <div className={styles.section}>
-            <div className={styles.sectionTitle}>Account Info · معلومات الحساب</div>
+            <div className={styles.sectionTitle}>{t('settings', 'accountInfo')}</div>
             <div className={styles.card}>
 
               <div className={styles.infoRow}>
-                <span className={styles.infoKey}>Member since</span>
+                <span className={styles.infoKey}>{t('settings', 'memberSince')}</span>
                 <span className={styles.infoVal}>{memberSince}</span>
               </div>
               <div className={styles.infoRow}>
-                <span className={styles.infoKey}>Total orders</span>
+                <span className={styles.infoKey}>{t('settings', 'totalOrders')}</span>
                 <span className={styles.infoVal}>{orders.length}</span>
               </div>
               <div className={styles.infoRow}>
-                <span className={styles.infoKey}>Current balance</span>
+                <span className={styles.infoKey}>{t('settings', 'currentBalance')}</span>
                 <span className={`${styles.infoVal} ${styles.infoValGold}`}>
                   {profile.balance?.toLocaleString()} IQD
                 </span>
               </div>
               <div className={styles.infoRow}>
-                <span className={styles.infoKey}>Account ID</span>
+                <span className={styles.infoKey}>{t('settings', 'accountId')}</span>
                 <span className={styles.infoVal} style={{ fontSize: 11, fontFamily: 'monospace' }}>
                   {profile.id.slice(0, 16)}…
                 </span>
@@ -423,7 +437,7 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
 
           {/* ── Sign out ── */}
           <button className={styles.signOutBtn} onClick={onSignOut}>
-            ↪ Sign Out · تسجيل الخروج
+            {t('settings', 'signOut')}
           </button>
 
         </div>

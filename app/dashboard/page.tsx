@@ -8,6 +8,7 @@ import {
 } from '@/lib/api'
 import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
 import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult } from '@/lib/types'
+import { useLanguage } from '@/lib/useLanguage'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
 import OrderFilters, { OrderFiltersState, DEFAULT_FILTERS } from './components/OrderFilters'
@@ -35,8 +36,9 @@ function detectOrderCountry(url: string): string {
 // ── Small shared components ───────────────────────────────────────────────────
 
 function Badge({ status }: { status: string }) {
+  const { language } = useLanguage()
   const s = STATUS_CONFIG[status] || STATUS_CONFIG.pending
-  return <span className={`${styles.badge} ${styles[s.cls]}`}>{s.icon} {s.label}</span>
+  return <span className={`${styles.badge} ${styles[s.cls]}`}>{s.icon} {language === 'ar' ? s.labelAr : s.label}</span>
 }
 
 function Spinner() {
@@ -520,6 +522,7 @@ function TopUpModal({ user, onClose, onDone }: { user: Profile; onClose: () => v
 
 export default function Dashboard() {
   const router = useRouter()
+  const { language, t, setLanguage } = useLanguage()
   const [profile, setProfile]           = useState<Profile | null>(null)
   const [orders, setOrders]             = useState<Order[]>([])
   const [users, setUsers]               = useState<Profile[]>([])
@@ -547,6 +550,7 @@ export default function Dashboard() {
     const prof = await getProfile(session.user.id)
     if (!prof) { setLoading(false); return }
     setProfile(prof)
+    if (prof.language) setLanguage(prof.language)
     if (prof.role === 'admin') {
       const [allOrders, allUsers] = await Promise.all([getAdminOrders(), getCustomers()])
       setOrders(allOrders); setUsers(allUsers)
@@ -604,23 +608,23 @@ export default function Dashboard() {
 
   const navItems: NavItem[] = isAdmin
     ? [
-        { id: 'admin-orders', icon: '📋', label: 'All Orders · جميع الطلبات', badge: pendingCount },
-        { id: 'admin-customers', icon: '👥', label: 'Customers · العملاء' },
+        { id: 'admin-orders', icon: '📋', label: t('nav', 'adminOrders'), badge: pendingCount },
+        { id: 'admin-customers', icon: '👥', label: t('nav', 'customers') },
       ]
     : [
-        { id: 'dashboard', icon: '⊞', label: 'Dashboard · لوحة التحكم' },
-        { id: 'shop', icon: '🛍️', label: 'Shop · تسوق' },
-        { id: 'orders', icon: '📦', label: 'My Orders · طلباتي', badge: calculatedCount },
-        { id: 'balance', icon: '💳', label: 'Balance · الرصيد' },
+        { id: 'dashboard', icon: '⊞', label: t('nav', 'dashboard') },
+        { id: 'shop', icon: '🛍️', label: t('nav', 'shop') },
+        { id: 'orders', icon: '📦', label: t('nav', 'orders'), badge: calculatedCount },
+        { id: 'balance', icon: '💳', label: t('nav', 'balance') },
       ]
 
   const pageTitle: Record<string, string> = {
-    dashboard: 'Dashboard · لوحة التحكم',
-    shop: 'Shop · تسوق',
-    orders: 'My Orders · طلباتي',
-    balance: 'Balance · الرصيد',
-    'admin-orders': 'All Orders · جميع الطلبات',
-    'admin-customers': 'Customers · العملاء',
+    dashboard:         t('nav', 'dashboard'),
+    shop:              t('nav', 'shop'),
+    orders:            t('nav', 'orders'),
+    balance:           t('nav', 'balance'),
+    'admin-orders':    t('nav', 'adminOrders'),
+    'admin-customers': t('nav', 'customers'),
   }
 
   return (
@@ -632,7 +636,7 @@ export default function Dashboard() {
           <div className={`${styles.logoSub} ar`}>خدمة الشحن الذكي</div>
         </div>
         <div className={styles.sidebarNav}>
-          <div className={styles.navSection}>{isAdmin ? 'Admin Panel' : 'Menu'}</div>
+          <div className={styles.navSection}>{isAdmin ? t('nav', 'adminPanel') : t('nav', 'menu')}</div>
           {navItems.map(n => (
             <div key={n.id} className={`${styles.navItem} ${page === n.id ? styles.navActive : ''}`} onClick={() => { setPage(n.id); setSidebarOpen(false) }}>
               <span>{n.icon}</span>
@@ -646,7 +650,7 @@ export default function Dashboard() {
             <div className={styles.userAvatar}>{profile?.full_name?.[0] || '?'}</div>
             <div>
               <div className={styles.userName}>{profile?.full_name}</div>
-              <div className={styles.userRole}>{isAdmin ? '🔧 Admin' : '👤 Customer'} · Settings</div>
+              <div className={styles.userRole}>{isAdmin ? '🔧 Admin' : '👤 Customer'} · {t('nav', 'settings')}</div>
             </div>
           </div>
         </div>
@@ -677,10 +681,10 @@ export default function Dashboard() {
             <div className="fade-up">
               <div className={styles.statsGrid}>
                 {[
-                  { label: 'Balance · الرصيد', value: `${profile?.balance?.toLocaleString()} IQD`, icon: '💳', color: '#c9a84c', bg: 'rgba(201,168,76,0.1)' },
-                  { label: 'Pending · معلق', value: orders.filter(o => o.status === 'pending').length, icon: '⏳', color: '#e07b3a', bg: 'rgba(224,123,58,0.1)' },
-                  { label: 'Calculated · محسوب', value: orders.filter(o => o.status === 'calculated').length, icon: '💰', color: '#5b9bd5', bg: 'rgba(91,155,213,0.1)' },
-                  { label: 'Delivered · تم التسليم', value: orders.filter(o => o.status === 'delivered').length, icon: '📬', color: '#16a34a', bg: 'rgba(34,197,94,0.1)' },
+                  { label: t('dashboard', 'balance'),   value: `${profile?.balance?.toLocaleString()} IQD`, icon: '💳', color: '#c9a84c', bg: 'rgba(201,168,76,0.1)' },
+                  { label: t('dashboard', 'pending'),   value: orders.filter(o => o.status === 'pending').length, icon: '⏳', color: '#e07b3a', bg: 'rgba(224,123,58,0.1)' },
+                  { label: t('dashboard', 'calculated'),value: orders.filter(o => o.status === 'calculated').length, icon: '💰', color: '#5b9bd5', bg: 'rgba(91,155,213,0.1)' },
+                  { label: t('dashboard', 'delivered'), value: orders.filter(o => o.status === 'delivered').length, icon: '📬', color: '#16a34a', bg: 'rgba(34,197,94,0.1)' },
                 ].map((s, i) => (
                   <div key={i} className={styles.statCard} style={{ animationDelay: `${i * 80}ms` }}>
                     <div className={styles.statIcon} style={{ background: s.bg, color: s.color }}>{s.icon}</div>
@@ -692,23 +696,23 @@ export default function Dashboard() {
               {calculatedCount > 0 && (
                 <div className={styles.alertBox}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--blue)' }}>💰 {calculatedCount} order{calculatedCount > 1 ? 's' : ''} ready for confirmation</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Shipping prices calculated — review and confirm to proceed</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--blue)' }}>💰 {calculatedCount} {calculatedCount > 1 ? t('dashboard', 'ordersReadyMany') : t('dashboard', 'ordersReady')}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{t('dashboard', 'reviewConfirm')}</div>
                   </div>
-                  <button className={styles.btnGhost} style={{ fontSize: 12, padding: '6px 14px' }} onClick={() => setPage('orders')}>View →</button>
+                  <button className={styles.btnGhost} style={{ fontSize: 12, padding: '6px 14px' }} onClick={() => setPage('orders')}>{t('dashboard', 'view')}</button>
                 </div>
               )}
               <div className={styles.card}>
                 <div className={styles.cardHeader}>
-                  <span style={{ fontSize: 15, fontWeight: 700 }}>Recent Orders · أحدث الطلبات</span>
-                  <button className={styles.btnGhost} style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setPage('orders')}>View All</button>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{t('dashboard', 'recentOrders')}</span>
+                  <button className={styles.btnGhost} style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setPage('orders')}>{t('dashboard', 'viewAll')}</button>
                 </div>
                 {orders.length === 0 ? (
                   <div className={styles.empty}>
                     <div className={styles.emptyIcon}>🚀</div>
-                    <div className={styles.emptyTitle}>Start your shipping journey</div>
-                    <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>Submit your first order and we'll handle the rest</div>
-                    <button className={styles.btnPrimary} style={{ marginTop: 16 }} onClick={() => { setPage('orders'); setShowNewOrder(true) }}>+ New Order · طلب جديد</button>
+                    <div className={styles.emptyTitle}>{t('dashboard', 'startTitle')}</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>{t('dashboard', 'startSub')}</div>
+                    <button className={styles.btnPrimary} style={{ marginTop: 16 }} onClick={() => { setPage('orders'); setShowNewOrder(true) }}>{t('dashboard', 'newOrder')}</button>
                   </div>
                 ) : (
                   <table className={styles.table}>
@@ -733,8 +737,8 @@ export default function Dashboard() {
             <div className="fade-up">
               <div className={styles.pageHeader}>
                 <div>
-                  <div className={styles.pageHeading}>Shop · تسوق</div>
-                  <div className={styles.pageSub}>Browse your favourite stores and get a shipping estimate</div>
+                  <div className={styles.pageHeading}>{t('shop', 'title')}</div>
+                  <div className={styles.pageSub}>{t('shop', 'sub')}</div>
                 </div>
               </div>
               <ShopSection />
@@ -746,19 +750,18 @@ export default function Dashboard() {
               {page === 'orders' && (
                 <div className={styles.pageHeader}>
                   <div>
-                    <div className={styles.pageHeading}>My Orders</div>
-                    <div className={styles.pageSub} style={{ fontFamily: 'Tajawal' }}>طلباتي</div>
+                    <div className={styles.pageHeading}>{t('orders', 'title')}</div>
                   </div>
-                  <button className={styles.btnPrimary} onClick={() => setShowNewOrder(true)}>+ New Order · طلب جديد</button>
+                  <button className={styles.btnPrimary} onClick={() => setShowNewOrder(true)}>{t('orders', 'newOrder')}</button>
                 </div>
               )}
               {page === 'admin-orders' && (
                 <div className={styles.pageHeader}>
                   <div>
-                    <div className={styles.pageHeading}>All Orders</div>
-                    <div className={styles.pageSub}>Manage and process customer orders</div>
+                    <div className={styles.pageHeading}>{t('adminOrders', 'title')}</div>
+                    <div className={styles.pageSub}>{t('adminOrders', 'sub')}</div>
                   </div>
-                  <button className={styles.btnGhost} onClick={() => setShowExport(true)}>📤 Export Orders</button>
+                  <button className={styles.btnGhost} onClick={() => setShowExport(true)}>{t('adminOrders', 'export')}</button>
                 </div>
               )}
               <OrderFilters isAdmin={isAdmin} value={filters} onChange={setFilters} />
@@ -766,18 +769,18 @@ export default function Dashboard() {
                 {filteredOrders.length === 0 ? (
                   <div className={styles.empty}>
                     <div className={styles.emptyIcon}>📬</div>
-                    <div className={styles.emptyTitle}>No orders match this filter</div>
+                    <div className={styles.emptyTitle}>{t('orders', 'noOrders')}</div>
                     {page === 'orders' && orders.length === 0 && (
-                      <button className={styles.btnPrimary} style={{ marginTop: 16 }} onClick={() => setShowNewOrder(true)}>+ Submit your first order</button>
+                      <button className={styles.btnPrimary} style={{ marginTop: 16 }} onClick={() => setShowNewOrder(true)}>{t('orders', 'submitFirst')}</button>
                     )}
                   </div>
                 ) : (
                   <div style={{ overflowX: 'auto' }}>
                     <table className={styles.table}>
                       <thead><tr>
-                        <th>ID</th>
-                        {isAdmin && <th>Customer</th>}
-                        <th>Description</th><th>Category</th><th>Item Price</th><th>Shipping</th><th>Date</th><th>Status</th>
+                        <th>{t('orders', 'id')}</th>
+                        {isAdmin && <th>{t('orders', 'customer')}</th>}
+                        <th>{t('orders', 'description')}</th><th>{t('orders', 'category')}</th><th>{t('orders', 'itemPrice')}</th><th>{t('orders', 'shipping')}</th><th>{t('orders', 'date')}</th><th>{t('orders', 'status')}</th>
                       </tr></thead>
                       <tbody>
                         {filteredOrders.map(o => (
@@ -807,7 +810,7 @@ export default function Dashboard() {
                             <td>
                               <Badge status={o.status} />
                               {o.status === 'pending' && (
-                                <button className={styles.processBadge} onClick={e => { e.stopPropagation(); setSelectedOrder(o) }}>→ Process</button>
+                                <button className={styles.processBadge} onClick={e => { e.stopPropagation(); setSelectedOrder(o) }}>{t('orders', 'process')}</button>
                               )}
                             </td>
                           </tr>
@@ -823,11 +826,11 @@ export default function Dashboard() {
           {page === 'balance' && (
             <div className="fade-up">
               <div className={styles.pageHeader}>
-                <div><div className={styles.pageHeading}>Balance · الرصيد</div></div>
+                <div><div className={styles.pageHeading}>{t('balance', 'title')}</div></div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
                 <div className={styles.card} style={{ textAlign: 'center', padding: '36px 24px' }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Available Balance · الرصيد المتاح</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('balance', 'available')}</div>
                   <span className={styles.priceBig}>{profile?.balance?.toLocaleString()}</span>
                   <span className={styles.priceCurrency}>IQD</span>
                   <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-dim)' }}>≈ ${Math.round((profile?.balance || 0) / 1450)} USD</div>
@@ -836,8 +839,8 @@ export default function Dashboard() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 40, height: 40, background: 'rgba(37,211,102,0.12)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>💬</div>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Top Up Your Balance · شحن الرصيد</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Contact us on WhatsApp — we'll top you up within a few hours</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{t('balance', 'topUp')}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{t('balance', 'topUpSub')}</div>
                     </div>
                   </div>
                   <a className={styles.btnWhatsApp} href="https://wa.me/964XXXXXXXXXX" target="_blank" rel="noopener noreferrer">
@@ -845,24 +848,24 @@ export default function Dashboard() {
                       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
                       <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2.1 21.9l4.837-1.316A9.956 9.956 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.956 7.956 0 0 1-4.099-1.132l-.293-.174-3.044.828.852-3.004-.192-.31A7.953 7.953 0 0 1 4 12c0-4.418 3.582-8 8-8s8 3.582 8 8-3.582 8-8 8z"/>
                     </svg>
-                    Chat on WhatsApp
+                    {t('balance', 'whatsapp')}
                   </a>
                   <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center' }}>
-                    +964 XXX XXX XXXX · Available Sat–Thu, 9am–9pm
+                    +964 XXX XXX XXXX · {t('balance', 'hours')}
                   </div>
                 </div>
               </div>
               <div className={styles.card}>
-                <div className={styles.cardHeader}><span style={{ fontSize: 15, fontWeight: 700 }}>Transaction History · سجل المعاملات</span></div>
+                <div className={styles.cardHeader}><span style={{ fontSize: 15, fontWeight: 700 }}>{t('balance', 'history')}</span></div>
                 {transactions.length === 0 ? (
                   <div className={styles.empty}>
                     <div className={styles.emptyIcon}>💸</div>
-                    <div className={styles.emptyTitle}>No transactions yet · لا توجد معاملات</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, maxWidth: 280 }}>Transactions appear here after your balance is topped up or an order is confirmed</div>
+                    <div className={styles.emptyTitle}>{t('balance', 'noTxns')}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, maxWidth: 280 }}>{t('balance', 'noTxnsSub')}</div>
                   </div>
                 ) : (
                   <table className={styles.table}>
-                    <thead><tr><th>ID</th><th>Description</th><th>Date</th><th>Amount</th></tr></thead>
+                    <thead><tr><th>{t('balance', 'id')}</th><th>{t('balance', 'desc')}</th><th>{t('balance', 'date')}</th><th>{t('balance', 'amount')}</th></tr></thead>
                     <tbody>
                       {transactions.map(t => (
                         <tr key={t.id}>
@@ -884,14 +887,14 @@ export default function Dashboard() {
           {page === 'admin-customers' && (
             <div className="fade-up">
               <div className={styles.pageHeader}>
-                <div><div className={styles.pageHeading}>Customers · العملاء</div><div className={styles.pageSub}>Manage accounts and balances</div></div>
+                <div><div className={styles.pageHeading}>{t('customers', 'title')}</div><div className={styles.pageSub}>{t('customers', 'sub')}</div></div>
               </div>
               <div className={styles.card} style={{ padding: 0, overflow: 'hidden' }}>
                 {users.length === 0 ? (
-                  <div className={styles.empty}><div className={styles.emptyIcon}>👥</div><div className={styles.emptyTitle}>No customers yet</div></div>
+                  <div className={styles.empty}><div className={styles.emptyIcon}>👥</div><div className={styles.emptyTitle}>{t('customers', 'noCustomers')}</div></div>
                 ) : (
                   <table className={styles.table}>
-                    <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Balance</th><th>Joined</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>{t('customers', 'name')}</th><th>{t('customers', 'email')}</th><th>{t('customers', 'phone')}</th><th>{t('customers', 'balance')}</th><th>{t('customers', 'joined')}</th><th>{t('customers', 'actions')}</th></tr></thead>
                     <tbody>
                       {users.map(u => (
                         <tr key={u.id}>
@@ -905,7 +908,7 @@ export default function Dashboard() {
                           <td>{u.phone || '—'}</td>
                           <td style={{ color: 'var(--gold)', fontWeight: 700 }}>{u.balance?.toLocaleString()} IQD</td>
                           <td>{u.created_at?.split('T')[0]}</td>
-                          <td><button className={styles.btnGhost} style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setTopUpUser(u)}>+ Balance</button></td>
+                          <td><button className={styles.btnGhost} style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setTopUpUser(u)}>{t('customers', 'addBalance')}</button></td>
                         </tr>
                       ))}
                     </tbody>

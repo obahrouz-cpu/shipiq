@@ -23,6 +23,7 @@ export interface Profile {
   phone?: string
   balance: number
   role: 'admin' | 'customer'
+  language?: 'en' | 'ar'
   created_at: string
 }
 
