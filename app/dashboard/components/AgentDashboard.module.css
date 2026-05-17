@@ -149,6 +149,12 @@
   border-left: 3px solid var(--orange);
 }
 
+.cardInProgress {
+  background: rgba(91,155,213,0.05);
+  border: 1px solid rgba(91,155,213,0.15);
+  border-left: 3px solid var(--blue);
+}
+
 .cardCompleted {
   background: rgba(76,175,122,0.05);
   border: 1px solid rgba(76,175,122,0.15);
@@ -343,6 +349,35 @@
   border: 1px solid rgba(76,175,122,0.3);
 }
 .actionBtnGreen:hover { background: rgba(76,175,122,0.22); }
+
+.actionBtnBlue {
+  background: rgba(91,155,213,0.12);
+  color: var(--blue);
+  border: 1px solid rgba(91,155,213,0.3);
+}
+.actionBtnBlue:hover:not(:disabled) { background: rgba(91,155,213,0.22); }
+.actionBtnBlue:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.actionBtnPurple {
+  background: rgba(156,39,176,0.1);
+  color: #c084fc;
+  border: 1px solid rgba(156,39,176,0.25);
+}
+.actionBtnPurple:hover:not(:disabled) { background: rgba(156,39,176,0.18); }
+.actionBtnPurple:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.lastMileBadge {
+  width: 100%;
+  padding: 11px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  background: rgba(34,197,94,0.08);
+  color: var(--green);
+  border: 1px dashed rgba(34,197,94,0.3);
+  letter-spacing: 0.3px;
+}
 
 /* ── Modal overlay ── */
 .overlay {

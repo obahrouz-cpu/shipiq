@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { signOut, getSession, agentMarkOrdered, agentMarkWarehouse } from '@/lib/api'
+import { signOut, getSession, updateOrder, agentMarkOrdered, agentMarkWarehouse } from '@/lib/api'
 import type { Order, Profile } from '@/lib/types'
 import styles from './AgentDashboard.module.css'
 
@@ -26,7 +26,7 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`${styles.badge} ${styles[cfg.cls]}`}>{cfg.icon} {cfg.label}</span>
 }
 
-// ── Action Modal ──────────────────────────────────────────────────────────────
+// ── Action Modal (photo upload) ───────────────────────────────────────────────
 
 function ActionModal({
   order, type, agentId, onClose, onDone,
@@ -99,11 +99,7 @@ function ActionModal({
 
         <div className={styles.modalFooter}>
           <button className={styles.btnCancel} onClick={onClose}>Cancel</button>
-          <button
-            className={styles.btnConfirm}
-            onClick={submit}
-            disabled={loading || !file}
-          >
+          <button className={styles.btnConfirm} onClick={submit} disabled={loading || !file}>
             {loading
               ? <span className={styles.spinner} />
               : (isOrdered ? '🛒 Mark as Ordered' : '🏭 Mark as Warehouse')}
@@ -117,13 +113,14 @@ function ActionModal({
 // ── Order Card ────────────────────────────────────────────────────────────────
 
 function OrderCard({
-  order, variant, onAction,
+  order, onPhotoAction, onRefresh,
 }: {
   order: Order
-  variant: 'action' | 'completed'
-  onAction: () => void
+  onPhotoAction: (type: 'ordered' | 'warehouse') => void
+  onRefresh: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  const [updating, setUpdating] = useState(false)
 
   const copyId = () => {
     navigator.clipboard.writeText(order.id).then(() => {
@@ -132,13 +129,20 @@ function OrderCard({
     })
   }
 
-  const canMarkWarehouse = variant === 'completed'
-    && order.status === 'ordered'
-    && !order.agent_warehouse_photo_url
+  const directUpdate = async (status: string) => {
+    setUpdating(true)
+    await updateOrder(order.id, { status })
+    setUpdating(false)
+    onRefresh()
+  }
+
+  const cardStyle = order.status === 'confirmed' ? styles.cardAction
+    : order.status === 'delivered' ? styles.cardCompleted
+    : styles.cardInProgress
 
   return (
-    <div className={`${styles.card} ${variant === 'action' ? styles.cardAction : styles.cardCompleted}`}>
-      {variant === 'action' && <span className={styles.pulse} />}
+    <div className={`${styles.card} ${cardStyle}`}>
+      {order.status === 'confirmed' && <span className={styles.pulse} />}
 
       <div className={styles.cardTop}>
         <div className={styles.orderIdRow}>
@@ -177,15 +181,9 @@ function OrderCard({
             <span className={styles.fieldVal}>{order.item_price} {order.item_price_currency}</span>
           </div>
         )}
-        {order.profiles?.full_name && (
-          <div className={styles.fieldRow}>
-            <span className={styles.fieldKey}>Customer</span>
-            <span className={styles.fieldVal} style={{ color: 'var(--text-muted)' }}>{order.profiles.full_name}</span>
-          </div>
-        )}
       </div>
 
-      {/* Customer product photo */}
+      {/* Product photo */}
       {order.photo_url && (
         <div style={{ marginBottom: 14 }}>
           <a href={order.photo_url} target="_blank" rel="noopener noreferrer">
@@ -196,7 +194,7 @@ function OrderCard({
               onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
             />
           </a>
-          <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 3 }}>Customer photo</div>
+          <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 3 }}>Product photo</div>
         </div>
       )}
 
@@ -206,12 +204,8 @@ function OrderCard({
           {order.agent_receipt_url && (
             <div className={styles.photoItem}>
               <a href={order.agent_receipt_url} target="_blank" rel="noopener noreferrer">
-                <img
-                  src={order.agent_receipt_url}
-                  alt="receipt"
-                  className={styles.photoThumb}
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                />
+                <img src={order.agent_receipt_url} alt="receipt" className={styles.photoThumb}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
               </a>
               <span className={styles.photoLabel}>Receipt</span>
             </div>
@@ -219,12 +213,8 @@ function OrderCard({
           {order.agent_warehouse_photo_url && (
             <div className={styles.photoItem}>
               <a href={order.agent_warehouse_photo_url} target="_blank" rel="noopener noreferrer">
-                <img
-                  src={order.agent_warehouse_photo_url}
-                  alt="warehouse"
-                  className={styles.photoThumb}
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                />
+                <img src={order.agent_warehouse_photo_url} alt="warehouse" className={styles.photoThumb}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
               </a>
               <span className={styles.photoLabel}>Warehouse</span>
             </div>
@@ -232,16 +222,29 @@ function OrderCard({
         </div>
       )}
 
-      {/* Action buttons */}
-      {variant === 'action' && (
-        <button className={`${styles.actionBtn} ${styles.actionBtnOrange}`} onClick={onAction}>
+      {/* Status-driven action buttons */}
+      {order.status === 'confirmed' && (
+        <button className={`${styles.actionBtn} ${styles.actionBtnOrange}`} onClick={() => onPhotoAction('ordered')}>
           🛒 Mark as Ordered
         </button>
       )}
-      {canMarkWarehouse && (
-        <button className={`${styles.actionBtn} ${styles.actionBtnGreen}`} onClick={onAction}>
+      {order.status === 'ordered' && (
+        <button className={`${styles.actionBtn} ${styles.actionBtnGreen}`} onClick={() => onPhotoAction('warehouse')}>
           🏭 Mark as At Warehouse
         </button>
+      )}
+      {order.status === 'warehouse' && (
+        <button className={`${styles.actionBtn} ${styles.actionBtnBlue}`} onClick={() => directUpdate('transit')} disabled={updating}>
+          {updating ? <span className={styles.spinner} /> : '✈️ Mark as In Transit'}
+        </button>
+      )}
+      {order.status === 'transit' && (
+        <button className={`${styles.actionBtn} ${styles.actionBtnPurple}`} onClick={() => directUpdate('arrived')} disabled={updating}>
+          {updating ? <span className={styles.spinner} /> : '🏙️ Mark as Arrived in City'}
+        </button>
+      )}
+      {order.status === 'arrived' && (
+        <div className={styles.lastMileBadge}>🏠 Ready for Last Mile</div>
       )}
     </div>
   )
@@ -263,7 +266,7 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
     setLoading(true)
     try {
       const session = await getSession()
-      console.log('[AgentDashboard] session:', session ? 'found' : 'null', '| country:', country, '| profile.assigned_country:', profile.assigned_country)
+      console.log('[AgentDashboard] session:', session ? 'found' : 'null', '| country:', country)
       if (!session) { setLoading(false); return }
 
       const res = await fetch('/api/agent/orders', {
@@ -295,9 +298,13 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
   }
 
   const needsAction = orders.filter(o => o.status === 'confirmed')
-  const inProgress  = orders.filter(o =>
-    ['ordered', 'warehouse', 'transit', 'arrived', 'delivered'].includes(o.status)
-  )
+  const inProgress  = orders.filter(o => ['ordered', 'warehouse', 'transit', 'arrived'].includes(o.status))
+  const completed   = orders.filter(o => o.status === 'delivered')
+
+  const handlePhotoAction = (order: Order, type: 'ordered' | 'warehouse') => {
+    setActionOrder(order)
+    setActionType(type)
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -318,10 +325,7 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
       <div className={styles.root}>
         <div className={styles.statsBar}>
           <div className={styles.stat}>
-            <span
-              className={styles.statNum}
-              style={{ color: needsAction.length > 0 ? 'var(--orange)' : 'var(--text-dim)' }}
-            >
+            <span className={styles.statNum} style={{ color: needsAction.length > 0 ? 'var(--orange)' : 'var(--text-dim)' }}>
               {needsAction.length}
             </span>
             <span className={styles.statLabel}>Needs Action</span>
@@ -331,8 +335,10 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
             <span className={styles.statLabel}>In Progress</span>
           </div>
           <div className={styles.stat}>
-            <span className={styles.statNum}>{orders.length}</span>
-            <span className={styles.statLabel}>Total</span>
+            <span className={styles.statNum} style={{ color: completed.length > 0 ? 'var(--green)' : 'var(--text-dim)' }}>
+              {completed.length}
+            </span>
+            <span className={styles.statLabel}>Completed</span>
           </div>
         </div>
 
@@ -347,10 +353,7 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
               <div className={styles.sectionHeader}>
                 <span
                   className={styles.sectionDot}
-                  style={{
-                    background: 'var(--orange)',
-                    boxShadow: needsAction.length > 0 ? '0 0 6px var(--orange)' : 'none',
-                  }}
+                  style={{ background: 'var(--orange)', boxShadow: needsAction.length > 0 ? '0 0 6px var(--orange)' : 'none' }}
                 />
                 NEEDS ACTION ({needsAction.length})
               </div>
@@ -358,12 +361,21 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
                 <div className={styles.empty}>✅ All caught up — no pending actions!</div>
               ) : (
                 needsAction.map(o => (
-                  <OrderCard
-                    key={o.id}
-                    order={o}
-                    variant="action"
-                    onAction={() => { setActionOrder(o); setActionType('ordered') }}
-                  />
+                  <OrderCard key={o.id} order={o} onPhotoAction={type => handlePhotoAction(o, type)} onRefresh={fetchOrders} />
+                ))
+              )}
+            </div>
+
+            <div className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <span className={styles.sectionDot} style={{ background: 'var(--blue)' }} />
+                IN PROGRESS ({inProgress.length})
+              </div>
+              {inProgress.length === 0 ? (
+                <div className={styles.empty}>No orders in progress yet.</div>
+              ) : (
+                inProgress.map(o => (
+                  <OrderCard key={o.id} order={o} onPhotoAction={type => handlePhotoAction(o, type)} onRefresh={fetchOrders} />
                 ))
               )}
             </div>
@@ -371,18 +383,13 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
             <div className={styles.section}>
               <div className={styles.sectionHeader}>
                 <span className={styles.sectionDot} style={{ background: 'var(--green)' }} />
-                IN PROGRESS / COMPLETED ({inProgress.length})
+                COMPLETED ({completed.length})
               </div>
-              {inProgress.length === 0 ? (
-                <div className={styles.empty}>No orders in progress yet.</div>
+              {completed.length === 0 ? (
+                <div className={styles.empty}>No completed orders yet.</div>
               ) : (
-                inProgress.map(o => (
-                  <OrderCard
-                    key={o.id}
-                    order={o}
-                    variant="completed"
-                    onAction={() => { setActionOrder(o); setActionType('warehouse') }}
-                  />
+                completed.map(o => (
+                  <OrderCard key={o.id} order={o} onPhotoAction={type => handlePhotoAction(o, type)} onRefresh={fetchOrders} />
                 ))
               )}
             </div>
