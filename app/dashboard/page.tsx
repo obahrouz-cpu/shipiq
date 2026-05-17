@@ -231,7 +231,7 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
         setThumbUrl(data.image_url || null)
       } catch { setThumbUrl(null) }
       setThumbLoading(false)
-    }, 1000)
+    }, 800)
     return () => clearTimeout(timer)
   }, [form.url])
 
