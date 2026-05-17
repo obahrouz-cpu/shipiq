@@ -98,6 +98,16 @@ export async function getUserOrders(userId: string): Promise<Order[]> {
   return data || []
 }
 
+function detectCountryFromUrl(url: string): string {
+  const u = url.toLowerCase()
+  if (u.includes('amazon.ae')) return 'UAE'
+  if (['amazon.', 'ebay.', 'bestbuy.', 'newegg.', 'bhphotovideo.', 'walmart.', 'target.'].some(d => u.includes(d))) return 'USA'
+  if (['trendyol.', 'hepsiburada.', 'n11.', 'lcwaikiki.'].some(d => u.includes(d))) return 'Turkey'
+  if (['noon.', 'namshi.', 'boutiqaat.', 'ounass.', 'sivvi.'].some(d => u.includes(d))) return 'UAE'
+  if (['aliexpress.', 'shein.', 'banggood.', 'dhgate.', 'alibaba.', 'taobao.', '1688.'].some(d => u.includes(d))) return 'China'
+  return ''
+}
+
 export async function createOrder(
   userId: string,
   form: OrderForm,
@@ -130,6 +140,7 @@ export async function createOrder(
     note: form.note,
     urgency: form.urgency,
     photo_url: photoUrl ?? autoImageUrl ?? null,
+    country_origin: detectCountryFromUrl(form.url),
     status: 'pending',
   })
 
@@ -242,4 +253,69 @@ export async function updateTierSettings(settings: TierSettings[]): Promise<void
   for (const s of settings) {
     await supabase.from('tier_settings').upsert(s, { onConflict: 'tier' })
   }
+}
+
+// ── Agent ─────────────────────────────────────────────────────────────────────
+
+export async function getAgentOrders(country: string): Promise<Order[]> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('orders')
+    .select('*, profiles(full_name, email)')
+    .eq('country_origin', country)
+    .in('status', ['confirmed', 'ordered', 'warehouse', 'transit', 'arrived', 'delivered'])
+    .order('created_at', { ascending: false })
+  return data || []
+}
+
+export async function agentMarkOrdered(
+  orderId: string,
+  receiptFile: File,
+  agentId: string
+): Promise<{ error: string | null }> {
+  const supabase = createClient()
+  const ext = receiptFile.name.split('.').pop() || 'jpg'
+  const fileName = `receipts/${agentId}/${orderId}-${Date.now()}.${ext}`
+  const { error: uploadError } = await supabase.storage
+    .from('agent-uploads')
+    .upload(fileName, receiptFile)
+  if (uploadError) return { error: uploadError.message }
+  const { data: urlData } = supabase.storage.from('agent-uploads').getPublicUrl(fileName)
+  const { error } = await supabase.from('orders').update({
+    agent_receipt_url: urlData.publicUrl,
+    status: 'ordered',
+    ordered_at: new Date().toISOString(),
+  }).eq('id', orderId)
+  return { error: error?.message ?? null }
+}
+
+export async function agentMarkWarehouse(
+  orderId: string,
+  warehousePhotoFile: File,
+  agentId: string
+): Promise<{ error: string | null }> {
+  const supabase = createClient()
+  const ext = warehousePhotoFile.name.split('.').pop() || 'jpg'
+  const fileName = `warehouse/${agentId}/${orderId}-${Date.now()}.${ext}`
+  const { error: uploadError } = await supabase.storage
+    .from('agent-uploads')
+    .upload(fileName, warehousePhotoFile)
+  if (uploadError) return { error: uploadError.message }
+  const { data: urlData } = supabase.storage.from('agent-uploads').getPublicUrl(fileName)
+  const { error } = await supabase.from('orders').update({
+    agent_warehouse_photo_url: urlData.publicUrl,
+    status: 'warehouse',
+    warehoused_at: new Date().toISOString(),
+  }).eq('id', orderId)
+  return { error: error?.message ?? null }
+}
+
+export async function getAgents(): Promise<Profile[]> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('role', 'agent')
+    .order('created_at', { ascending: false })
+  return data || []
 }

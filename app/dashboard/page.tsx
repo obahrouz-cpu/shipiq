@@ -23,6 +23,7 @@ import BoutiqaatWeightEstimator from './components/BoutiqaatWeightEstimator'
 import TierBadge from './components/TierBadge'
 import AdminTierSettings from './components/AdminTierSettings'
 import AdminAnalytics from './components/AdminAnalytics'
+import AgentDashboard from './components/AgentDashboard'
 import type { TierSettings } from '@/lib/types'
 
 // ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
@@ -531,6 +532,49 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order
                 </div>
               </div>
             )}
+            {isAdmin && (order.agent_receipt_url || order.agent_warehouse_photo_url || order.ordered_at || order.warehoused_at) && (
+              <div style={{ marginTop: 16, padding: '14px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+                  🤝 Agent Activity
+                </div>
+                {order.ordered_at && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                    🛒 Ordered: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{order.ordered_at.split('T')[0]}</span>
+                  </div>
+                )}
+                {order.warehoused_at && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                    🏭 Warehoused: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{order.warehoused_at.split('T')[0]}</span>
+                  </div>
+                )}
+                {(order.agent_receipt_url || order.agent_warehouse_photo_url) && (
+                  <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                    {order.agent_receipt_url && (
+                      <div>
+                        <a href={order.agent_receipt_url} target="_blank" rel="noopener noreferrer">
+                          <img src={order.agent_receipt_url} alt="receipt"
+                            style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--border)', display: 'block' }}
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                          />
+                        </a>
+                        <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 3, textAlign: 'center' }}>Receipt</div>
+                      </div>
+                    )}
+                    {order.agent_warehouse_photo_url && (
+                      <div>
+                        <a href={order.agent_warehouse_photo_url} target="_blank" rel="noopener noreferrer">
+                          <img src={order.agent_warehouse_photo_url} alt="warehouse"
+                            style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--border)', display: 'block' }}
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                          />
+                        </a>
+                        <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 3, textAlign: 'center' }}>Warehouse</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {order.status === 'calculated' && !isAdmin && (
               <button className={styles.btnPrimary} style={{ width: '100%', marginTop: 20 }} onClick={handleConfirm}>
                 Confirm & Proceed · تأكيد المضي قدماً
@@ -643,6 +687,80 @@ function TopUpModal({ user, onClose, onDone }: { user: Profile; onClose: () => v
   )
 }
 
+// ── CreateAgentModal ──────────────────────────────────────────────────────────
+
+const AGENT_COUNTRIES = ['USA', 'Turkey', 'UAE', 'China']
+const COUNTRY_FLAGS_MAP: Record<string, string> = { USA: '🇺🇸', Turkey: '🇹🇷', UAE: '🇦🇪', China: '🇨🇳' }
+
+function CreateAgentModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', country: 'USA' })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handle = <K extends keyof typeof form>(k: K, v: string) => setForm(p => ({ ...p, [k]: v }))
+
+  const submit = async () => {
+    if (!form.name || !form.email || !form.password) { setError('Name, email and password are required'); return }
+    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
+    setLoading(true); setError('')
+    const res = await fetch('/api/create-agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    const data = await res.json()
+    setLoading(false)
+    if (data.error) { setError(data.error); return }
+    onDone(); onClose()
+  }
+
+  return (
+    <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className={styles.modal}>
+        <div className={styles.modalHeader}>
+          <div className={styles.modalTitle}>Create Agent · إنشاء وكيل</div>
+          <button className={styles.modalClose} onClick={onClose}>✕</button>
+        </div>
+        {error && <div className={styles.errorBox}>{error}</div>}
+        <div className={styles.formGroup}>
+          <label className={styles.label}>Full Name · الاسم الكامل</label>
+          <input className={styles.input} value={form.name} onChange={e => handle('name', e.target.value)} placeholder="Agent full name" />
+        </div>
+        <div className={styles.grid2}>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>Email · البريد الإلكتروني</label>
+            <input className={styles.input} type="email" value={form.email} onChange={e => handle('email', e.target.value)} placeholder="agent@example.com" />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>Phone · الهاتف</label>
+            <input className={styles.input} value={form.phone} onChange={e => handle('phone', e.target.value)} placeholder="+1..." />
+          </div>
+        </div>
+        <div className={styles.grid2}>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>Password · كلمة المرور</label>
+            <input className={styles.input} type="password" value={form.password} onChange={e => handle('password', e.target.value)} placeholder="Min 8 characters" />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>Assign Country · الدولة</label>
+            <select className={styles.input} value={form.country} onChange={e => handle('country', e.target.value)}>
+              {AGENT_COUNTRIES.map(c => (
+                <option key={c} value={c}>{COUNTRY_FLAGS_MAP[c]} {c}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className={styles.modalFooter}>
+          <button className={styles.btnGhost} onClick={onClose}>Cancel</button>
+          <button className={styles.btnPrimary} onClick={submit} disabled={loading || !form.name || !form.email || !form.password}>
+            {loading ? <Spinner /> : '+ Create Agent'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -666,6 +784,7 @@ export default function Dashboard() {
   const [showTopUp, setShowTopUp]         = useState(false)
   const [tierSettings, setTierSettings]   = useState<TierSettings[]>([])
   const [showTierSettings, setShowTierSettings] = useState(false)
+  const [showCreateAgent, setShowCreateAgent] = useState(false)
   const fetchingPhotosRef = useRef<Set<string>>(new Set())
 
   const toast = (message: string, type: Toast['type'] = 'success') => {
@@ -684,11 +803,12 @@ export default function Dashboard() {
     if (prof.role === 'admin') {
       const [allOrders, allUsers] = await Promise.all([getAdminOrders(), getCustomers()])
       setOrders(allOrders); setUsers(allUsers)
-    } else {
+    } else if (prof.role === 'customer') {
       const [myOrders, txns] = await Promise.all([getUserOrders(session.user.id), getUserTransactions(session.user.id)])
       setOrders(myOrders); setTransactions(txns)
     }
-    getTierSettings().then(setTierSettings)
+    // agents: AgentDashboard fetches its own data
+    if (prof.role !== 'agent') getTierSettings().then(setTierSettings)
     setLoading(false)
   }
 
@@ -729,6 +849,10 @@ export default function Dashboard() {
   )
 
   const isAdmin = profile?.role === 'admin'
+  const isAgent = profile?.role === 'agent'
+
+  if (isAgent && profile) return <AgentDashboard profile={profile} />
+
   const pendingCount = orders.filter(o => o.status === 'pending').length
   const calculatedCount = orders.filter(o => o.status === 'calculated').length
   const filteredOrders = (() => {
@@ -997,10 +1121,25 @@ export default function Dashboard() {
                             </td>
                             <td>{o.created_at?.split('T')[0]}</td>
                             <td>
-                              <Badge status={o.status} />
-                              {o.status === 'pending' && (
-                                <button className={styles.processBadge} onClick={e => { e.stopPropagation(); setSelectedOrder(o) }}>{t('orders', 'process')}</button>
-                              )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <Badge status={o.status} />
+                                {isAdmin && ['confirmed','ordered','warehouse','transit','arrived','delivered'].includes(o.status) && (
+                                  <span
+                                    style={{
+                                      display: 'inline-block', width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                                      background: o.status === 'confirmed' ? '#555'
+                                        : o.status === 'ordered' ? 'var(--orange)'
+                                        : 'var(--green)',
+                                    }}
+                                    title={o.status === 'confirmed' ? 'Agent: not ordered yet'
+                                      : o.status === 'ordered' ? 'Agent: order placed'
+                                      : 'Agent: at warehouse or beyond'}
+                                  />
+                                )}
+                                {o.status === 'pending' && (
+                                  <button className={styles.processBadge} onClick={e => { e.stopPropagation(); setSelectedOrder(o) }}>{t('orders', 'process')}</button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1170,7 +1309,10 @@ export default function Dashboard() {
             <div className="fade-up">
               <div className={styles.pageHeader}>
                 <div><div className={styles.pageHeading}>{t('customers', 'title')}</div><div className={styles.pageSub}>{t('customers', 'sub')}</div></div>
-                <button className={styles.btnGhost} style={{ fontSize: 12, padding: '6px 14px' }} onClick={() => setShowTierSettings(true)}>⚙️ Tiers</button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className={styles.btnGhost} style={{ fontSize: 12, padding: '6px 14px' }} onClick={() => setShowTierSettings(true)}>⚙️ Tiers</button>
+                  <button className={styles.btnPrimary} style={{ fontSize: 12, padding: '6px 14px' }} onClick={() => setShowCreateAgent(true)}>+ Create Agent</button>
+                </div>
               </div>
               <div className={styles.card} style={{ padding: 0, overflow: 'hidden' }}>
                 {users.length === 0 ? (
@@ -1234,6 +1376,7 @@ export default function Dashboard() {
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}
       {showExport && isAdmin && <AdminExport orders={orders} onClose={() => setShowExport(false)} />}
       {showTierSettings && isAdmin && <AdminTierSettings onClose={() => { setShowTierSettings(false); getTierSettings().then(setTierSettings) }} />}
+      {showCreateAgent && isAdmin && <CreateAgentModal onClose={() => setShowCreateAgent(false)} onDone={() => { toast('Agent created!') }} />}
       <Toast toasts={toasts} />
       <FAQChatbot />
       {settingsOpen && profile && (

@@ -22,10 +22,11 @@ export interface Profile {
   email: string
   phone?: string
   balance: number
-  role: 'admin' | 'customer'
+  role: 'admin' | 'customer' | 'agent'
   language?: 'en' | 'ar'
   tier?: string
   total_spent?: number
+  assigned_country?: string
   created_at: string
 }
 
@@ -57,6 +58,11 @@ export interface Order {
   shipping_currency?: string
   weight?: string
   reject_reason?: string
+  country_origin?: string
+  agent_receipt_url?: string
+  agent_warehouse_photo_url?: string
+  ordered_at?: string
+  warehoused_at?: string
   created_at: string
   profiles?: Pick<Profile, 'full_name' | 'email'>
 }
