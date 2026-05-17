@@ -91,28 +91,8 @@ async function fetchAmazon(url: string): Promise<string | null> {
   const asin = extractAsin(url)
   if (!asin) return null
 
-  // Step 1: og:image scrape (free, no credits)
-  console.log('[product-image] Amazon: scraping og:image for ASIN', asin)
-  const html = await fetchPage(`https://www.amazon.com/dp/${asin}`)
-  if (html) {
-    const ogPatterns = [
-      /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
-      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
-    ]
-    for (const p of ogPatterns) {
-      const m = html.match(p)
-      if (m?.[1] && m[1].startsWith('http')) {
-        if (!isBadImage(m[1])) {
-          console.log('[product-image] Amazon og:image found:', m[1])
-          return m[1]
-        }
-        console.log('[product-image] Amazon og:image filtered (bad image):', m[1])
-      }
-    }
-  }
-
-  // Step 2: OpenWebNinja fallback (uses API credits)
-  console.log('[product-image] Amazon: falling back to OpenWebNinja')
+  // Amazon blocks bots and serves no og:image — go straight to OpenWebNinja
+  console.log('[product-image] Amazon: calling OpenWebNinja for ASIN', asin)
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 8000)
@@ -137,9 +117,12 @@ async function fetchAmazon(url: string): Promise<string | null> {
         console.log('[product-image] Amazon OpenWebNinja found:', img)
         return img
       }
+      console.log('[product-image] Amazon OpenWebNinja returned no image')
+    } else {
+      console.log('[product-image] Amazon OpenWebNinja non-OK status:', res.status)
     }
   } catch {
-    console.log('[product-image] Amazon OpenWebNinja failed')
+    console.log('[product-image] Amazon OpenWebNinja request failed')
   }
 
   return null
