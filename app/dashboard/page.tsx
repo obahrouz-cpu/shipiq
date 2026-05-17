@@ -8,7 +8,7 @@ import {
   getTierSettings,
 } from '@/lib/api'
 import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
-import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, TierSettings } from '@/lib/types'
+import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
@@ -22,6 +22,16 @@ import WalletTopUp from './components/WalletTopUp'
 import BoutiqaatWeightEstimator from './components/BoutiqaatWeightEstimator'
 import TierBadge from './components/TierBadge'
 import AdminTierSettings from './components/AdminTierSettings'
+import type { TierSettings } from '@/lib/types'
+
+// ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
+const FALLBACK_TIERS: TierSettings[] = [
+  { tier: 'bronze',   name_en: 'Bronze',   name_ar: 'برونزي',  min_spend: 0,    color: '#CD7F32', icon: '🥉', benefits: 'Welcome to ShipIQ!', is_active: true },
+  { tier: 'silver',   name_en: 'Silver',   name_ar: 'فضي',     min_spend: 100,  color: '#C0C0C0', icon: '🥈', benefits: 'Coming soon',         is_active: true },
+  { tier: 'gold',     name_en: 'Gold',     name_ar: 'ذهبي',    min_spend: 500,  color: '#FFD700', icon: '🥇', benefits: 'Coming soon',         is_active: true },
+  { tier: 'platinum', name_en: 'Platinum', name_ar: 'بلاتيني', min_spend: 1500, color: '#E5E4E2', icon: '💎', benefits: 'Coming soon',         is_active: true },
+  { tier: 'vip',      name_en: 'VIP',      name_ar: 'كبار',    min_spend: 5000, color: '#c9a84c', icon: '👑', benefits: 'Coming soon',         is_active: true },
+]
 
 // ── URL → country-of-origin detection (used by admin filter) ──────────────────
 
@@ -841,11 +851,11 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
-              {!isAdmin && tierSettings.length > 0 && (
+              {!isAdmin && (
                 <TierBadge
                   tier={profile?.tier || 'bronze'}
                   totalSpent={profile?.total_spent || 0}
-                  tiers={tierSettings}
+                  tiers={tierSettings.length > 0 ? tierSettings : FALLBACK_TIERS}
                   language={language as 'en' | 'ar'}
                 />
               )}
