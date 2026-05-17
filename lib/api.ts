@@ -157,9 +157,25 @@ export async function updateOrder(
 
 const TIER_ORDER = ['bronze', 'silver', 'gold', 'platinum', 'vip']
 
-export async function confirmOrder(order: Order): Promise<void> {
+export async function confirmOrder(order: Order): Promise<{ error: string | null }> {
   const supabase = createClient()
-  await supabase.from('orders').update({ status: 'confirmed' }).eq('id', order.id)
+
+  // Idempotency guard — fetch fresh status to prevent double-deduction
+  const { data: fresh } = await supabase
+    .from('orders')
+    .select('status')
+    .eq('id', order.id)
+    .single()
+  if (!fresh || fresh.status !== 'calculated') {
+    return { error: null } // already confirmed or wrong state — do nothing
+  }
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ status: 'confirmed' })
+    .eq('id', order.id)
+  if (updateError) return { error: updateError.message }
+
   if (order.shipping_price) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -218,6 +234,7 @@ export async function confirmOrder(order: Order): Promise<void> {
       }
     }
   }
+  return { error: null }
 }
 
 export async function updateLanguage(userId: string, language: 'en' | 'ar'): Promise<void> {

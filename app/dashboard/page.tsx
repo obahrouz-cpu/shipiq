@@ -432,7 +432,12 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order
   })
 
   const handleConfirm = async () => {
-    await confirmOrder(order)
+    if (loading) return                        // prevent double-tap
+    if (order.status !== 'calculated') return  // already confirmed
+    setLoading(true)
+    const { error } = await confirmOrder(order)
+    setLoading(false)
+    if (error) { console.error('confirmOrder error:', error); return }
     onRefresh(); onClose()
   }
 
@@ -576,8 +581,13 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order
               </div>
             )}
             {order.status === 'calculated' && !isAdmin && (
-              <button className={styles.btnPrimary} style={{ width: '100%', marginTop: 20 }} onClick={handleConfirm}>
-                Confirm & Proceed · تأكيد المضي قدماً
+              <button
+                className={styles.btnPrimary}
+                style={{ width: '100%', marginTop: 20 }}
+                onClick={handleConfirm}
+                disabled={loading}
+              >
+                {loading ? <Spinner /> : 'Confirm & Proceed · تأكيد المضي قدماً'}
               </button>
             )}
           </div>
