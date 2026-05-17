@@ -84,17 +84,19 @@ export async function POST(req: NextRequest) {
     const { url } = await req.json()
     if (!url || typeof url !== 'string') return NextResponse.json({ image_url: null })
 
-    // 1. Microlink — universal, works for all sites
-    const microlinkImage = await tryMicrolink(url)
-    if (microlinkImage) return NextResponse.json({ image_url: microlinkImage })
+    const isAmazon = url.toLowerCase().includes('amazon.')
 
-    // 2. Amazon RapidAPI fallback
-    if (url.toLowerCase().includes('amazon.')) {
+    if (isAmazon) {
+      // Amazon: Microlink returns marketing/logo images, so use RapidAPI first
       const amazonImage = await tryAmazonRapidApi(url)
       if (amazonImage) return NextResponse.json({ image_url: amazonImage })
+    } else {
+      // All other sites: Microlink works well
+      const microlinkImage = await tryMicrolink(url)
+      if (microlinkImage) return NextResponse.json({ image_url: microlinkImage })
     }
 
-    // 3. og:image fallback
+    // Final fallback: og:image scrape
     const ogImage = await tryOgImage(url)
     return NextResponse.json({ image_url: ogImage })
   } catch {
