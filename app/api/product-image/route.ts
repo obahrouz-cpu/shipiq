@@ -30,7 +30,12 @@ async function tryMicrolink(url: string): Promise<string | null> {
     clearTimeout(timeout)
     if (!res.ok) return null
     const data = await res.json()
-    return data?.data?.image?.url || data?.data?.logo?.url || null
+    const imageUrl: string | undefined = data?.data?.image?.url
+    if (!imageUrl) return null
+    // Skip logo/icon images — those are branding assets, not product photos
+    const lower = imageUrl.toLowerCase()
+    if (lower.includes('logo') || lower.includes('icon')) return null
+    return imageUrl
   } catch {
     return null
   }
@@ -84,17 +89,16 @@ export async function POST(req: NextRequest) {
     const { url } = await req.json()
     if (!url || typeof url !== 'string') return NextResponse.json({ image_url: null })
 
-    const isAmazon = url.toLowerCase().includes('amazon.')
-
-    if (isAmazon) {
-      // Amazon: Microlink returns marketing/logo images, so use RapidAPI first
+    // Amazon: always try RapidAPI first (Microlink returns marketing logos)
+    if (url.toLowerCase().includes('amazon.')) {
       const amazonImage = await tryAmazonRapidApi(url)
       if (amazonImage) return NextResponse.json({ image_url: amazonImage })
-    } else {
-      // All other sites: Microlink works well
-      const microlinkImage = await tryMicrolink(url)
-      if (microlinkImage) return NextResponse.json({ image_url: microlinkImage })
     }
+
+    // All sites (including Amazon if RapidAPI failed): try Microlink
+    // Logo/icon images are filtered out inside tryMicrolink
+    const microlinkImage = await tryMicrolink(url)
+    if (microlinkImage) return NextResponse.json({ image_url: microlinkImage })
 
     // Final fallback: og:image scrape
     const ogImage = await tryOgImage(url)
