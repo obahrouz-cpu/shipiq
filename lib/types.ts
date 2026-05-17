@@ -24,7 +24,20 @@ export interface Profile {
   balance: number
   role: 'admin' | 'customer'
   language?: 'en' | 'ar'
+  tier?: string
+  total_spent?: number
   created_at: string
+}
+
+export interface TierSettings {
+  tier: string
+  name_en: string
+  name_ar: string
+  min_spend: number
+  color: string
+  icon: string
+  benefits: string
+  is_active: boolean
 }
 
 export interface Order {

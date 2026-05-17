@@ -5,9 +5,10 @@ import {
   getSession, getProfile, getAdminOrders, getUserOrders,
   getCustomers, getUserTransactions, createOrder,
   updateOrder, confirmOrder, topUpBalance, signOut,
+  getTierSettings,
 } from '@/lib/api'
 import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
-import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult } from '@/lib/types'
+import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, TierSettings } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
@@ -19,6 +20,8 @@ import TrendyolWeightEstimator from './components/TrendyolWeightEstimator'
 import ExchangeRateTicker from './components/ExchangeRateTicker'
 import WalletTopUp from './components/WalletTopUp'
 import BoutiqaatWeightEstimator from './components/BoutiqaatWeightEstimator'
+import TierBadge from './components/TierBadge'
+import AdminTierSettings from './components/AdminTierSettings'
 
 // ── URL → country-of-origin detection (used by admin filter) ──────────────────
 
@@ -650,6 +653,8 @@ export default function Dashboard() {
   const [showExport, setShowExport]       = useState(false)
   const [txnFilter, setTxnFilter]         = useState<'all' | 'topup' | 'deduction'>('all')
   const [showTopUp, setShowTopUp]         = useState(false)
+  const [tierSettings, setTierSettings]   = useState<TierSettings[]>([])
+  const [showTierSettings, setShowTierSettings] = useState(false)
   const fetchingPhotosRef = useRef<Set<string>>(new Set())
 
   const toast = (message: string, type: Toast['type'] = 'success') => {
@@ -672,6 +677,7 @@ export default function Dashboard() {
       const [myOrders, txns] = await Promise.all([getUserOrders(session.user.id), getUserTransactions(session.user.id)])
       setOrders(myOrders); setTransactions(txns)
     }
+    getTierSettings().then(setTierSettings)
     setLoading(false)
   }
 
@@ -835,6 +841,14 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
+              {!isAdmin && tierSettings.length > 0 && (
+                <TierBadge
+                  tier={profile?.tier || 'bronze'}
+                  totalSpent={profile?.total_spent || 0}
+                  tiers={tierSettings}
+                  language={language as 'en' | 'ar'}
+                />
+              )}
               {calculatedCount > 0 && (
                 <div className={styles.alertBox}>
                   <div>
@@ -1137,31 +1151,56 @@ export default function Dashboard() {
             <div className="fade-up">
               <div className={styles.pageHeader}>
                 <div><div className={styles.pageHeading}>{t('customers', 'title')}</div><div className={styles.pageSub}>{t('customers', 'sub')}</div></div>
+                <button className={styles.btnGhost} style={{ fontSize: 12, padding: '6px 14px' }} onClick={() => setShowTierSettings(true)}>⚙️ Tiers</button>
               </div>
               <div className={styles.card} style={{ padding: 0, overflow: 'hidden' }}>
                 {users.length === 0 ? (
                   <div className={styles.empty}><div className={styles.emptyIcon}>👥</div><div className={styles.emptyTitle}>{t('customers', 'noCustomers')}</div></div>
                 ) : (
-                  <table className={styles.table}>
-                    <thead><tr><th>{t('customers', 'name')}</th><th>{t('customers', 'email')}</th><th>{t('customers', 'phone')}</th><th>{t('customers', 'balance')}</th><th>{t('customers', 'joined')}</th><th>{t('customers', 'actions')}</th></tr></thead>
-                    <tbody>
-                      {users.map(u => (
-                        <tr key={u.id}>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <div className={styles.userAvatar} style={{ width: 30, height: 30, fontSize: 12 }}>{u.full_name?.[0]}</div>
-                              <span className={styles.tdMain}>{u.full_name}</span>
-                            </div>
-                          </td>
-                          <td>{u.email}</td>
-                          <td>{u.phone || '—'}</td>
-                          <td style={{ color: 'var(--gold)', fontWeight: 700 }}>{u.balance?.toLocaleString()} IQD</td>
-                          <td>{u.created_at?.split('T')[0]}</td>
-                          <td><button className={styles.btnGhost} style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setTopUpUser(u)}>{t('customers', 'addBalance')}</button></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className={styles.table}>
+                      <thead><tr>
+                        <th>{t('customers', 'name')}</th>
+                        <th>Tier</th>
+                        <th>{t('customers', 'email')}</th>
+                        <th>{t('customers', 'phone')}</th>
+                        <th>Total Spent</th>
+                        <th>{t('customers', 'balance')}</th>
+                        <th>{t('customers', 'joined')}</th>
+                        <th>{t('customers', 'actions')}</th>
+                      </tr></thead>
+                      <tbody>
+                        {users.map(u => (
+                          <tr key={u.id}>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div className={styles.userAvatar} style={{ width: 30, height: 30, fontSize: 12 }}>{u.full_name?.[0]}</div>
+                                <span className={styles.tdMain}>{u.full_name}</span>
+                              </div>
+                            </td>
+                            <td>
+                              {tierSettings.length > 0 && (
+                                <TierBadge
+                                  tier={u.tier || 'bronze'}
+                                  totalSpent={u.total_spent || 0}
+                                  tiers={tierSettings}
+                                  compact
+                                />
+                              )}
+                            </td>
+                            <td>{u.email}</td>
+                            <td>{u.phone || '—'}</td>
+                            <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
+                              ${(u.total_spent || 0).toFixed(2)}
+                            </td>
+                            <td style={{ color: 'var(--gold)', fontWeight: 700 }}>{u.balance?.toLocaleString()} IQD</td>
+                            <td>{u.created_at?.split('T')[0]}</td>
+                            <td><button className={styles.btnGhost} style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setTopUpUser(u)}>{t('customers', 'addBalance')}</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </div>
@@ -1175,6 +1214,7 @@ export default function Dashboard() {
       {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} />}
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}
       {showExport && isAdmin && <AdminExport orders={orders} onClose={() => setShowExport(false)} />}
+      {showTierSettings && isAdmin && <AdminTierSettings onClose={() => { setShowTierSettings(false); getTierSettings().then(setTierSettings) }} />}
       <Toast toasts={toasts} />
       <FAQChatbot />
       {settingsOpen && profile && (

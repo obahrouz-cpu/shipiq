@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { createClient } from './supabase'
-import type { Order, OrderForm, Profile, Transaction } from './types'
+import type { Order, OrderForm, Profile, Transaction, TierSettings } from './types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -144,16 +144,19 @@ export async function updateOrder(
   await supabase.from('orders').update(updates).eq('id', orderId)
 }
 
+const TIER_ORDER = ['bronze', 'silver', 'gold', 'platinum', 'vip']
+
 export async function confirmOrder(order: Order): Promise<void> {
   const supabase = createClient()
   await supabase.from('orders').update({ status: 'confirmed' }).eq('id', order.id)
   if (order.shipping_price) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('balance, id')
+      .select('balance, id, tier, total_spent')
       .eq('id', order.user_id)
       .single()
     if (profile) {
+      // Deduct balance and update shipping transaction
       await supabase
         .from('profiles')
         .update({ balance: profile.balance - order.shipping_price })
@@ -165,6 +168,43 @@ export async function confirmOrder(order: Order): Promise<void> {
         note: `Shipping confirmed for ${order.id}`,
         order_id: order.id,
       })
+
+      // Update total_spent and recalculate tier
+      const spendUSD = order.shipping_currency === 'USD'
+        ? order.shipping_price
+        : order.shipping_price / 1450
+      const newTotalSpent = ((profile as { total_spent?: number }).total_spent || 0) + spendUSD
+
+      const { data: tierRows } = await supabase
+        .from('tier_settings')
+        .select('tier, name_en, min_spend')
+        .eq('is_active', true)
+        .order('min_spend', { ascending: false })
+
+      let newTier = 'bronze'
+      for (const t of (tierRows || []) as { tier: string; name_en: string; min_spend: number }[]) {
+        if (newTotalSpent >= t.min_spend) { newTier = t.tier; break }
+      }
+
+      await supabase
+        .from('profiles')
+        .update({ total_spent: newTotalSpent, tier: newTier })
+        .eq('id', profile.id)
+
+      // Insert tier upgrade notification if upgraded
+      const oldTier = (profile as { tier?: string }).tier || 'bronze'
+      if (TIER_ORDER.indexOf(newTier) > TIER_ORDER.indexOf(oldTier)) {
+        const tierInfo = (tierRows || [] as { tier: string; name_en: string; min_spend: number }[]).find(
+          (t: { tier: string; name_en: string; min_spend: number }) => t.tier === newTier
+        )
+        await supabase.from('transactions').insert({
+          user_id: order.user_id,
+          amount: 0,
+          currency: 'IQD',
+          note: `🎉 Congratulations! You've been upgraded to ${tierInfo?.name_en || newTier} tier!`,
+          order_id: order.id,
+        })
+      }
     }
   }
 }
@@ -184,4 +224,22 @@ export async function getUserTransactions(userId: string): Promise<Transaction[]
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
   return data || []
+}
+
+// ── Tier settings ──────────────────────────────────────────────────────────────
+
+export async function getTierSettings(): Promise<TierSettings[]> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('tier_settings')
+    .select('*')
+    .order('min_spend', { ascending: true })
+  return (data as TierSettings[]) || []
+}
+
+export async function updateTierSettings(settings: TierSettings[]): Promise<void> {
+  const supabase = createClient()
+  for (const s of settings) {
+    await supabase.from('tier_settings').upsert(s, { onConflict: 'tier' })
+  }
 }
