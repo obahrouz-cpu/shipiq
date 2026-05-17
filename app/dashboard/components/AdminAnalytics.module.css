@@ -1,0 +1,294 @@
+/* ── SKELETON ── */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface2) 0%, var(--surface3) 50%, var(--surface2) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+/* ── PERIOD FILTER ── */
+.periodFilter {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  padding: 7px 18px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.pill:hover { background: var(--surface2); color: var(--text); }
+
+.pillActive {
+  background: rgba(201,168,76,0.12) !important;
+  border-color: rgba(201,168,76,0.4) !important;
+  color: var(--gold) !important;
+}
+
+/* ── GRID LAYOUTS ── */
+.overviewGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.twoCol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.threeCol {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* ── CARDS ── */
+.section { margin-bottom: 24px; }
+
+.chartCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.chartTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chartSub {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 500;
+  margin-left: auto;
+}
+
+/* ── STAT CARD ── */
+.statCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.15s;
+}
+
+.statCard:hover { border-color: var(--gold-dim); }
+
+.statEmoji { font-size: 22px; margin-bottom: 6px; }
+
+.statLabel {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.statValue {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--gold);
+}
+
+.statSub {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* ── TABLE ── */
+.tableWrap { overflow-x: auto; }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 11px 14px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td { border-bottom: none; }
+.table tbody tr:hover td { background: var(--surface2); }
+
+.rankNum {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-dim);
+  width: 24px;
+  text-align: center;
+}
+
+/* ── FUNNEL ── */
+.funnelRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.funnelLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  width: 80px;
+  flex-shrink: 0;
+  text-transform: capitalize;
+}
+
+.funnelBarWrap {
+  flex: 1;
+  background: var(--surface2);
+  border-radius: 4px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.funnelBarFill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--gold);
+  transition: width 0.7s ease;
+}
+
+.funnelCount {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  width: 40px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.funnelPct {
+  font-size: 11px;
+  color: var(--text-dim);
+  width: 38px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── DAILY GRID ── */
+.dailyGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.dailyCard {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+}
+
+.dailyNum {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.dailyLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* ── SUMMARY ROWS ── */
+.summaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.summaryRow:last-child { border-bottom: none; }
+
+.summaryKey { color: var(--text-muted); font-weight: 500; }
+.summaryVal { color: var(--text); font-weight: 700; }
+
+/* ── TIER BADGE ── */
+.tierDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+/* ── EMPTY STATE ── */
+.empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 1200px) {
+  .overviewGrid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 900px) {
+  .overviewGrid { grid-template-columns: repeat(2, 1fr); }
+  .twoCol       { grid-template-columns: 1fr; }
+  .threeCol     { grid-template-columns: 1fr; }
+  .dailyGrid    { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 520px) {
+  .overviewGrid { grid-template-columns: 1fr 1fr; }
+  .dailyGrid    { grid-template-columns: 1fr 1fr; }
+}

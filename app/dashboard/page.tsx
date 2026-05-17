@@ -22,6 +22,7 @@ import WalletTopUp from './components/WalletTopUp'
 import BoutiqaatWeightEstimator from './components/BoutiqaatWeightEstimator'
 import TierBadge from './components/TierBadge'
 import AdminTierSettings from './components/AdminTierSettings'
+import AdminAnalytics from './components/AdminAnalytics'
 import type { TierSettings } from '@/lib/types'
 
 // ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
@@ -760,6 +761,7 @@ export default function Dashboard() {
   const navItems: NavItem[] = isAdmin
     ? [
         { id: 'admin-orders', icon: '📋', label: t('nav', 'adminOrders'), badge: pendingCount },
+        { id: 'admin-analytics', icon: '📊', label: 'Analytics' },
         { id: 'admin-customers', icon: '👥', label: t('nav', 'customers') },
       ]
     : [
@@ -775,6 +777,7 @@ export default function Dashboard() {
     orders:            t('nav', 'orders'),
     balance:           t('nav', 'balance'),
     'admin-orders':    t('nav', 'adminOrders'),
+    'admin-analytics': '📊 Analytics',
     'admin-customers': t('nav', 'customers'),
   }
 
@@ -1154,6 +1157,12 @@ export default function Dashboard() {
                   )
                 })()}
               </div>
+            </div>
+          )}
+
+          {page === 'admin-analytics' && (
+            <div className="fade-up">
+              <AdminAnalytics />
             </div>
           )}
 
