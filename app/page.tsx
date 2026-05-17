@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import { SHIPPING_RATES } from '@/lib/constants'
+import ShippingCalculator from './dashboard/components/ShippingCalculator'
 import styles from './landing.module.css'
 
 // ── Clearbit logo with fallback ───────────────────────────────────────────────
@@ -134,7 +134,7 @@ const FAQS = [
   },
   {
     q: 'How is shipping cost calculated? · كيف تحسبون تكلفة الشحن؟',
-    a: 'Shipping is based on the billable weight (actual or dimensional weight, whichever is higher) multiplied by the per-kg rate for your chosen country. Use our calculator above for an instant estimate.',
+    a: 'Shipping is based on the billable weight (actual or dimensional weight, whichever is higher) multiplied by the per-kg rate for your country. Use our calculator for an instant estimate.',
   },
   {
     q: 'How long does delivery take? · كم يستغرق التوصيل؟',
@@ -153,15 +153,9 @@ const FAQS = [
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
-  const [loggedIn, setLoggedIn]   = useState<boolean | null>(null)
-  const [menuOpen, setMenuOpen]   = useState(false)
-  const [openFaq, setOpenFaq]     = useState<number | null>(null)
-
-  // Calculator
-  const [country, setCountry]   = useState('USA')
-  const [category, setCategory] = useState('General')
-  const [weight, setWeight]     = useState('')
-  const [result, setResult]     = useState<{ min: number; max: number } | null>(null)
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [openFaq, setOpenFaq]   = useState<number | null>(null)
 
   // Scroll animation refs
   const statsRef     = useInView()
@@ -179,21 +173,6 @@ export default function LandingPage() {
     })
   }, [])
 
-  function calculate() {
-    const kg = parseFloat(weight)
-    if (!kg || kg <= 0) return
-    let key = country
-    if (country === 'UAE') {
-      if (category === 'Cosmetics')    key = 'UAE_Cosmetics'
-      else if (category === 'Supplements') key = 'UAE_Supplements'
-      else if (category === 'Clothing')    key = 'UAE_Clothing'
-      else if (category === 'Accessories') key = 'UAE_Accessories'
-    }
-    const rate = SHIPPING_RATES[key]
-    if (!rate) return
-    setResult({ min: Math.round(rate.min * kg), max: Math.round(rate.max * kg) })
-  }
-
   return (
     <div>
       {/* ── NAVBAR ── */}
@@ -203,9 +182,9 @@ export default function LandingPage() {
 
           <div className={`${styles.navLinks} ${menuOpen ? styles.navLinksOpen : ''}`}>
             <a href="#how-it-works" className={styles.navLink} onClick={() => setMenuOpen(false)}>How it Works</a>
-            <a href="#calculator"   className={styles.navLink} onClick={() => setMenuOpen(false)}>Calculator</a>
-            <a href="#stores"       className={styles.navLink} onClick={() => setMenuOpen(false)}>Stores</a>
-            <a href="#faq"          className={styles.navLink} onClick={() => setMenuOpen(false)}>FAQ</a>
+            <Link href="/calculator"  className={styles.navLink} onClick={() => setMenuOpen(false)}>Calculator</Link>
+            <a href="#stores"         className={styles.navLink} onClick={() => setMenuOpen(false)}>Stores</a>
+            <a href="#faq"            className={styles.navLink} onClick={() => setMenuOpen(false)}>FAQ</a>
           </div>
 
           <div className={styles.navActions}>
@@ -231,7 +210,6 @@ export default function LandingPage() {
 
       {/* ── HERO ── */}
       <section id="top" className={styles.hero}>
-        {/* Floating country flags */}
         <div className={styles.floatingFlags} aria-hidden>
           <span className={`${styles.flag} ${styles.flag1}`}>🇺🇸</span>
           <span className={`${styles.flag} ${styles.flag2}`}>🇹🇷</span>
@@ -349,81 +327,7 @@ export default function LandingPage() {
       {/* ── CALCULATOR ── */}
       <section id="calculator" className={styles.section}>
         <div ref={calcRef.ref} className={`${styles.sectionInner} ${calcRef.inView ? styles.visible : ''}`}>
-          <div className={styles.calcBox}>
-            <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>
-                Calculate Your Shipping · <span className="ar">احسب تكلفة شحنك</span>
-              </h2>
-              <p className={styles.sectionSub}>Get an instant estimate before you commit to an order</p>
-            </div>
-
-            <div className={styles.calcForm}>
-              <div className={styles.calcRow}>
-                <div className={styles.calcField}>
-                  <label className={styles.calcLabel}>Country · الدولة</label>
-                  <select
-                    className={styles.calcSelect}
-                    value={country}
-                    onChange={e => { setCountry(e.target.value); setResult(null) }}
-                  >
-                    <option value="USA">🇺🇸 USA</option>
-                    <option value="Turkey">🇹🇷 Turkey</option>
-                    <option value="UAE">🇦🇪 UAE</option>
-                    <option value="China">🇨🇳 China</option>
-                  </select>
-                </div>
-
-                {country === 'UAE' && (
-                  <div className={styles.calcField}>
-                    <label className={styles.calcLabel}>Category · الفئة</label>
-                    <select
-                      className={styles.calcSelect}
-                      value={category}
-                      onChange={e => { setCategory(e.target.value); setResult(null) }}
-                    >
-                      <option value="General">General</option>
-                      <option value="Cosmetics">Cosmetics</option>
-                      <option value="Supplements">Supplements</option>
-                      <option value="Clothing">Clothing</option>
-                      <option value="Accessories">Accessories</option>
-                    </select>
-                  </div>
-                )}
-
-                <div className={styles.calcField}>
-                  <label className={styles.calcLabel}>Weight (kg) · الوزن</label>
-                  <input
-                    className={styles.calcInput}
-                    type="number"
-                    placeholder="e.g. 1.5"
-                    min="0.1"
-                    step="0.1"
-                    value={weight}
-                    onChange={e => { setWeight(e.target.value); setResult(null) }}
-                    onKeyDown={e => e.key === 'Enter' && calculate()}
-                  />
-                </div>
-
-                <button className={styles.calcBtn} onClick={calculate}>
-                  Calculate · احسب
-                </button>
-              </div>
-
-              {result && (
-                <div className={styles.calcResult}>
-                  <div className={styles.calcResultLabel}>≈ Estimated Shipping · تقدير الشحن</div>
-                  <div className={styles.calcResultRange}>
-                    {result.min.toLocaleString()} – {result.max.toLocaleString()}
-                    <span className={styles.calcResultCurrency}> IQD</span>
-                  </div>
-                  <div className={styles.calcResultNote}>
-                    Final price confirmed by ShipIQ after order review ·{' '}
-                    <span className="ar">السعر النهائي يتم تأكيده من شيب آي كيو</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <ShippingCalculator />
         </div>
       </section>
 
@@ -523,7 +427,7 @@ export default function LandingPage() {
             <div className={styles.footerLinks}>
               <Link href="/auth">Sign Up</Link>
               <a href="#how-it-works">How it Works</a>
-              <a href="#calculator">Calculator</a>
+              <Link href="/calculator">Calculator</Link>
               <a href="#stores">Stores</a>
               <a href="#faq">FAQ</a>
             </div>

@@ -453,126 +453,6 @@
 
 .countryRate { font-size: 11px; color: var(--text-dim); }
 
-/* ── CALCULATOR ── */
-.calcBox {
-  background: var(--surface);
-  border: 2px solid var(--gold-dim);
-  border-radius: 20px;
-  padding: 60px 52px;
-  box-shadow: 0 0 80px rgba(201,168,76,0.07), var(--shadow-lg);
-}
-
-.calcForm { max-width: 820px; margin: 0 auto; }
-
-.calcRow {
-  display: flex;
-  gap: 16px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-
-.calcField {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-width: 140px;
-}
-
-.calcLabel {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.7px;
-}
-
-.calcSelect,
-.calcInput {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-size: 15px;
-  font-family: inherit;
-  padding: 12px 14px;
-  transition: border-color 0.18s;
-  width: 100%;
-  height: 48px;
-}
-
-.calcSelect:focus,
-.calcInput:focus {
-  outline: none;
-  border-color: var(--gold-dim);
-}
-
-.calcSelect option { background: #1a1916; }
-
-.calcBtn {
-  background: var(--gold);
-  color: #0f0e0c;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 15px;
-  font-weight: 700;
-  padding: 0 28px;
-  cursor: pointer;
-  transition: all 0.18s;
-  white-space: nowrap;
-  height: 48px;
-  flex-shrink: 0;
-  font-family: inherit;
-}
-
-.calcBtn:hover {
-  background: var(--gold-light);
-  transform: translateY(-1px);
-}
-
-@keyframes fadeUpIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.calcResult {
-  margin-top: 28px;
-  background: rgba(201, 168, 76, 0.07);
-  border: 1px solid rgba(201, 168, 76, 0.22);
-  border-radius: var(--radius);
-  padding: 28px 36px;
-  text-align: center;
-  animation: fadeUpIn 0.4s ease forwards;
-}
-
-.calcResultLabel {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: var(--gold-dim);
-  margin-bottom: 10px;
-}
-
-.calcResultRange {
-  font-size: 38px;
-  font-weight: 800;
-  color: var(--gold);
-  margin-bottom: 8px;
-  letter-spacing: -1px;
-}
-
-.calcResultCurrency {
-  font-size: 22px;
-  color: var(--gold-dim);
-}
-
-.calcResultNote {
-  font-size: 12px;
-  color: var(--text-dim);
-  line-height: 1.6;
-}
-
 /* ── STORES ── */
 .storesGroup { margin-bottom: 44px; }
 .storesGroup:last-child { margin-bottom: 0; }
@@ -817,10 +697,6 @@
   .hamburger    { display: flex; }
 
   .stepsGrid { grid-template-columns: 1fr; }
-
-  .calcBox { padding: 32px 24px; }
-  .calcRow { flex-direction: column; }
-  .calcBtn { width: 100%; justify-content: center; }
 
   .statItem {
     padding: 16px 20px;
