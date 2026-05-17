@@ -650,6 +650,7 @@ export default function Dashboard() {
   const [showExport, setShowExport]       = useState(false)
   const [txnFilter, setTxnFilter]         = useState<'all' | 'topup' | 'deduction'>('all')
   const [showTopUp, setShowTopUp]         = useState(false)
+  const fetchingPhotosRef = useRef<Set<string>>(new Set())
 
   const toast = (message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
@@ -675,6 +676,27 @@ export default function Dashboard() {
   }
 
   useEffect(() => { fetchData() }, [])
+
+  useEffect(() => {
+    orders.forEach(o => {
+      if (o.photo_url || fetchingPhotosRef.current.has(o.id) || !o.url) return
+      fetchingPhotosRef.current.add(o.id)
+      fetch('/api/product-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: o.url }),
+      })
+        .then(r => r.json())
+        .then((data: { image_url: string | null }) => {
+          if (data.image_url) {
+            setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, photo_url: data.image_url! } : ord))
+            updateOrder(o.id, { photo_url: data.image_url })
+          }
+        })
+        .catch(() => {})
+        .finally(() => fetchingPhotosRef.current.delete(o.id))
+    })
+  }, [orders])
 
   const logout = async () => {
     await signOut()
@@ -836,10 +858,18 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <table className={styles.table}>
-                    <thead><tr><th>ID</th><th>Description</th><th>Date</th><th>Status</th></tr></thead>
+                    <thead><tr><th style={{ width: 56 }}></th><th>ID</th><th>Description</th><th>Date</th><th>Status</th></tr></thead>
                     <tbody>
                       {orders.slice(0, 5).map(o => (
                         <tr key={o.id} onClick={() => setSelectedOrder(o)} style={{ cursor: 'pointer' }}>
+                          <td style={{ padding: '8px 12px' }}>
+                            <div style={{ width: 40, height: 40, borderRadius: 6, background: 'var(--surface2)', border: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', fontSize: 18, position: 'relative', color: '#888' }}>
+                              <span style={{ position: 'absolute' }}>🛍️</span>
+                              {o.photo_url && (
+                                <img src={o.photo_url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                              )}
+                            </div>
+                          </td>
                           <td className={styles.tdMain}>{o.id}</td>
                           <td>{o.description}</td>
                           <td>{o.created_at?.split('T')[0]}</td>
@@ -898,6 +928,7 @@ export default function Dashboard() {
                   <div style={{ overflowX: 'auto' }}>
                     <table className={styles.table}>
                       <thead><tr>
+                        <th style={{ width: 56 }}></th>
                         <th>{t('orders', 'id')}</th>
                         {isAdmin && <th>{t('orders', 'customer')}</th>}
                         <th>{t('orders', 'description')}</th><th>{t('orders', 'itemPrice')}</th><th>{t('orders', 'shipping')}</th><th>{t('orders', 'date')}</th><th>{t('orders', 'status')}</th>
@@ -905,6 +936,14 @@ export default function Dashboard() {
                       <tbody>
                         {filteredOrders.map(o => (
                           <tr key={o.id} onClick={() => setSelectedOrder(o)} style={{ cursor: 'pointer' }}>
+                            <td style={{ padding: '8px 12px' }}>
+                              <div style={{ width: 40, height: 40, borderRadius: 6, background: 'var(--surface2)', border: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', fontSize: 18, position: 'relative', color: '#888' }}>
+                                <span style={{ position: 'absolute' }}>🛍️</span>
+                                {o.photo_url && (
+                                  <img src={o.photo_url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                                )}
+                              </div>
+                            </td>
                             <td className={styles.tdMain}>{o.id}</td>
                             {isAdmin && (
                               <td>
@@ -917,19 +956,11 @@ export default function Dashboard() {
                               </td>
                             )}
                             <td>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <div style={{ width: 44, height: 44, borderRadius: 6, background: 'var(--surface2)', border: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', fontSize: 18, position: 'relative' }}>
-                                  <span style={{ position: 'absolute' }}>🛍️</span>
-                                  {o.photo_url && (
-                                    <img src={o.photo_url} alt="" style={{ width: 44, height: 44, objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
-                                  )}
-                                </div>
-                                <div>
-                                  <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: 13, marginBottom: 3 }}>{o.description}</div>
-                                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                                    <span style={{ fontSize: 10, color: 'var(--text-dim)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 6px' }}>{o.category}</span>
-                                    {o.urgency && <span style={{ fontSize: 10, color: 'var(--orange)' }}>⚡ Urgent</span>}
-                                  </div>
+                              <div>
+                                <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: 13, marginBottom: 3 }}>{o.description}</div>
+                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                                  <span style={{ fontSize: 10, color: 'var(--text-dim)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 6px' }}>{o.category}</span>
+                                  {o.urgency && <span style={{ fontSize: 10, color: 'var(--orange)' }}>⚡ Urgent</span>}
                                 </div>
                               </div>
                             </td>
