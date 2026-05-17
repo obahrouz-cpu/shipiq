@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import ShippingCalculator from './dashboard/components/ShippingCalculator'
 import styles from './landing.module.css'
@@ -153,6 +154,7 @@ const FAQS = [
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
+  const router = useRouter()
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [openFaq, setOpenFaq]   = useState<number | null>(null)
@@ -169,9 +171,16 @@ export default function LandingPage() {
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setLoggedIn(!!session)
+      if (session) {
+        router.replace('/dashboard')
+      } else {
+        setLoggedIn(false)
+      }
     })
   }, [])
+
+  // Don't render landing content until we know the user isn't logged in
+  if (loggedIn === null) return null
 
   return (
     <div>
