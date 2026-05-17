@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import {
   getSession, getProfile, getAdminOrders, getUserOrders,
   getCustomers, getUserTransactions, createOrder,
-  updateOrder, confirmOrder, topUpBalance, signOut,
+  updateOrder, topUpBalance, signOut,
   getTierSettings,
 } from '@/lib/api'
 import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
@@ -433,11 +433,21 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order
 
   const handleConfirm = async () => {
     if (loading) return                        // prevent double-tap
-    if (order.status !== 'calculated') return  // already confirmed
+    if (order.status !== 'calculated') return  // client-side guard
     setLoading(true)
-    const { error } = await confirmOrder(order)
+    const session = await getSession()
+    if (!session) { setLoading(false); return }
+    const res = await fetch('/api/orders/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id: order.id, access_token: session.access_token }),
+    })
+    const data = await res.json()
     setLoading(false)
-    if (error) { console.error('confirmOrder error:', error); return }
+    if (!res.ok || data.error) {
+      console.error('confirmOrder error:', data.error)
+      return
+    }
     onRefresh(); onClose()
   }
 
