@@ -179,8 +179,8 @@ export default function LandingPage() {
     })
   }, [])
 
-  // Don't render landing content until we know the user isn't logged in
-  if (loggedIn === null) return null
+  // Show dark background while session check runs to avoid white flash
+  if (loggedIn === null) return <div style={{ minHeight: '100vh', background: 'var(--bg)' }} />
 
   return (
     <div>
