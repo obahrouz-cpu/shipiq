@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { signOut, getAgentOrders, agentMarkOrdered, agentMarkWarehouse } from '@/lib/api'
+import { signOut, getSession, agentMarkOrdered, agentMarkWarehouse } from '@/lib/api'
 import type { Order, Profile } from '@/lib/types'
 import styles from './AgentDashboard.module.css'
 
@@ -261,8 +261,29 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
 
   const fetchOrders = async () => {
     setLoading(true)
-    const data = await getAgentOrders(country)
-    setOrders(data)
+    try {
+      const session = await getSession()
+      console.log('[AgentDashboard] session:', session ? 'found' : 'null', '| country:', country, '| profile.assigned_country:', profile.assigned_country)
+      if (!session) { setLoading(false); return }
+
+      const res = await fetch('/api/agent/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: session.access_token }),
+      })
+      const data = await res.json()
+      console.log('[AgentDashboard] /api/agent/orders response:', res.status, 'orders:', data.orders?.length ?? 'error', 'error:', data.error ?? 'none')
+
+      if (!res.ok || data.error) {
+        console.error('[AgentDashboard] fetch error:', data.error)
+        setOrders([])
+      } else {
+        setOrders(data.orders || [])
+      }
+    } catch (e) {
+      console.error('[AgentDashboard] exception:', e)
+      setOrders([])
+    }
     setLoading(false)
   }
 
