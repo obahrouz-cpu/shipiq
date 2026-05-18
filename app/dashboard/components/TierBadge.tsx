@@ -50,6 +50,10 @@ export default function TierBadge({ tier, totalSpent, tiers, compact = false, la
       boxShadow: `0 0 16px ${color}20`,
       padding: '14px 16px',
       marginBottom: 16,
+      width: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden',
+      boxSizing: 'border-box',
     }}>
       {/* Icon + name row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>

@@ -45,37 +45,54 @@ export default function ExchangeRateTicker() {
 
   if (loading || rates.length === 0) return null
 
+  // Duplicate items so the marquee loops seamlessly
+  const items = [...rates, ...rates]
+
   return (
-    <div style={{
-      borderBottom: '1px solid var(--border)',
-      background: 'var(--surface)',
-      padding: '6px 32px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 24,
-      overflowX: 'auto',
-      flexWrap: 'nowrap',
-      scrollbarWidth: 'none',
-    }}>
-      {rates.map(r => (
-        <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', fontSize: 12, color: 'var(--text-muted)' }}>
-          {r.isIQD && (
-            <span style={{
-              width: 7, height: 7, borderRadius: '50%',
-              background: '#22c55e',
-              boxShadow: '0 0 4px #22c55e',
-              display: 'inline-block',
-              flexShrink: 0,
-            }} />
-          )}
-          <span style={{ fontWeight: r.isIQD ? 700 : 500, color: r.isIQD ? 'var(--text)' : undefined }}>
-            {r.label}
-          </span>
-          {r.isIQD && (
-            <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 600, letterSpacing: '0.3px' }}>LIVE</span>
-          )}
+    <>
+      <style>{`
+        @keyframes tickerScroll {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+      `}</style>
+      <div style={{
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--surface)',
+        padding: '6px 0',
+        overflow: 'hidden',
+        width: '100%',
+        maxWidth: '100vw',
+      }}>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 32,
+          paddingLeft: 24,
+          whiteSpace: 'nowrap',
+          animation: 'tickerScroll 20s linear infinite',
+        }}>
+          {items.map((r, i) => (
+            <div key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>
+              {r.isIQD && (
+                <span style={{
+                  width: 7, height: 7, borderRadius: '50%',
+                  background: '#22c55e',
+                  boxShadow: '0 0 4px #22c55e',
+                  display: 'inline-block',
+                  flexShrink: 0,
+                }} />
+              )}
+              <span style={{ fontWeight: r.isIQD ? 700 : 500, color: r.isIQD ? 'var(--text)' : undefined }}>
+                {r.label}
+              </span>
+              {r.isIQD && (
+                <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 600, letterSpacing: '0.3px' }}>LIVE</span>
+              )}
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      </div>
+    </>
   )
 }
