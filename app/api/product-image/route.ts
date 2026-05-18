@@ -91,8 +91,6 @@ async function fetchAmazon(url: string): Promise<string | null> {
   const asin = extractAsin(url)
   if (!asin) return null
 
-  // Amazon blocks bots and serves no og:image — go straight to OpenWebNinja
-  console.log('[product-image] Amazon: calling OpenWebNinja for ASIN', asin)
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 8000)
@@ -113,16 +111,10 @@ async function fetchAmazon(url: string): Promise<string | null> {
         data?.data?.product_photo ||
         data?.data?.product_main_image_url ||
         data?.data?.product_photos?.[0]
-      if (img) {
-        console.log('[product-image] Amazon OpenWebNinja found:', img)
-        return img
-      }
-      console.log('[product-image] Amazon OpenWebNinja returned no image')
-    } else {
-      console.log('[product-image] Amazon OpenWebNinja non-OK status:', res.status)
+      if (img) return img
     }
-  } catch {
-    console.log('[product-image] Amazon OpenWebNinja request failed')
+  } catch (err) {
+    console.error('[product-image] Amazon API request failed:', err)
   }
 
   return null
@@ -133,7 +125,6 @@ async function fetchTrendyol(url: string): Promise<string | null> {
   const productId = m?.[1]
 
   if (productId) {
-    console.log('[product-image] Trendyol: trying public API for productId', productId)
     try {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 7000)
@@ -156,40 +147,25 @@ async function fetchTrendyol(url: string): Promise<string | null> {
         const images: string[] = product?.images || product?.productImages || []
         const first = images[0]
         if (first) {
-          const imgUrl = first.startsWith('http') ? first : `https://cdn.dsmcdn.com${first}`
-          console.log('[product-image] Trendyol API found:', imgUrl)
-          return imgUrl
+          return first.startsWith('http') ? first : `https://cdn.dsmcdn.com${first}`
         }
       }
-    } catch {
-      console.log('[product-image] Trendyol API failed')
+    } catch (err) {
+      console.error('[product-image] Trendyol API failed:', err)
     }
   }
 
   // Fallback: og:image from page
-  console.log('[product-image] Trendyol: falling back to og:image scrape')
   const html = await fetchPage(url, {
     'Accept-Language': 'tr-TR,tr;q=0.9,en;q=0.8',
     'Referer': 'https://www.trendyol.com/',
   })
-  if (html) {
-    const img = extractMetaImage(html)
-    if (img) {
-      console.log('[product-image] Trendyol og:image found:', img)
-      return img
-    }
-  }
-
-  return null
+  return html ? extractMetaImage(html) : null
 }
 
 async function fetchGeneric(url: string): Promise<string | null> {
-  console.log('[product-image] Generic: fetching page with mobile UA')
   const html = await fetchPage(url)
-  if (!html) return null
-  const img = extractMetaImage(html)
-  if (img) console.log('[product-image] Generic meta image found:', img)
-  return img
+  return html ? extractMetaImage(html) : null
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -202,13 +178,8 @@ export async function POST(req: NextRequest) {
     const lowerUrl = url.toLowerCase()
 
     // 1. Database cache check — never fetch the same URL twice
-    console.log('[product-image] Checking cache for:', url)
     const cached = await checkDbCache(url)
-    if (cached) {
-      console.log('[product-image] Cache hit:', cached)
-      return NextResponse.json({ image_url: cached })
-    }
-    console.log('[product-image] Cache miss, fetching...')
+    if (cached) return NextResponse.json({ image_url: cached })
 
     // 2. Fetch by site type
     let imageUrl: string | null = null
@@ -221,15 +192,11 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Persist result so the same URL is never fetched again
-    if (imageUrl) {
-      console.log('[product-image] Saving to cache:', imageUrl)
-      await saveToDbCache(url, imageUrl)
-    } else {
-      console.log('[product-image] No image found for:', url)
-    }
+    if (imageUrl) await saveToDbCache(url, imageUrl)
 
     return NextResponse.json({ image_url: imageUrl })
-  } catch {
+  } catch (err) {
+    console.error('[product-image] Unhandled error:', err)
     return NextResponse.json({ image_url: null })
   }
 }

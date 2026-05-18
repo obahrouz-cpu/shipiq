@@ -144,12 +144,8 @@ export async function POST(req: NextRequest) {
 
     if (siteInfo.site === 'trendyol.com') {
       try {
-        console.log('[Trendyol] Starting scrape for URL:', url)
-
-        // Extract productId from URL: brand/name-p-{productId}
         const productIdMatch = url.match(/-p-(\d+)/)
         const productId = productIdMatch ? productIdMatch[1] : null
-        console.log('[Trendyol] Extracted productId:', productId)
 
         let weightKg: number | null = null
         let dims: { l: number; w: number; h: number } | null = null
@@ -160,7 +156,6 @@ export async function POST(req: NextRequest) {
         // Step 1: Try the Trendyol public product API
         if (productId) {
           const apiUrl = `https://public.trendyol.com/discovery-web-productgw-service/api/productDetail/${productId}`
-          console.log('[Trendyol] Trying public API:', apiUrl)
           try {
             const apiRes = await fetch(apiUrl, {
               headers: {
@@ -171,27 +166,19 @@ export async function POST(req: NextRequest) {
                 'Referer': 'https://www.trendyol.com/',
               },
             })
-            console.log('[Trendyol] Public API status:', apiRes.status)
             if (apiRes.ok) {
               const apiData = await apiRes.json()
-              console.log('[Trendyol] API response keys:', Object.keys(apiData || {}))
               const product = apiData?.result?.product || apiData?.result || apiData?.product || apiData
               if (product) {
                 productName = product.name || product.productName || productName
                 category = product.categoryName || product.category?.name || null
-                console.log('[Trendyol] Product name:', productName, '| Category:', category)
 
-                // Parse attributes array — two common shapes
                 const attrs: Array<Record<string, unknown>> = [
                   ...(product.attributes || []),
                   ...(product.productDetailAttributes || []),
                   ...(product.allVariants?.[0]?.attributes || []),
                 ]
-                console.log('[Trendyol] Total attributes found:', attrs.length)
                 for (const attr of attrs) {
-                  // Shape A: { attributeName, attributeValue }
-                  // Shape B: { key: { name }, value: { name } }
-                  // Shape C: { name, value }
                   const attrName = String(
                     attr.attributeName ||
                     (attr.key as Record<string,unknown>)?.name ||
@@ -202,27 +189,23 @@ export async function POST(req: NextRequest) {
                     (attr.value as Record<string,unknown>)?.name ||
                     attr.value || ''
                   )
-                  console.log('[Trendyol] Attr:', attrName, '=', attrVal)
                   if (/ağırlık|weight/i.test(attrName) && attrVal && !weightKg) {
                     weightKg = parseWeightToKg(attrVal)
-                    console.log('[Trendyol] Parsed weight:', weightKg, 'kg from', attrVal)
                   }
                   if (/boyut|dimension|ölçü|en x boy|ebat/i.test(attrName) && attrVal && !dims) {
                     dims = parseDimensionsToCm(attrVal.replace(/\s*x\s*/gi, ' x '))
-                    console.log('[Trendyol] Parsed dims:', dims, 'from', attrVal)
                   }
                 }
                 apiSuccess = true
               }
             }
           } catch (apiErr) {
-            console.log('[Trendyol] Public API failed:', apiErr instanceof Error ? apiErr.message : apiErr)
+            console.error('[scrape] Trendyol API failed:', apiErr)
           }
         }
 
         // Step 2: Fallback — fetch product HTML with mobile iPhone UA
         if (!apiSuccess || (!weightKg && !dims)) {
-          console.log('[Trendyol] Falling back to HTML scrape...')
           const htmlRes = await fetch(url, {
             headers: {
               'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
@@ -231,26 +214,19 @@ export async function POST(req: NextRequest) {
               'Referer': 'https://www.trendyol.com',
             },
           })
-          console.log('[Trendyol] HTML response status:', htmlRes.status)
           if (!htmlRes.ok) {
             return NextResponse.json({ found: false, reason: `Trendyol returned HTTP ${htmlRes.status}. Try entering manually.` })
           }
           const html = await htmlRes.text()
-          console.log('[Trendyol] HTML length:', html.length)
-          console.log('[Trendyol] HTML preview (first 500):', html.slice(0, 500))
 
-          // Product name from og:title or <title>
           const nameMatch = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/)
             || html.match(/<title>([^<]+)<\/title>/)
           if (nameMatch) productName = nameMatch[1].replace(/ \| Trendyol.*$/, '').trim()
 
-          // Category from breadcrumb or JSON-LD pattern
           const catMatch = html.match(/"pattern"\s*:\s*"([^"]+)"/)
             || html.match(/"categoryName"\s*:\s*"([^"]+)"/)
           if (catMatch && !category) category = catMatch[1]
 
-          // Try to extract attributes from embedded JSON (shape with nested key/value objects)
-          // Trendyol embeds: "attributes":[{"key":{"id":N,"name":"..."},"value":{"id":N,"name":"..."}}]
           const attrRegex = /"attributes"\s*:\s*(\[[^\]]{0,4000}\])/g
           let attrMatch: RegExpExecArray | null
           while ((attrMatch = attrRegex.exec(html)) !== null) {
@@ -270,23 +246,19 @@ export async function POST(req: NextRequest) {
                 )
                 if (/ağırlık|weight/i.test(attrName) && attrVal && !weightKg) {
                   weightKg = parseWeightToKg(attrVal)
-                  console.log('[Trendyol] HTML attr weight:', weightKg, 'from', attrVal)
                 }
                 if (/boyut|dimension|ölçü|en x boy|ebat/i.test(attrName) && attrVal && !dims) {
                   dims = parseDimensionsToCm(attrVal.replace(/\s*x\s*/gi, ' x '))
-                  console.log('[Trendyol] HTML attr dims:', dims, 'from', attrVal)
                 }
               }
             } catch { /* skip bad JSON */ }
           }
 
-          // Fallback weight/dim text patterns in raw HTML
           if (!weightKg) {
             const wMatch = html.match(/[Aa]ğırlık[^:]*:\s*<[^>]*>([^<]+)|"Ağırlık"\s*,\s*"value"\s*:\s*"([^"]+)"|"attributeName"\s*:\s*"Ağırlık"\s*,\s*"attributeValue"\s*:\s*"([^"]+)"/)
             if (wMatch) {
               const raw = wMatch[1] || wMatch[2] || wMatch[3]
               weightKg = parseWeightToKg(raw)
-              console.log('[Trendyol] Text weight match:', raw, '->', weightKg)
             }
           }
           if (!dims) {
@@ -297,12 +269,9 @@ export async function POST(req: NextRequest) {
               let h = parseFloat(dMatch[3].replace(',', '.'))
               if ((dMatch[4] || '').toLowerCase() === 'mm') { l /= 10; w /= 10; h /= 10 }
               dims = { l: Math.round(l * 10) / 10, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 }
-              console.log('[Trendyol] Text dims match:', dims)
             }
           }
         }
-
-        console.log('[Trendyol] Final result — weight:', weightKg, '| dims:', dims, '| name:', productName)
 
         if (!weightKg && !dims) {
           return NextResponse.json({
@@ -331,19 +300,15 @@ export async function POST(req: NextRequest) {
         })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
-        console.log('[Trendyol] Unexpected error:', msg)
+        console.error('[scrape] Trendyol unexpected error:', msg)
         return NextResponse.json({ found: false, reason: `Trendyol scrape failed: ${msg}` })
       }
     }
 
     if (siteInfo.site === 'noon.com') {
       try {
-        console.log('[Noon] Starting scrape for URL:', url)
-
-        // Extract product ID — pattern: /{ID}/p/ e.g. /N79004521V/p/
         const productIdMatch = url.match(/\/([A-Z][A-Z0-9]{6,18})\/p(?:\/|$)/i)
         const productId = productIdMatch ? productIdMatch[1].toUpperCase() : null
-        console.log('[Noon] Extracted productId:', productId)
 
         let weightKg: number | null = null
         let productName = 'Noon Product'
@@ -352,7 +317,6 @@ export async function POST(req: NextRequest) {
 
         if (productId) {
           const apiUrl = `https://www.noon.com/api/v2/pdp/product/${productId}?country=UAE`
-          console.log('[Noon] Trying product API:', apiUrl)
           try {
             const controller = new AbortController()
             const timeout = setTimeout(() => controller.abort(), 8000)
@@ -364,12 +328,8 @@ export async function POST(req: NextRequest) {
               signal: controller.signal,
             })
             clearTimeout(timeout)
-            console.log('[Noon] API status:', apiRes.status)
             if (apiRes.ok) {
               const data = await apiRes.json()
-              console.log('[Noon] API response keys:', JSON.stringify(Object.keys(data || {})))
-              console.log('[Noon] Full API response (truncated):', JSON.stringify(data).slice(0, 2000))
-
               const product = data?.catalog_product || data?.product || data?.model || data?.item || data
               productName = product?.name || product?.title || product?.product_title || productName
 
@@ -378,34 +338,31 @@ export async function POST(req: NextRequest) {
                 data?.catalog?.category?.name ||
                 (Array.isArray(product?.categories) ? product.categories[product.categories.length - 1]?.name : null) || ''
               )
-              if (catRaw) { category = detectNoonCategory(catRaw); console.log('[Noon] Raw category:', catRaw, '→', category) }
+              if (catRaw) category = detectNoonCategory(catRaw)
 
               const attrs: Array<Record<string, unknown>> = product?.attributes || product?.specifications || product?.details || []
               if (Array.isArray(attrs)) {
                 for (const attr of attrs) {
                   const name = String(attr.name || attr.key || attr.label || '').toLowerCase()
                   const value = String(attr.value || attr.val || attr.text || '')
-                  console.log('[Noon] Attr:', name, '=', value)
                   if (/weight/i.test(name) && value && !weightKg) {
                     weightKg = parseWeightToKg(value)
-                    console.log('[Noon] Found weight from attr:', weightKg, 'kg from', value)
                   }
                 }
               }
               if (!weightKg) {
                 const direct = product?.weight || product?.shipping_weight || product?.item_weight
-                if (direct) { weightKg = parseWeightToKg(String(direct)); console.log('[Noon] Direct weight field:', weightKg) }
+                if (direct) weightKg = parseWeightToKg(String(direct))
               }
               apiSuccess = true
             }
           } catch (apiErr) {
-            console.log('[Noon] API failed:', apiErr instanceof Error ? apiErr.message : apiErr)
+            console.error('[scrape] Noon API failed:', apiErr)
           }
         }
 
         // Fallback: scrape product page HTML
         if (!apiSuccess || (!weightKg && !category)) {
-          console.log('[Noon] Falling back to HTML scrape...')
           try {
             const controller = new AbortController()
             const timeout = setTimeout(() => controller.abort(), 8000)
@@ -418,10 +375,8 @@ export async function POST(req: NextRequest) {
               signal: controller.signal,
             })
             clearTimeout(timeout)
-            console.log('[Noon] HTML status:', htmlRes.status)
             if (htmlRes.ok) {
               const html = await htmlRes.text()
-              console.log('[Noon] HTML length:', html.length)
 
               const nameMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/)
                 || html.match(/<title>([^<]+)<\/title>/)
@@ -429,33 +384,30 @@ export async function POST(req: NextRequest) {
 
               const catMatch = html.match(/"categoryName"\s*:\s*"([^"]+)"/)
                 || html.match(/<meta[^>]+property=["']product:category["'][^>]+content=["']([^"']+)["']/)
-              if (catMatch && !category) { category = detectNoonCategory(catMatch[1]); console.log('[Noon] HTML category:', catMatch[1], '→', category) }
+              if (catMatch && !category) category = detectNoonCategory(catMatch[1])
 
               if (!weightKg) {
                 const wMatch = html.match(/[Ww]eight[^:]*:\s*<[^>]*>([^<]+)/)
                   || html.match(/"weight"\s*:\s*"([^"]+)"/i)
-                if (wMatch) { weightKg = parseWeightToKg(wMatch[1]); console.log('[Noon] HTML weight:', weightKg, 'from', wMatch[1]) }
+                if (wMatch) weightKg = parseWeightToKg(wMatch[1])
               }
 
-              // JSON-LD
               const jsonLdTags = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || []
               for (const tag of jsonLdTags) {
                 try {
                   const json = JSON.parse(tag.replace(/<script[^>]*>|<\/script>/gi, ''))
-                  console.log('[Noon] JSON-LD type:', json?.['@type'])
                   if (!category && json?.category) category = detectNoonCategory(String(json.category))
-                  if (!weightKg && json?.weight) { weightKg = parseWeightToKg(String(json.weight)); console.log('[Noon] JSON-LD weight:', weightKg) }
+                  if (!weightKg && json?.weight) weightKg = parseWeightToKg(String(json.weight))
                   if (!productName || productName === 'Noon Product') productName = json?.name || productName
                 } catch { /* skip */ }
               }
             }
           } catch (htmlErr) {
-            console.log('[Noon] HTML scrape failed:', htmlErr instanceof Error ? htmlErr.message : htmlErr)
+            console.error('[scrape] Noon HTML scrape failed:', htmlErr)
           }
         }
 
         const finalCategory = category || 'Accessories'
-        console.log('[Noon] Final — weight:', weightKg, '| category:', finalCategory, '| name:', productName)
 
         if (!weightKg) {
           return NextResponse.json({
@@ -480,15 +432,13 @@ export async function POST(req: NextRequest) {
         })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
-        console.log('[Noon] Unexpected error:', msg)
+        console.error('[scrape] Noon unexpected error:', msg)
         return NextResponse.json({ found: false, reason: `Noon scrape failed: ${msg}` })
       }
     }
 
     if (siteInfo.site === 'boutiqaat.com') {
       try {
-        console.log('[Boutiqaat] Starting scrape for URL:', url)
-
         let weightKg: number | null = null
         let productName = 'Boutiqaat Product'
         const category = 'Cosmetics'
@@ -504,7 +454,6 @@ export async function POST(req: NextRequest) {
           signal: controller.signal,
         })
         clearTimeout(timeout)
-        console.log('[Boutiqaat] HTML status:', htmlRes.status)
 
         if (!htmlRes.ok) {
           return NextResponse.json({
@@ -515,15 +464,12 @@ export async function POST(req: NextRequest) {
         }
 
         const html = await htmlRes.text()
-        console.log('[Boutiqaat] HTML length:', html.length)
 
         const nameMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/)
           || html.match(/<h1[^>]*>([^<]+)<\/h1>/)
           || html.match(/<title>([^<]+)<\/title>/)
         if (nameMatch) productName = nameMatch[1].replace(/\s*[|\-–]\s*(boutiqaat|بوتيكات).*$/i, '').trim()
-        console.log('[Boutiqaat] Product name:', productName)
 
-        // Weight from various patterns
         const weightPatterns = [
           /[Ww]eight[^:]*:\s*<[^>]*>([^<]+)/,
           /[Ww]eight[^:]*:([^<\n,]{1,20})/,
@@ -534,22 +480,18 @@ export async function POST(req: NextRequest) {
           const m = html.match(p)
           if (m) {
             const parsed = parseWeightToKg(m[1])
-            if (parsed) { weightKg = parsed; console.log('[Boutiqaat] Weight:', weightKg, 'kg from', m[1]); break }
+            if (parsed) { weightKg = parsed; break }
           }
         }
 
-        // JSON-LD
         const jsonLdTags = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || []
         for (const tag of jsonLdTags) {
           try {
             const json = JSON.parse(tag.replace(/<script[^>]*>|<\/script>/gi, ''))
-            console.log('[Boutiqaat] JSON-LD:', JSON.stringify(json).slice(0, 500))
             if (!productName || productName === 'Boutiqaat Product') productName = json?.name || productName
-            if (!weightKg && json?.weight) { weightKg = parseWeightToKg(String(json.weight)); console.log('[Boutiqaat] JSON-LD weight:', weightKg) }
+            if (!weightKg && json?.weight) weightKg = parseWeightToKg(String(json.weight))
           } catch { /* skip */ }
         }
-
-        console.log('[Boutiqaat] Final — weight:', weightKg, '| category:', category, '| name:', productName)
 
         if (!weightKg) {
           return NextResponse.json({
@@ -574,7 +516,7 @@ export async function POST(req: NextRequest) {
         })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
-        console.log('[Boutiqaat] Unexpected error:', msg)
+        console.error('[scrape] Boutiqaat unexpected error:', msg)
         return NextResponse.json({ found: false, reason: `Boutiqaat scrape failed: ${msg}`, category: 'Cosmetics' })
       }
     }
@@ -583,6 +525,7 @@ export async function POST(req: NextRequest) {
 
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
+    console.error('[scrape] Unhandled error:', message)
     return NextResponse.json({ found: false, reason: message }, { status: 500 })
   }
 }

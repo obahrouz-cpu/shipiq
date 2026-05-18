@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   getSession, getProfile, getAdminOrders, getUserOrders,
@@ -807,13 +807,13 @@ export default function Dashboard() {
   const [showCreateAgent, setShowCreateAgent] = useState(false)
   const fetchingPhotosRef = useRef<Set<string>>(new Set())
 
-  const toast = (message: string, type: Toast['type'] = 'success') => {
+  const toast = useCallback((message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
     setToasts(p => [...p, { id, message, type }])
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500)
-  }
+  }, [])
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     const session = await getSession()
     if (!session) { window.location.href = '/auth'; return }
     const prof = await getProfile(session.user.id)
@@ -830,9 +830,9 @@ export default function Dashboard() {
     // agents: AgentDashboard fetches its own data
     if (prof.role !== 'agent') getTierSettings().then(setTierSettings)
     setLoading(false)
-  }
+  }, [setLanguage])
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData() }, [fetchData])
 
   useEffect(() => {
     orders.forEach(o => {
@@ -855,10 +855,10 @@ export default function Dashboard() {
     })
   }, [orders])
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await signOut()
     router.push('/auth')
-  }
+  }, [router])
 
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16 }}>
@@ -871,11 +871,11 @@ export default function Dashboard() {
   const isAdmin = profile?.role === 'admin'
   const isAgent = profile?.role === 'agent'
 
-  if (isAgent && profile) return <AgentDashboard profile={profile} />
+  if (isAgent && profile) return <AgentDashboard profile={profile} onSignOut={logout} />
 
   const pendingCount = orders.filter(o => o.status === 'pending').length
   const calculatedCount = orders.filter(o => o.status === 'calculated').length
-  const filteredOrders = (() => {
+  const filteredOrders = useMemo(() => {
     let result = [...orders]
     if (filters.status !== 'all') result = result.filter(o => o.status === filters.status)
     if (filters.category !== 'All') result = result.filter(o => o.category === filters.category)
@@ -900,7 +900,7 @@ export default function Dashboard() {
     else if (filters.sort === 'price-low')  result.sort((a, b) => (a.shipping_price ?? 0) - (b.shipping_price ?? 0))
     else result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     return result
-  })()
+  }, [orders, filters, isAdmin])
 
   const navItems: NavItem[] = isAdmin
     ? [

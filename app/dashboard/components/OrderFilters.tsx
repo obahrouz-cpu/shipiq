@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import styles from './OrderFilters.module.css'
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -140,6 +140,22 @@ interface OrderFiltersProps {
 
 export default function OrderFilters({ isAdmin, value, onChange }: OrderFiltersProps) {
   const [open, setOpen] = useState(false)
+  const [searchInput, setSearchInput] = useState(value.customerSearch)
+
+  // Sync when parent resets filters (e.g. clearAll)
+  useEffect(() => { setSearchInput(value.customerSearch) }, [value.customerSearch])
+
+  // Debounce customer search propagation (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== value.customerSearch) {
+        onChange({ ...value, customerSearch: searchInput })
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  // value and onChange intentionally omitted to prevent re-trigger loop
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput])
 
   const activeCount = countActive(value, isAdmin)
   const chips = buildChips(value, isAdmin)
@@ -228,8 +244,8 @@ export default function OrderFilters({ isAdmin, value, onChange }: OrderFiltersP
                 <input
                   className={styles.input}
                   placeholder="Search by name..."
-                  value={value.customerSearch}
-                  onChange={e => set('customerSearch', e.target.value)}
+                  value={searchInput}
+                  onChange={e => setSearchInput(e.target.value)}
                 />
               </Section>
 

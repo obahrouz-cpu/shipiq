@@ -278,8 +278,8 @@ export default function AdminAnalytics() {
       if (!map[o.user_id]) {
         const prof = allProfiles.find(p => p.id === o.user_id)
         map[o.user_id] = {
-          name: (o.profiles as any)?.full_name || prof?.full_name || '—',
-          email: (o.profiles as any)?.email || prof?.email || '—',
+          name: o.profiles?.full_name || prof?.full_name || '—',
+          email: o.profiles?.email || prof?.email || '—',
           orders: 0, revenue: 0,
           tier: prof?.tier || 'bronze',
           lastOrder: o.created_at,

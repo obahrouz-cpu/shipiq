@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { signOut, getSession, updateOrder, agentMarkOrdered, agentMarkWarehouse } from '@/lib/api'
+import { getSession, updateOrder, agentMarkOrdered, agentMarkWarehouse } from '@/lib/api'
 import type { Order, Profile } from '@/lib/types'
 import styles from './AgentDashboard.module.css'
 
@@ -252,8 +251,7 @@ function OrderCard({
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-export default function AgentDashboard({ profile }: { profile: Profile }) {
-  const router = useRouter()
+export default function AgentDashboard({ profile, onSignOut }: { profile: Profile; onSignOut: () => void }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [actionOrder, setActionOrder] = useState<Order | null>(null)
@@ -266,7 +264,6 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
     setLoading(true)
     try {
       const session = await getSession()
-      console.log('[AgentDashboard] session:', session ? 'found' : 'null', '| country:', country)
       if (!session) { setLoading(false); return }
 
       const res = await fetch('/api/agent/orders', {
@@ -275,7 +272,6 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
         body: JSON.stringify({ access_token: session.access_token }),
       })
       const data = await res.json()
-      console.log('[AgentDashboard] /api/agent/orders response:', res.status, 'orders:', data.orders?.length ?? 'error', 'error:', data.error ?? 'none')
 
       if (!res.ok || data.error) {
         console.error('[AgentDashboard] fetch error:', data.error)
@@ -291,11 +287,6 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
   }
 
   useEffect(() => { fetchOrders() }, [country])
-
-  const handleLogout = async () => {
-    await signOut()
-    router.push('/auth')
-  }
 
   const needsAction = orders.filter(o => o.status === 'confirmed')
   const inProgress  = orders.filter(o => ['ordered', 'warehouse', 'transit', 'arrived'].includes(o.status))
@@ -318,7 +309,7 @@ export default function AgentDashboard({ profile }: { profile: Profile }) {
         <div className={styles.topBarRight}>
           <span className={styles.agentName}>{profile.full_name}</span>
           <button className={styles.refreshBtn} onClick={fetchOrders}>↻</button>
-          <button className={styles.signOutBtn} onClick={handleLogout}>Sign Out</button>
+          <button className={styles.signOutBtn} onClick={onSignOut}>Sign Out</button>
         </div>
       </div>
 
