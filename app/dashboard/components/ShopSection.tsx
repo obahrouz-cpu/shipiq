@@ -281,7 +281,7 @@ export default function ShopSection() {
   if (categoryFilter !== 'All') metaParts.push(categoryFilter)
 
   return (
-    <div>
+    <div style={{ width: '100%', overflowX: 'hidden' }}>
       {/* Deals + Recently Visited */}
       <DealsSection />
 

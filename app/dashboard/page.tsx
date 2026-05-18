@@ -792,6 +792,7 @@ export default function Dashboard() {
   const [users, setUsers]               = useState<Profile[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [page, setPage]                 = useState('dashboard')
+  const handlePageChange = (newPage: string) => { setPage(newPage); setSettingsOpen(false) }
   const [loading, setLoading]           = useState(true)
   const [showNewOrder, setShowNewOrder] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -940,7 +941,7 @@ export default function Dashboard() {
         <div className={styles.sidebarNav}>
           <div className={styles.navSection}>{isAdmin ? t('nav', 'adminPanel') : t('nav', 'menu')}</div>
           {navItems.map(n => (
-            <div key={n.id} className={`${styles.navItem} ${page === n.id ? styles.navActive : ''}`} onClick={() => { setPage(n.id); setSidebarOpen(false) }}>
+            <div key={n.id} className={`${styles.navItem} ${page === n.id ? styles.navActive : ''}`} onClick={() => { handlePageChange(n.id); setSidebarOpen(false) }}>
               <span>{n.icon}</span>
               <span style={{ flex: 1 }}>{n.label}</span>
               {n.badge !== undefined && n.badge > 0 && <span className={styles.navBadge}>{n.badge}</span>}
@@ -1188,7 +1189,7 @@ export default function Dashboard() {
                   💳 Top Up · شحن الرصيد
                 </button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+              <div className={styles.grid2} style={{ marginBottom: 24 }}>
                 <div className={styles.card} style={{ textAlign: 'center', padding: '36px 24px' }}>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('balance', 'available')}</div>
                   <span className={styles.priceBig}>{profile?.balance?.toLocaleString()}</span>
@@ -1282,10 +1283,10 @@ export default function Dashboard() {
                         <thead>
                           <tr>
                             <th style={{ width: 36 }}></th>
-                            <th>Date · التاريخ</th>
+                            <th className={styles.mobileHide}>Date · التاريخ</th>
                             <th>Description · الوصف</th>
                             <th>Amount · المبلغ</th>
-                            <th>Balance · الرصيد</th>
+                            <th className={styles.mobileHide}>Balance · الرصيد</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1294,7 +1295,7 @@ export default function Dashboard() {
                               <td style={{ textAlign: 'center', fontSize: 16 }}>
                                 {getIcon(txn.note || '')}
                               </td>
-                              <td style={{ whiteSpace: 'nowrap', color: 'var(--text-dim)', fontSize: 12 }}>
+                              <td className={styles.mobileHide} style={{ whiteSpace: 'nowrap', color: 'var(--text-dim)', fontSize: 12 }}>
                                 {txn.created_at?.split('T')[0]}
                               </td>
                               <td style={{ maxWidth: 200 }}>
@@ -1310,7 +1311,7 @@ export default function Dashboard() {
                               <td style={{ whiteSpace: 'nowrap', fontWeight: 700, color: txn.amount > 0 ? 'var(--green)' : 'var(--red)' }}>
                                 {txn.amount > 0 ? '+' : ''}{txn.amount?.toLocaleString()} {txn.currency}
                               </td>
-                              <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: 13 }}>
+                              <td className={styles.mobileHide} style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: 13 }}>
                                 {txn.afterBalance.toLocaleString()} IQD
                               </td>
                             </tr>
@@ -1407,7 +1408,7 @@ export default function Dashboard() {
             <button
               key={n.id}
               className={`${styles.bottomNavItem} ${page === n.id ? styles.bottomNavActive : ''}`}
-              onClick={() => setPage(n.id)}
+              onClick={() => handlePageChange(n.id)}
               style={{ position: 'relative' }}
             >
               {n.badge !== undefined && n.badge > 0 && (

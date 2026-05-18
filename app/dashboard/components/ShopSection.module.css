@@ -377,30 +377,15 @@
 
 /* ── Mobile: grid & pill tweaks (≤ 600px) ─────────────────── */
 @media (max-width: 600px) {
-  .grid  { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 
-  /* Pills: horizontal scroll row — no wrapping */
-  .pills {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    gap: 6px;
-    padding-bottom: 4px;
-  }
-  .pills::-webkit-scrollbar { display: none; }
-  .pill  { font-size: 12px; padding: 6px 12px; flex-shrink: 0; min-height: 36px; }
+  /* Pills: wrap instead of scroll */
+  .pills { flex-wrap: wrap; gap: 6px; }
+  .pill  { font-size: 12px; padding: 6px 12px; min-height: 36px; }
 
-  /* Bubbles: horizontal scroll too */
-  .bubbles {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-bottom: 4px;
-  }
-  .bubbles::-webkit-scrollbar { display: none; }
-  .bubble { flex-shrink: 0; min-height: 32px; }
+  /* Bubbles: wrap instead of scroll */
+  .bubbles { flex-wrap: wrap; }
+  .bubble  { min-height: 32px; }
 
   /* Show drag handle on mobile */
   .dragHandle { display: flex; }
