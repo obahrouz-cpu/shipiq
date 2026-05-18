@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import {
   getSession, getProfile, getAdminOrders, getUserOrders,
   getCustomers, getUserTransactions, createOrder,
@@ -22,7 +23,7 @@ import WalletTopUp from './components/WalletTopUp'
 import BoutiqaatWeightEstimator from './components/BoutiqaatWeightEstimator'
 import TierBadge from './components/TierBadge'
 import AdminTierSettings from './components/AdminTierSettings'
-import AdminAnalytics from './components/AdminAnalytics'
+const AdminAnalytics = dynamic(() => import('./components/AdminAnalytics'), { ssr: false })
 import AgentDashboard from './components/AgentDashboard'
 import type { TierSettings } from '@/lib/types'
 
