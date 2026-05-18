@@ -301,9 +301,8 @@
   .sidebarOverlay { display: block; }
   .main { margin-left: 0; }
   .grid2 { grid-template-columns: 1fr; }
-  .body { padding: 20px 16px 88px; }
+  .body { padding: 20px 16px calc(70px + env(safe-area-inset-bottom)); }
   .statsGrid { grid-template-columns: 1fr 1fr; }
-  .hamburger { display: flex; }
   .topbar { padding: 0 16px; height: 56px; }
   .balanceChip { font-size: 12px; padding: 5px 10px; }
 
@@ -335,10 +334,12 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 64px;
+    height: auto;
+    min-height: 64px;
+    padding-bottom: env(safe-area-inset-bottom);
     background: var(--surface);
     border-top: 1px solid var(--border);
-    z-index: 200;
+    z-index: 1000;
     align-items: stretch;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);

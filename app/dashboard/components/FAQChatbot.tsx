@@ -1,96 +1,91 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import styles from './FAQChatbot.module.css'
 
-// ── Knowledge base ────────────────────────────────────────────────────────────
+const WA_URL = 'https://wa.me/9647XXXXXXXXX'
 
-interface Topic {
-  keywords: string[]
-  response: string
+type Action =
+  | 'main'
+  | 'how_it_works'
+  | 'shipping_rates'
+  | 'delivery_time'
+  | 'contact_us'
+  | 'which_sites'
+  | 'uae_rates'
+  | 'whatsapp'
+  | 'calculator'
+
+interface BubbleDef {
+  label: string
+  action: Action
 }
 
-const TOPICS: Topic[] = [
-  {
-    keywords: ['who', 'what', 'shipiq', 'about', 'company', 'service', 'من', 'ماذا', 'شيب', 'نحن'],
-    response: "ShipIQ is a smart shipping service that helps you buy products from the US, Turkey, UAE and China and delivers them to Iraq. We handle everything — purchasing, shipping, and delivery. 🚀",
+interface NodeDef {
+  answer: string
+  bubbles: BubbleDef[]
+}
+
+const NODES: Record<string, NodeDef> = {
+  how_it_works: {
+    answer: "Simple! Submit a link → we calculate shipping → you confirm → we deliver to Iraq 📦",
+    bubbles: [
+      { label: "Which sites? 🛒", action: "which_sites" },
+      { label: "How long? ⏱️", action: "delivery_time" },
+      { label: "Main menu 🏠", action: "main" },
+    ],
   },
-  {
-    keywords: ['how', 'works', 'process', 'steps', 'كيف', 'خطوات', 'يعمل', 'طريقة'],
-    response: "It's simple! 1️⃣ Browse stores and find a product 2️⃣ Submit the link 3️⃣ We calculate the shipping price 4️⃣ You confirm and pay from your balance 5️⃣ We purchase and ship it to you 📦",
+  shipping_rates: {
+    answer: "Rates vary by country and category. UAE: Cosmetics $7.25/kg, Supplements $35/kg, Clothing $3.50/kg. Other countries contact us for rates!",
+    bubbles: [
+      { label: "Calculate shipping ⚡", action: "calculator" },
+      { label: "UAE rates 🇦🇪", action: "uae_rates" },
+      { label: "Main menu 🏠", action: "main" },
+    ],
   },
-  {
-    keywords: ['time', 'long', 'days', 'weeks', 'delivery', 'arrive', 'وقت', 'كم', 'أيام', 'توصيل', 'يوم', 'أسبوع'],
-    response: "Estimated delivery times: 🇺🇸 USA → 10-20 days · 🇹🇷 Turkey → 7-14 days · 🇦🇪 UAE → 5-10 days · 🇨🇳 China → 14-30 days. Times may vary depending on customs.",
+  delivery_time: {
+    answer: "🇺🇸 USA: 10-20 days · 🇹🇷 Turkey: 7-14 days · 🇦🇪 UAE: 5-10 days · 🇨🇳 China: 14-30 days",
+    bubbles: [
+      { label: "How it works? 🤔", action: "how_it_works" },
+      { label: "Contact us 📱", action: "contact_us" },
+      { label: "Main menu 🏠", action: "main" },
+    ],
   },
-  {
-    keywords: ['price', 'cost', 'rate', 'much', 'fee', 'charge', 'expensive', 'cheap', 'سعر', 'تكلفة', 'رسوم', 'شحن', 'كلفة', 'أسعار'],
-    response: "Shipping rates vary by country and package weight. Submit your order link and we'll calculate the exact price for you automatically! 💰 Contact us on WhatsApp for current rates.",
+  contact_us: {
+    answer: "Reach us on WhatsApp! Our team in Erbil & Baghdad is ready to help 🇮🇶",
+    bubbles: [
+      { label: "💬 Open WhatsApp", action: "whatsapp" },
+      { label: "Main menu 🏠", action: "main" },
+    ],
   },
-  {
-    keywords: ['auto', 'calculate', 'estimate', 'automatic', 'instant', 'supported', 'sites', 'احسب', 'تلقائي', 'تقدير', 'حساب'],
-    response: "We automatically calculate shipping estimates for: ✅ Amazon ✅ eBay ✅ B&H Photo ✅ Best Buy ✅ Newegg. More sites coming soon including Trendyol, Noon and AliExpress! ⚡",
+  which_sites: {
+    answer: "We support Amazon, eBay, Trendyol, Noon, AliExpress, Shein and 20+ more stores! ⚡ Auto-estimates available on Amazon, eBay, B&H, Best Buy and Newegg.",
+    bubbles: [
+      { label: "Shipping rates 💰", action: "shipping_rates" },
+      { label: "Main menu 🏠", action: "main" },
+    ],
   },
-  {
-    keywords: ['balance', 'credit', 'top', 'recharge', 'add', 'pay', 'payment', 'wallet', 'رصيد', 'شحن', 'دفع', 'محفظة', 'شحن الرصيد'],
-    response: "Your balance is shown in the top right corner. To add balance, contact us on WhatsApp and we'll top it up manually within 24 hours. 💳",
+  uae_rates: {
+    answer: "🇦🇪 UAE rates: Cosmetics $7.25/kg · Supplements $35/kg · Clothing $3.50/kg. All prices include door-to-door delivery to Iraq. Contact us for a custom quote!",
+    bubbles: [
+      { label: "Calculate shipping ⚡", action: "calculator" },
+      { label: "Contact us 📱", action: "contact_us" },
+      { label: "Main menu 🏠", action: "main" },
+    ],
   },
-  {
-    keywords: ['tax', 'customs', 'duty', 'extra', 'fees', 'hidden', 'ضريبة', 'جمرك', 'رسوم جمركية', 'عرف'],
-    response: "Some items may be subject to Iraqi customs duties depending on the product type and value. We'll let you know if any customs fees apply to your order. 📋",
-  },
-  {
-    keywords: ['cancel', 'cancellation', 'stop', 'remove', 'إلغاء', 'الغاء', 'إيقاف'],
-    response: "To cancel an order, contact us as soon as possible on WhatsApp before we purchase the item. Once purchased, cancellation may not be possible. ⚠️",
-  },
-  {
-    keywords: ['track', 'tracking', 'status', 'update', 'تتبع', 'أين', 'وين', 'حالة', 'متى'],
-    response: "You can track your order status in the My Orders section. Status updates: ⏳ Pending → 💰 Calculated → ✅ Confirmed → 📦 Shipped. We'll notify you at each step!",
-  },
-  {
-    keywords: ['contact', 'whatsapp', 'phone', 'call', 'reach', 'help', 'support', 'تواصل', 'واتساب', 'مساعدة', 'دعم', 'هاتف'],
-    response: "You can reach us on WhatsApp for any questions or support. Our team is available to help you! 📱",
-  },
-  {
-    keywords: ['country', 'countries', 'ship', 'from', 'available', 'دولة', 'دول', 'من أين', 'متوفر', 'يشحن'],
-    response: "We currently ship from: 🇺🇸 United States · 🇹🇷 Turkey · 🇦🇪 UAE · 🇨🇳 China. More countries coming soon!",
-  },
+}
+
+const MAIN_BUBBLES: BubbleDef[] = [
+  { label: "🤔 How does it work?", action: "how_it_works" },
+  { label: "💰 Shipping rates", action: "shipping_rates" },
+  { label: "⏱️ Delivery time", action: "delivery_time" },
+  { label: "📱 Contact us", action: "contact_us" },
 ]
 
-const DEFAULT_RESPONSE = "I'm not sure about that. Please contact us on WhatsApp for more help, or try asking about: shipping rates, delivery time, how it works, or supported sites 😊"
+const GREETING = "Hi! I'm ShipIQ's assistant 👋 Tap a topic to get started:"
 
-const QUICK_REPLIES = [
-  "How does it work?",
-  "Shipping rates 💰",
-  "Delivery time ⏱️",
-  "Contact us 📱",
-  "كيف يعمل؟",
-  "أسعار الشحن",
-  "وقت التوصيل",
-]
-
-const GREETING = "Hi! I'm ShipIQ's virtual assistant 👋 How can I help you today? Ask me anything about shipping, rates, or supported stores."
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Message {
-  id: number
-  role: 'user' | 'bot'
-  text: string
-}
-
-// ── Keyword matcher ───────────────────────────────────────────────────────────
-
-function findResponse(input: string): string {
-  const lower = input.toLowerCase()
-  for (const topic of TOPICS) {
-    if (topic.keywords.some(kw => lower.includes(kw))) {
-      return topic.response
-    }
-  }
-  return DEFAULT_RESPONSE
-}
-
-// ── Icons ─────────────────────────────────────────────────────────────────────
+type ChatItem =
+  | { type: 'message'; id: number; text: string }
+  | { type: 'bubbles'; id: number; bubbles: BubbleDef[] }
 
 function ChatBubbleIcon() {
   return (
@@ -108,62 +103,52 @@ function CloseIcon() {
   )
 }
 
-function SendIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-    </svg>
-  )
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
-
 export default function FAQChatbot() {
-  const [open, setOpen]                     = useState(false)
-  const [messages, setMessages]             = useState<Message[]>([])
-  const [input, setInput]                   = useState('')
-  const [typing, setTyping]                 = useState(false)
-  const [showUnread, setShowUnread]         = useState(true)
-  const [showQuickReplies, setShowQuickReplies] = useState(true)
-
-  const bottomRef  = useRef<HTMLDivElement>(null)
-  const inputRef   = useRef<HTMLInputElement>(null)
-  const idRef      = useRef(0)
-  const greeted    = useRef(false)
+  const [open, setOpen]           = useState(false)
+  const [items, setItems]         = useState<ChatItem[]>([])
+  const [showUnread, setShowUnread] = useState(true)
+  const bottomRef   = useRef<HTMLDivElement>(null)
+  const idRef       = useRef(0)
+  const initialized = useRef(false)
 
   const nextId = () => ++idRef.current
 
   useEffect(() => {
     if (!open) return
     setShowUnread(false)
-    if (!greeted.current) {
-      greeted.current = true
-      setMessages([{ id: nextId(), role: 'bot', text: GREETING }])
+    if (!initialized.current) {
+      initialized.current = true
+      setItems([
+        { type: 'message', id: nextId(), text: GREETING },
+        { type: 'bubbles', id: nextId(), bubbles: MAIN_BUBBLES },
+      ])
     }
-    const t = setTimeout(() => inputRef.current?.focus(), 120)
-    return () => clearTimeout(t)
   }, [open])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, typing])
+  }, [items])
 
-  const sendMessage = useCallback((text: string) => {
-    const trimmed = text.trim()
-    if (!trimmed) return
-    setMessages(prev => [...prev, { id: ++idRef.current, role: 'user', text: trimmed }])
-    setInput('')
-    setShowQuickReplies(false)
-    setTyping(true)
-    setTimeout(() => {
-      setTyping(false)
-      setMessages(prev => [...prev, { id: ++idRef.current, role: 'bot', text: findResponse(trimmed) }])
-    }, 1000)
-  }, [])
-
-  const handleSend = () => sendMessage(input)
-  const handleKey  = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+  const handleBubble = (action: Action) => {
+    if (action === 'whatsapp') {
+      window.open(WA_URL, '_blank', 'noopener,noreferrer')
+      return
+    }
+    if (action === 'calculator') {
+      window.open('/calculator', '_blank', 'noopener,noreferrer')
+      return
+    }
+    if (action === 'main') {
+      setItems(prev => [...prev, { type: 'bubbles', id: nextId(), bubbles: MAIN_BUBBLES }])
+      return
+    }
+    const node = NODES[action]
+    if (!node) return
+    setItems(prev => [
+      ...prev,
+      { type: 'message', id: nextId(), text: node.answer },
+      { type: 'bubbles', id: nextId(), bubbles: node.bubbles },
+    ])
   }
 
   return (
@@ -191,63 +176,30 @@ export default function FAQChatbot() {
 
         {/* Messages */}
         <div className={styles.messages}>
-          {messages.map(msg => (
-            <div
-              key={msg.id}
-              className={`${styles.msgRow} ${msg.role === 'user' ? styles.msgRowUser : ''}`}
-            >
-              {msg.role === 'bot' && <div className={styles.botAvatar}>S</div>}
-              <div className={`${styles.bubble} ${msg.role === 'user' ? styles.bubbleUser : styles.bubbleBot}`}>
-                {msg.text}
+          {items.map(item => {
+            if (item.type === 'message') {
+              return (
+                <div key={item.id} className={styles.msgRow}>
+                  <div className={styles.botAvatar}>S</div>
+                  <div className={`${styles.bubble} ${styles.bubbleBot}`}>{item.text}</div>
+                </div>
+              )
+            }
+            return (
+              <div key={item.id} className={styles.bubblesRow}>
+                {item.bubbles.map(b => (
+                  <button
+                    key={b.label}
+                    className={styles.topicBubble}
+                    onClick={() => handleBubble(b.action)}
+                  >
+                    {b.label}
+                  </button>
+                ))}
               </div>
-            </div>
-          ))}
-
-          {/* Quick reply chips — shown only until first user message */}
-          {showQuickReplies && messages.length > 0 && (
-            <div className={styles.quickReplies}>
-              {QUICK_REPLIES.map(q => (
-                <button key={q} className={styles.quickBtn} onClick={() => sendMessage(q)}>
-                  {q}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Typing indicator */}
-          {typing && (
-            <div className={styles.msgRow}>
-              <div className={styles.botAvatar}>S</div>
-              <div className={`${styles.bubble} ${styles.bubbleBot} ${styles.typingBubble}`}>
-                <span className={styles.typingDot} />
-                <span className={styles.typingDot} />
-                <span className={styles.typingDot} />
-              </div>
-            </div>
-          )}
-
+            )
+          })}
           <div ref={bottomRef} />
-        </div>
-
-        {/* Input */}
-        <div className={styles.inputRow}>
-          <input
-            ref={inputRef}
-            className={styles.input}
-            placeholder="Ask me anything..."
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKey}
-            aria-label="Chat message"
-          />
-          <button
-            className={styles.sendBtn}
-            onClick={handleSend}
-            disabled={!input.trim() || typing}
-            aria-label="Send message"
-          >
-            <SendIcon />
-          </button>
         </div>
       </div>
 

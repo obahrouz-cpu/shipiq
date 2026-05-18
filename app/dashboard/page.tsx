@@ -961,7 +961,6 @@ export default function Dashboard() {
       <div className={styles.main}>
         <div className={styles.topbar}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button className={styles.hamburger} onClick={() => setSidebarOpen(true)}>☰</button>
             <div className={styles.pageTitle}>{pageTitle[page]}</div>
           </div>
           <div className={styles.topbarActions}>
