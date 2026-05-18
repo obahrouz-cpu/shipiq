@@ -1032,8 +1032,9 @@ export default function Dashboard() {
                     <button className={styles.btnPrimary} style={{ marginTop: 16 }} onClick={() => { setPage('orders'); setShowNewOrder(true) }}>{t('dashboard', 'newOrder')}</button>
                   </div>
                 ) : (
+                  <div className={styles.tableWrapper}>
                   <table className={styles.table}>
-                    <thead><tr><th style={{ width: 56 }}></th><th>ID</th><th>Description</th><th>Date</th><th>Status</th></tr></thead>
+                    <thead><tr><th style={{ width: 56 }}></th><th className={styles.mobileHide}>ID</th><th>Description</th><th className={styles.mobileHide}>Date</th><th>Status</th></tr></thead>
                     <tbody>
                       {orders.slice(0, 5).map(o => (
                         <tr key={o.id} onClick={() => setSelectedOrder(o)} style={{ cursor: 'pointer' }}>
@@ -1045,14 +1046,15 @@ export default function Dashboard() {
                               )}
                             </div>
                           </td>
-                          <td className={styles.tdMain}>{o.id}</td>
+                          <td className={`${styles.tdMain} ${styles.mobileHide}`}>{o.id}</td>
                           <td>{o.description}</td>
-                          <td>{o.created_at?.split('T')[0]}</td>
+                          <td className={styles.mobileHide}>{o.created_at?.split('T')[0]}</td>
                           <td><Badge status={o.status} /></td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 )}
               </div>
             </div>
@@ -1100,13 +1102,13 @@ export default function Dashboard() {
                     )}
                   </div>
                 ) : (
-                  <div style={{ overflowX: 'auto' }}>
+                  <div className={styles.tableWrapper}>
                     <table className={styles.table}>
                       <thead><tr>
                         <th style={{ width: 56 }}></th>
-                        <th>{t('orders', 'id')}</th>
+                        <th className={styles.mobileHide}>{t('orders', 'id')}</th>
                         {isAdmin && <th>{t('orders', 'customer')}</th>}
-                        <th>{t('orders', 'description')}</th><th>{t('orders', 'itemPrice')}</th><th>{t('orders', 'shipping')}</th><th>{t('orders', 'date')}</th><th>{t('orders', 'status')}</th>
+                        <th>{t('orders', 'description')}</th><th className={styles.mobileHide}>{t('orders', 'itemPrice')}</th><th className={styles.mobileHide}>{t('orders', 'shipping')}</th><th className={styles.mobileHide}>{t('orders', 'date')}</th><th>{t('orders', 'status')}</th>
                       </tr></thead>
                       <tbody>
                         {filteredOrders.map(o => (
@@ -1119,7 +1121,7 @@ export default function Dashboard() {
                                 )}
                               </div>
                             </td>
-                            <td className={styles.tdMain}>{o.id}</td>
+                            <td className={`${styles.tdMain} ${styles.mobileHide}`}>{o.id}</td>
                             {isAdmin && (
                               <td>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1139,11 +1141,11 @@ export default function Dashboard() {
                                 </div>
                               </div>
                             </td>
-                            <td>{o.item_price ? `${o.item_price} ${o.item_price_currency}` : '—'}</td>
-                            <td style={{ color: o.shipping_price ? 'var(--gold)' : 'var(--text-dim)', fontWeight: o.shipping_price ? 700 : 400 }}>
+                            <td className={styles.mobileHide}>{o.item_price ? `${o.item_price} ${o.item_price_currency}` : '—'}</td>
+                            <td className={styles.mobileHide} style={{ color: o.shipping_price ? 'var(--gold)' : 'var(--text-dim)', fontWeight: o.shipping_price ? 700 : 400 }}>
                               {o.shipping_price ? `${o.shipping_price.toLocaleString()} ${o.shipping_currency}` : '—'}
                             </td>
-                            <td>{o.created_at?.split('T')[0]}</td>
+                            <td className={styles.mobileHide}>{o.created_at?.split('T')[0]}</td>
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                 <Badge status={o.status} />
@@ -1276,7 +1278,7 @@ export default function Dashboard() {
                     </div>
                   )
                   return (
-                    <div style={{ overflowX: 'auto' }}>
+                    <div className={styles.tableWrapper}>
                       <table className={styles.table}>
                         <thead>
                           <tr>
@@ -1342,7 +1344,7 @@ export default function Dashboard() {
                 {users.length === 0 ? (
                   <div className={styles.empty}><div className={styles.emptyIcon}>👥</div><div className={styles.emptyTitle}>{t('customers', 'noCustomers')}</div></div>
                 ) : (
-                  <div style={{ overflowX: 'auto' }}>
+                  <div className={styles.tableWrapper}>
                     <table className={styles.table}>
                       <thead><tr>
                         <th>{t('customers', 'name')}</th>
