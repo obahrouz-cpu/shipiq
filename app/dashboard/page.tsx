@@ -861,21 +861,13 @@ export default function Dashboard() {
     router.push('/auth')
   }, [router])
 
-  if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16 }}>
-      <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--gold)', letterSpacing: -0.5 }}>ShipIQ</div>
-      <div style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'Tajawal, sans-serif', marginTop: -8 }}>خدمة الشحن الذكي</div>
-      <div className={styles.spinner} style={{ width: 28, height: 28, borderWidth: 2, marginTop: 8 }} />
-    </div>
-  )
-
+  // ── Derived values — must stay above ALL early returns so hook count is stable ──
   const isAdmin = profile?.role === 'admin'
   const isAgent = profile?.role === 'agent'
 
-  if (isAgent && profile) return <AgentDashboard profile={profile} onSignOut={logout} />
-
-  const pendingCount = orders.filter(o => o.status === 'pending').length
+  const pendingCount    = orders.filter(o => o.status === 'pending').length
   const calculatedCount = orders.filter(o => o.status === 'calculated').length
+
   const filteredOrders = useMemo(() => {
     let result = [...orders]
     if (filters.status !== 'all') result = result.filter(o => o.status === filters.status)
@@ -902,6 +894,17 @@ export default function Dashboard() {
     else result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     return result
   }, [orders, filters, isAdmin])
+
+  // ── Early returns (all hooks are above this line) ────────────────────────────
+  if (loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16 }}>
+      <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--gold)', letterSpacing: -0.5 }}>ShipIQ</div>
+      <div style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'Tajawal, sans-serif', marginTop: -8 }}>خدمة الشحن الذكي</div>
+      <div className={styles.spinner} style={{ width: 28, height: 28, borderWidth: 2, marginTop: 8 }} />
+    </div>
+  )
+
+  if (isAgent && profile) return <AgentDashboard profile={profile} onSignOut={logout} />
 
   const navItems: NavItem[] = isAdmin
     ? [
