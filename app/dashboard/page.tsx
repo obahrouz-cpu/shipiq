@@ -1390,6 +1390,38 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Mobile bottom navigation — customers only */}
+      {!isAdmin && !isAgent && (
+        <nav className={styles.bottomNav}>
+          {[
+            { id: 'dashboard', icon: '⊞', label: 'Home' },
+            { id: 'shop',      icon: '🛍️', label: 'Shop' },
+            { id: 'orders',    icon: '📦', label: 'Orders', badge: calculatedCount },
+            { id: 'balance',   icon: '💳', label: 'Balance' },
+          ].map(n => (
+            <button
+              key={n.id}
+              className={`${styles.bottomNavItem} ${page === n.id ? styles.bottomNavActive : ''}`}
+              onClick={() => setPage(n.id)}
+              style={{ position: 'relative' }}
+            >
+              {n.badge !== undefined && n.badge > 0 && (
+                <span className={styles.bottomNavBadge}>{n.badge}</span>
+              )}
+              <span className={styles.bottomNavIcon}>{n.icon}</span>
+              <span>{n.label}</span>
+            </button>
+          ))}
+          <button
+            className={`${styles.bottomNavItem} ${settingsOpen ? styles.bottomNavActive : ''}`}
+            onClick={() => setSettingsOpen(true)}
+          >
+            <span className={styles.bottomNavIcon}>👤</span>
+            <span>Account</span>
+          </button>
+        </nav>
+      )}
+
       {showNewOrder && profile && <SubmitOrderModal userId={profile.id} onClose={() => setShowNewOrder(false)} onDone={() => { fetchData(); toast('Order submitted! · تم إرسال الطلب') }} />}
       {showTopUp && profile && <WalletTopUp userId={profile.id} open={true} onClose={() => setShowTopUp(false)} onSuccess={() => { fetchData(); toast('Top-up request sent! · تم إرسال طلب الشحن') }} />}
       {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} />}

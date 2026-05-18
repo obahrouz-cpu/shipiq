@@ -682,6 +682,23 @@
 
   .stepsGrid { grid-template-columns: 1fr; }
 
+  /* Country cards: 2 columns on mobile */
+  .countriesGrid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Country card: compact */
+  .countryCard  { padding: 24px 16px; }
+  .countryFlag  { font-size: 36px; }
+  .countryName  { font-size: 15px; }
+
+  /* FAQ: full width */
+  .faqList { max-width: 100%; }
+  .faqQ    { font-size: 13px; padding: 16px 18px; }
+  .faqA    { padding: 0 18px; }
+  .faqOpen .faqA { padding: 14px 18px 18px; }
+
+  /* Store logos: allow smaller */
+  .storeLogoCard { padding: 10px 12px; min-width: 68px; }
+
   .statItem {
     padding: 16px 20px;
     border-right: none;
@@ -693,13 +710,16 @@
   .statItem:nth-child(3),
   .statItem:last-child { border-bottom: none; }
 
-  .footerTop { flex-direction: column; }
+  .footerTop { flex-direction: column; gap: 28px; margin-bottom: 28px; }
   .section   { padding: 64px 20px; }
+
+  /* CTA buttons: min touch target */
+  .ctaPrimary, .ctaSecondary { min-height: 52px; }
 }
 
 @media (max-width: 520px) {
-  .countriesGrid { grid-template-columns: 1fr; }
-  .whyGrid       { grid-template-columns: 1fr; }
+  .countriesGrid { grid-template-columns: repeat(2, 1fr); }
+  .whyGrid       { grid-template-columns: repeat(2, 1fr); }
 
   .statItem {
     width: 100%;
@@ -708,4 +728,15 @@
 
   .statItem:last-child { border-bottom: none; }
 
+  /* Store logos: allow smaller wrapping on tiny screens */
+  .storesLogoGrid { gap: 6px; }
+  .storeLogoCard  { min-width: 64px; padding: 12px 10px; }
+
+  /* Hero: comfortable on small phones */
+  .hero { padding: 100px 16px 60px; }
+  .heroCtas { flex-direction: column; align-items: center; }
+  .ctaPrimary, .ctaSecondary { width: 100%; max-width: 320px; justify-content: center; }
+
+  /* Sections */
+  .section { padding: 48px 16px; }
 }

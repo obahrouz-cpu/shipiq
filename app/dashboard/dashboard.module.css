@@ -290,17 +290,99 @@
 }
 .processBadge:hover { background: rgba(201,168,76,0.2); }
 
+/* ── Bottom navigation (mobile customers) ── */
+.bottomNav {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .sidebar { display: none; transition: transform 0.25s ease; }
   .sidebarOpen { display: flex !important; z-index: 100; }
   .sidebarOverlay { display: block; }
   .main { margin-left: 0; }
   .grid2 { grid-template-columns: 1fr; }
-  .body { padding: 20px 16px; }
+  .body { padding: 20px 16px 88px; }
   .statsGrid { grid-template-columns: 1fr 1fr; }
   .hamburger { display: flex; }
-  .topbar { padding: 0 16px; }
+  .topbar { padding: 0 16px; height: 56px; }
   .balanceChip { font-size: 12px; padding: 5px 10px; }
+
+  /* Modal: full screen on mobile */
+  .modal {
+    max-width: 100vw;
+    width: 100vw;
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+    padding: 24px 20px;
+  }
+  .overlay { padding: 0; align-items: flex-end; }
+
+  /* Inputs: 16px min font-size to prevent iOS zoom on focus */
+  .input, .textarea { font-size: 16px !important; }
+
+  /* Touch targets: minimum 44px */
+  .btnPrimary, .btnGhost, .btnDanger { min-height: 44px; }
+
+  /* Toast: above bottom nav */
+  .toastContainer { bottom: 76px; right: 12px; left: 12px; }
+  .toast { min-width: unset; width: 100%; }
+
+  /* Bottom nav */
+  .bottomNav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 200;
+    align-items: stretch;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  .bottomNavItem {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    color: var(--text-dim);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    transition: color 0.15s;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    min-height: 44px;
+  }
+  .bottomNavItem:active { background: rgba(255,255,255,0.04); }
+  .bottomNavIcon { font-size: 20px; line-height: 1; }
+  .bottomNavActive { color: var(--gold) !important; }
+  .bottomNavActive .bottomNavIcon { filter: drop-shadow(0 0 6px rgba(201,168,76,0.5)); }
+  .bottomNavBadge {
+    position: absolute;
+    top: 8px;
+    background: var(--gold);
+    color: var(--bg);
+    font-size: 9px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    margin-left: 14px;
+  }
 }
 
 /* ── RTL layout overrides ────────────────────────────────── */

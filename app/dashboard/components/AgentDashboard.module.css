@@ -565,4 +565,19 @@
   .card         { padding: 14px 16px; }
   .orderId      { font-size: 13px; }
   .agentName    { display: none; }
+
+  /* Touch targets */
+  .actionBtn    { min-height: 48px; font-size: 15px; }
+  .copyBtn      { padding: 6px 12px; font-size: 12px; min-height: 36px; }
+  .signOutBtn, .refreshBtn { min-height: 36px; padding: 8px 14px; }
+
+  /* Inputs 16px to prevent iOS zoom */
+  .textarea     { font-size: 16px !important; }
+
+  /* Photos smaller on tiny screens */
+  .photoThumb   { width: 60px; height: 60px; }
+  .customerPhoto { width: 64px; height: 64px; }
+
+  /* Upload area larger tap target */
+  .uploadArea   { padding: 40px 20px; }
 }
