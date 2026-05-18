@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { updateLanguage, getTierSettings } from '@/lib/api'
 import type { Profile, Order, TierSettings } from '@/lib/types'
@@ -73,7 +73,7 @@ interface Props {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function AccountSettings({ profile, orders, onClose, onProfileUpdate, onSignOut }: Props) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const { language, t, setLanguage: applyLang } = useLanguage()
 
   // ── Profile: name ──────────────────────────────────────────────────────────

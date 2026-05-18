@@ -1,12 +1,19 @@
 import { createBrowserClient } from '@supabase/ssr'
 
-let client: ReturnType<typeof createBrowserClient> | null = null
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+// Singleton instance — only one client ever created
+let supabaseInstance: ReturnType<typeof createBrowserClient> | null = null
 
 export function createClient() {
-  if (client) return client
-  client = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-  return client
+  if (typeof window === 'undefined') {
+    // Server side — always create new instance
+    return createBrowserClient(supabaseUrl, supabaseKey)
+  }
+  // Client side — reuse existing instance
+  if (!supabaseInstance) {
+    supabaseInstance = createBrowserClient(supabaseUrl, supabaseKey)
+  }
+  return supabaseInstance
 }
