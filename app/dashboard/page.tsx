@@ -33,6 +33,7 @@ import AdminSettings from './components/AdminSettings'
 import WishlistPage from './components/WishlistPage'
 import DeliveryRequestModal from './components/DeliveryRequestModal'
 import AdminDeliveries from './components/AdminDeliveries'
+import NotificationCenter from './components/NotificationCenter'
 import type { TierSettings } from '@/lib/types'
 
 // ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
@@ -1529,6 +1530,7 @@ export default function Dashboard() {
           </div>
           <div className={styles.topbarActions}>
             <ThemeToggle />
+            {profile && <NotificationCenter userId={profile.id} />}
             {!isAdmin && (
               <div
                 className={styles.balanceChip}

@@ -42,14 +42,18 @@ function useInView(threshold = 0.12) {
 
   useEffect(() => {
     const el = ref.current
-    if (!el) return
+    if (!el) { return }
+    if (typeof IntersectionObserver === 'undefined') {
+      setInView(true)
+      return
+    }
     const observer = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) setInView(true) },
       { threshold }
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [threshold])
+  })
 
   return { ref, inView }
 }

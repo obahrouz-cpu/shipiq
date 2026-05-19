@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { createClient } from './supabase'
-import type { Order, OrderForm, Profile, Transaction, TierSettings, WishlistItem, DeliveryRequest } from './types'
+import type { Order, OrderForm, Profile, Transaction, TierSettings, WishlistItem, DeliveryRequest, Notification } from './types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -377,4 +377,26 @@ export async function getAdminDeliveryRequests(): Promise<DeliveryRequest[]> {
 export async function updateDeliveryRequest(id: string, updates: Record<string, unknown>): Promise<void> {
   const supabase = createClient()
   await supabase.from('delivery_requests').update(updates).eq('id', id)
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export async function getNotifications(userId: string): Promise<Notification[]> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(10)
+  return data || []
+}
+
+export async function markAllNotificationsRead(userId: string): Promise<void> {
+  const supabase = createClient()
+  await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('user_id', userId)
+    .eq('read', false)
 }
