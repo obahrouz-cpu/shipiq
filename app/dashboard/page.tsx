@@ -27,6 +27,7 @@ const AdminAnalytics = dynamic(() => import('./components/AdminAnalytics'), { ss
 import AgentDashboard from './components/AgentDashboard'
 import AdminMobileAccount from './components/AdminMobileAccount'
 import ShippingCalculator from './components/ShippingCalculator'
+import AdminSettings from './components/AdminSettings'
 import type { TierSettings } from '@/lib/types'
 
 // ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
@@ -1205,9 +1206,10 @@ export default function Dashboard() {
 
   const navItems: NavItem[] = isAdmin
     ? [
-        { id: 'admin-orders', icon: '📋', label: t('nav', 'adminOrders'), badge: pendingCount },
+        { id: 'admin-orders',    icon: '📋', label: t('nav', 'adminOrders'), badge: pendingCount },
         { id: 'admin-analytics', icon: '📊', label: 'Analytics' },
         { id: 'admin-customers', icon: '👥', label: t('nav', 'customers') },
+        { id: 'admin-settings',  icon: '⚙️', label: 'Settings' },
       ]
     : [
         { id: 'dashboard',  icon: '⊞',  label: t('nav', 'dashboard') },
@@ -1227,6 +1229,7 @@ export default function Dashboard() {
     'admin-orders':    t('nav', 'adminOrders'),
     'admin-analytics': '📊 Analytics',
     'admin-customers': t('nav', 'customers'),
+    'admin-settings':  '⚙️ Settings',
   }
 
   return (
@@ -1676,6 +1679,12 @@ export default function Dashboard() {
           {page === 'admin-analytics' && (
             <div className="fade-up">
               <AdminAnalytics />
+            </div>
+          )}
+
+          {page === 'admin-settings' && isAdmin && (
+            <div className="fade-up">
+              <AdminSettings />
             </div>
           )}
 
