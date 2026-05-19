@@ -26,6 +26,7 @@ import AdminTierSettings from './components/AdminTierSettings'
 const AdminAnalytics = dynamic(() => import('./components/AdminAnalytics'), { ssr: false })
 import AgentDashboard from './components/AgentDashboard'
 import AdminMobileAccount from './components/AdminMobileAccount'
+import ShippingCalculator from './components/ShippingCalculator'
 import type { TierSettings } from '@/lib/types'
 
 // ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
@@ -1154,7 +1155,7 @@ export default function Dashboard() {
 
   const logout = useCallback(async () => {
     await signOut()
-    router.push('/auth')
+    router.push('/')
   }, [router])
 
   // ── Derived values — must stay above ALL early returns so hook count is stable ──
@@ -1209,15 +1210,17 @@ export default function Dashboard() {
         { id: 'admin-customers', icon: '👥', label: t('nav', 'customers') },
       ]
     : [
-        { id: 'dashboard', icon: '⊞', label: t('nav', 'dashboard') },
-        { id: 'shop', icon: '🛍️', label: t('nav', 'shop') },
-        { id: 'orders', icon: '📦', label: t('nav', 'orders'), badge: calculatedCount },
-        { id: 'balance', icon: '💳', label: t('nav', 'balance') },
+        { id: 'dashboard',  icon: '⊞',  label: t('nav', 'dashboard') },
+        { id: 'shop',       icon: '🛍️', label: t('nav', 'shop') },
+        { id: 'calculator', icon: '🧮', label: 'Calculator' },
+        { id: 'orders',     icon: '📦', label: t('nav', 'orders'), badge: calculatedCount },
+        { id: 'balance',    icon: '💳', label: t('nav', 'balance') },
       ]
 
   const pageTitle: Record<string, string> = {
     dashboard:         t('nav', 'dashboard'),
     shop:              t('nav', 'shop'),
+    calculator:        '🧮 Calculator',
     orders:            t('nav', 'orders'),
     balance:           t('nav', 'balance'),
     account:           isAdmin ? '🔧 Admin Account' : '👤 Account',
@@ -1380,6 +1383,12 @@ export default function Dashboard() {
                 </div>
               </div>
               <ShopSection />
+            </div>
+          )}
+
+          {page === 'calculator' && !isAdmin && (
+            <div className="fade-up">
+              <ShippingCalculator />
             </div>
           )}
 
@@ -1770,10 +1779,11 @@ export default function Dashboard() {
       {!isAdmin && !isAgent && (
         <nav className={styles.bottomNav}>
           {[
-            { id: 'dashboard', icon: '⊞', label: 'Home' },
-            { id: 'shop',      icon: '🛍️', label: 'Shop' },
-            { id: 'orders',    icon: '📦', label: 'Orders', badge: calculatedCount },
-            { id: 'balance',   icon: '💳', label: 'Balance' },
+            { id: 'dashboard',  icon: '⊞',  label: 'Home' },
+            { id: 'shop',       icon: '🛍️', label: 'Shop' },
+            { id: 'calculator', icon: '🧮', label: 'Calc' },
+            { id: 'orders',     icon: '📦', label: 'Orders', badge: calculatedCount },
+            { id: 'balance',    icon: '💳', label: 'Balance' },
           ].map(n => (
             <button
               key={n.id}
