@@ -155,19 +155,16 @@ export async function updateOrder(
   await supabase.from('orders').update(updates).eq('id', orderId)
 }
 
-const TIER_ORDER = ['bronze', 'silver', 'gold', 'platinum', 'vip']
-
 export async function confirmOrder(order: Order): Promise<{ error: string | null }> {
   const supabase = createClient()
 
-  // Idempotency guard — fetch fresh status to prevent double-deduction
   const { data: fresh } = await supabase
     .from('orders')
     .select('status')
     .eq('id', order.id)
     .single()
   if (!fresh || fresh.status !== 'calculated') {
-    return { error: null } // already confirmed or wrong state — do nothing
+    return { error: null }
   }
 
   const { error: updateError } = await supabase
@@ -176,64 +173,36 @@ export async function confirmOrder(order: Order): Promise<{ error: string | null
     .eq('id', order.id)
   if (updateError) return { error: updateError.message }
 
-  if (order.shipping_price) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('balance, id, tier, total_spent')
-      .eq('id', order.user_id)
-      .single()
-    if (profile) {
-      // Deduct balance and update shipping transaction
-      await supabase
-        .from('profiles')
-        .update({ balance: profile.balance - order.shipping_price })
-        .eq('id', profile.id)
-      await supabase.from('transactions').insert({
-        user_id: order.user_id,
-        amount: -order.shipping_price,
-        currency: order.shipping_currency,
-        note: `Shipping confirmed for ${order.id}`,
-        order_id: order.id,
-      })
+  return { error: null }
+}
 
-      // Update total_spent and recalculate tier
-      const spendUSD = order.shipping_currency === 'USD'
-        ? order.shipping_price
-        : order.shipping_price / 1450
-      const newTotalSpent = ((profile as { total_spent?: number }).total_spent || 0) + spendUSD
-
-      const { data: tierRows } = await supabase
-        .from('tier_settings')
-        .select('tier, name_en, min_spend')
-        .eq('is_active', true)
-        .order('min_spend', { ascending: false })
-
-      let newTier = 'bronze'
-      for (const t of (tierRows || []) as { tier: string; name_en: string; min_spend: number }[]) {
-        if (newTotalSpent >= t.min_spend) { newTier = t.tier; break }
-      }
-
-      await supabase
-        .from('profiles')
-        .update({ total_spent: newTotalSpent, tier: newTier })
-        .eq('id', profile.id)
-
-      // Insert tier upgrade notification if upgraded
-      const oldTier = (profile as { tier?: string }).tier || 'bronze'
-      if (TIER_ORDER.indexOf(newTier) > TIER_ORDER.indexOf(oldTier)) {
-        const tierInfo = (tierRows || [] as { tier: string; name_en: string; min_spend: number }[]).find(
-          (t: { tier: string; name_en: string; min_spend: number }) => t.tier === newTier
-        )
-        await supabase.from('transactions').insert({
-          user_id: order.user_id,
-          amount: 0,
-          currency: 'IQD',
-          note: `🎉 Congratulations! You've been upgraded to ${tierInfo?.name_en || newTier} tier!`,
-          order_id: order.id,
-        })
-      }
-    }
+export async function deductBalance(
+  userId: string,
+  currentBalance: number,
+  amount: number,
+  currency: string,
+  note: string,
+  orderId?: string
+): Promise<{ error: string | null }> {
+  if (amount > currentBalance) {
+    return { error: 'Amount exceeds current balance' }
   }
+  const supabase = createClient()
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .update({ balance: currentBalance - amount })
+    .eq('id', userId)
+  if (profileError) return { error: profileError.message }
+
+  const { error: txnError } = await supabase.from('transactions').insert({
+    user_id: userId,
+    amount: -amount,
+    currency,
+    note,
+    order_id: orderId,
+  })
+  if (txnError) return { error: txnError.message }
+
   return { error: null }
 }
 

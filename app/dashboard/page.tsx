@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import {
   getSession, getProfile, getAdminOrders, getUserOrders,
   getCustomers, getUserTransactions, createOrder,
-  updateOrder, topUpBalance, signOut,
+  updateOrder, topUpBalance, deductBalance, signOut,
   getTierSettings,
 } from '@/lib/api'
 import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
@@ -412,12 +412,21 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
 
 // ── OrderDetailModal ──────────────────────────────────────────────────────────
 
-function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order; isAdmin: boolean; onClose: () => void; onRefresh: () => void }) {
+function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { order: Order; isAdmin: boolean; adminName?: string; onClose: () => void; onRefresh: () => void }) {
   const [view, setView] = useState<'detail' | 'calculate' | 'reject'>('detail')
   const [shipping, setShipping] = useState({ price: '', currency: 'IQD', weight: '' })
   const [rejectReason, setRejectReason] = useState('')
   const [loading, setLoading] = useState(false)
+  const [orderCustomerProfile, setOrderCustomerProfile] = useState<Profile | null>(null)
+  const [showDeductModal, setShowDeductModal] = useState(false)
+  const [showInlineTopUp, setShowInlineTopUp] = useState(false)
   const s = STATUS_CONFIG[order.status]
+
+  useEffect(() => {
+    if (isAdmin) {
+      getProfile(order.user_id).then(setOrderCustomerProfile)
+    }
+  }, [isAdmin, order.user_id])
 
   const applyUpdate = async (updates: Record<string, unknown>) => {
     setLoading(true)
@@ -479,7 +488,35 @@ function OrderDetailModal({ order, isAdmin, onClose, onRefresh }: { order: Order
             {order.status === 'delivered' && (
               <div style={{ textAlign: 'center', padding: '8px 0 16px', fontSize: 15, color: 'var(--green)', fontWeight: 700 }}>Order Complete ✅</div>
             )}
+            {orderCustomerProfile && (
+              <div style={{ display: 'flex', gap: 8, paddingBottom: 16 }}>
+                {(['confirmed', 'ordered', 'warehouse', 'transit', 'arrived', 'delivered'] as string[]).includes(order.status) && (
+                  <button className={styles.btnDanger} style={{ flex: 1, fontSize: 13 }} onClick={() => setShowDeductModal(true)}>
+                    💳 Deduct Balance
+                  </button>
+                )}
+                <button className={styles.btnGhost} style={{ flex: 1, fontSize: 13 }} onClick={() => setShowInlineTopUp(true)}>
+                  + Add Balance
+                </button>
+              </div>
+            )}
           </>
+        )}
+        {showDeductModal && orderCustomerProfile && (
+          <DeductBalanceModal
+            order={order}
+            customerProfile={orderCustomerProfile}
+            adminName={adminName || 'Admin'}
+            onClose={() => setShowDeductModal(false)}
+            onDone={() => { getProfile(order.user_id).then(setOrderCustomerProfile); onRefresh() }}
+          />
+        )}
+        {showInlineTopUp && orderCustomerProfile && (
+          <TopUpModal
+            user={orderCustomerProfile}
+            onClose={() => setShowInlineTopUp(false)}
+            onDone={() => { getProfile(order.user_id).then(setOrderCustomerProfile); onRefresh() }}
+          />
         )}
         {view === 'detail' && (
           <div>
@@ -703,6 +740,89 @@ function TopUpModal({ user, onClose, onDone }: { user: Profile; onClose: () => v
         <button className={styles.btnPrimary} style={{ width: '100%' }} onClick={submit} disabled={loading || !amount}>
           {loading ? <Spinner /> : 'Add Balance · إضافة الرصيد'}
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ── DeductBalanceModal ────────────────────────────────────────────────────────
+
+function DeductBalanceModal({
+  order,
+  customerProfile,
+  adminName,
+  onClose,
+  onDone,
+}: {
+  order: Order
+  customerProfile: Profile
+  adminName: string
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [amount, setAmount] = useState(order.shipping_price?.toString() || '')
+  const [reason, setReason] = useState(`Shipping fee for ${order.id}`)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async () => {
+    const amt = parseInt(amount)
+    if (!amt || amt <= 0) { setError('Enter a valid amount'); return }
+    if (amt > customerProfile.balance) { setError(`Amount exceeds customer balance (${customerProfile.balance.toLocaleString()} IQD)`); return }
+    setLoading(true); setError('')
+    const { error: err } = await deductBalance(
+      customerProfile.id,
+      customerProfile.balance,
+      amt,
+      order.shipping_currency || 'IQD',
+      `${reason} — by ${adminName}`,
+      order.id
+    )
+    setLoading(false)
+    if (err) { setError(err); return }
+    onDone(); onClose()
+  }
+
+  return (
+    <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className={styles.modal} style={{ maxWidth: 400 }}>
+        <div className={styles.modalHeader}>
+          <div className={styles.modalTitle}>💳 Deduct Balance</div>
+          <button className={styles.modalClose} onClick={onClose}>✕</button>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Customer Balance</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--gold)' }}>
+            {customerProfile.balance?.toLocaleString()} IQD
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{customerProfile.full_name}</div>
+        </div>
+        {order.shipping_price && (
+          <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--surface2)', borderRadius: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+            Shipping price: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{order.shipping_price.toLocaleString()} {order.shipping_currency}</span>
+          </div>
+        )}
+        {error && <div className={styles.errorBox}>{error}</div>}
+        <div className={styles.grid2}>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>Amount to Deduct</label>
+            <input className={styles.input} type="number" value={amount} onChange={e => { setAmount(e.target.value); setError('') }} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>Currency</label>
+            <input className={styles.input} value={order.shipping_currency || 'IQD'} readOnly style={{ opacity: 0.7 }} />
+          </div>
+        </div>
+        <div className={styles.formGroup}>
+          <label className={styles.label}>Reason</label>
+          <input className={styles.input} value={reason} onChange={e => setReason(e.target.value)} />
+        </div>
+        <div className={styles.modalFooter}>
+          <button className={styles.btnGhost} onClick={onClose}>Cancel</button>
+          <button className={styles.btnDanger} onClick={submit} disabled={loading || !amount}>
+            {loading ? <Spinner /> : 'Confirm Deduction'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -990,7 +1110,7 @@ export default function Dashboard() {
             <div className="fade-up">
               <div className={styles.statsGrid}>
                 {[
-                  { label: t('dashboard', 'balance'),   value: `${profile?.balance?.toLocaleString()} IQD`, icon: '💳', color: '#c9a84c', bg: 'rgba(201,168,76,0.1)' },
+                  { label: t('dashboard', 'balance'),   value: `${profile?.balance?.toLocaleString()} IQD`, icon: '💳', color: '#c9a84c', bg: 'rgba(201,168,76,0.1)', sub: 'Managed by admin' },
                   { label: t('dashboard', 'pending'),   value: orders.filter(o => o.status === 'pending').length, icon: '⏳', color: '#e07b3a', bg: 'rgba(224,123,58,0.1)' },
                   { label: t('dashboard', 'calculated'),value: orders.filter(o => o.status === 'calculated').length, icon: '💰', color: '#5b9bd5', bg: 'rgba(91,155,213,0.1)' },
                   { label: t('dashboard', 'delivered'), value: orders.filter(o => o.status === 'delivered').length, icon: '📬', color: '#16a34a', bg: 'rgba(34,197,94,0.1)' },
@@ -999,6 +1119,7 @@ export default function Dashboard() {
                     <div className={styles.statIcon} style={{ background: s.bg, color: s.color }}>{s.icon}</div>
                     <div className={styles.statLabel}>{s.label}</div>
                     <div className={styles.statValue} style={{ color: s.color }}>{s.value}</div>
+                    {'sub' in s && <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 3 }}>{(s as { sub: string }).sub}</div>}
                   </div>
                 ))}
               </div>
@@ -1188,6 +1309,9 @@ export default function Dashboard() {
                 >
                   💳 Top Up · شحن الرصيد
                 </button>
+              </div>
+              <div className={styles.infoBox} style={{ marginBottom: 20 }}>
+                ℹ️ Your balance is managed by ShipIQ admin. Shipping fees are deducted manually after your order is confirmed.
               </div>
               <div className={styles.grid2} style={{ marginBottom: 24 }}>
                 <div className={styles.card} style={{ textAlign: 'center', padding: '36px 24px' }}>
@@ -1430,7 +1554,7 @@ export default function Dashboard() {
 
       {showNewOrder && profile && <SubmitOrderModal userId={profile.id} onClose={() => setShowNewOrder(false)} onDone={() => { fetchData(); toast('Order submitted! · تم إرسال الطلب') }} />}
       {showTopUp && profile && <WalletTopUp userId={profile.id} open={true} onClose={() => setShowTopUp(false)} onSuccess={() => { fetchData(); toast('Top-up request sent! · تم إرسال طلب الشحن') }} />}
-      {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} />}
+      {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} adminName={isAdmin ? (profile?.full_name || 'Admin') : undefined} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} />}
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}
       {showExport && isAdmin && <AdminExport orders={orders} onClose={() => setShowExport(false)} />}
       {showTierSettings && isAdmin && <AdminTierSettings onClose={() => { setShowTierSettings(false); getTierSettings().then(setTierSettings) }} />}
