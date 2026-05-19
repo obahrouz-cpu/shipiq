@@ -514,7 +514,7 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
 // ── OrderDetailModal ──────────────────────────────────────────────────────────
 
 function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { order: Order; isAdmin: boolean; adminName?: string; onClose: () => void; onRefresh: () => void }) {
-  const [view, setView] = useState<'detail' | 'calculate' | 'reject'>('detail')
+  const [view, setView] = useState<'detail' | 'calculate' | 'reject' | 'billing'>('detail')
   const autoDeliveryFee =
     order.delivery_preference === 'home_erbil'   ? '3000' :
     order.delivery_preference === 'home_baghdad' ? '5000' : '0'
@@ -522,8 +522,17 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
   const [rejectReason, setRejectReason] = useState('')
   const [loading, setLoading] = useState(false)
   const [orderCustomerProfile, setOrderCustomerProfile] = useState<Profile | null>(null)
-  const [showDeductModal, setShowDeductModal] = useState(false)
   const [showInlineTopUp, setShowInlineTopUp] = useState(false)
+
+  // Billing tab state
+  const [billServiceFee, setBillServiceFee] = useState(String(order.service_fee ?? 0))
+  const [billCustomsFee, setBillCustomsFee] = useState(String(order.customs_fee ?? 0))
+  const [billDeliveryFee, setBillDeliveryFee] = useState(autoDeliveryFee)
+  const [chargeLoading, setChargeLoading] = useState(false)
+  const [chargeError, setChargeError] = useState('')
+  const [charged, setCharged] = useState(order.is_charged ?? false)
+  const [chargedAt, setChargedAt] = useState(order.charged_at ?? '')
+
   const s = STATUS_CONFIG[order.status]
 
   useEffect(() => {
@@ -576,6 +585,39 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
     onRefresh(); onClose()
   }
 
+  const billShipping = order.shipping_price ?? 0
+  const billItemPrice = order.item_price ?? 0
+  const billTotal = billShipping + (parseInt(billServiceFee) || 0) + (parseInt(billCustomsFee) || 0) + (parseInt(billDeliveryFee) || 0)
+
+  const handleCharge = async () => {
+    if (!orderCustomerProfile) return
+    if (charged) return
+    const total = billTotal
+    if (total <= 0) { setChargeError('Total must be greater than 0'); return }
+    if (orderCustomerProfile.balance < total) {
+      setChargeError(`Insufficient balance — customer needs ${(total - orderCustomerProfile.balance).toLocaleString()} more IQD`)
+      return
+    }
+    setChargeLoading(true); setChargeError('')
+    const note = `Order ${order.id}: Shipping ${billShipping.toLocaleString()} IQD + Service ${(parseInt(billServiceFee)||0).toLocaleString()} IQD + Customs ${(parseInt(billCustomsFee)||0).toLocaleString()} IQD + Delivery ${(parseInt(billDeliveryFee)||0).toLocaleString()} IQD — by ${adminName || 'Admin'}`
+    const { error: deductErr } = await deductBalance(orderCustomerProfile.id, orderCustomerProfile.balance, total, 'IQD', note, order.id)
+    if (deductErr) { setChargeError(deductErr); setChargeLoading(false); return }
+    const now = new Date().toISOString()
+    await updateOrder(order.id, {
+      is_charged: true,
+      charged_at: now,
+      total_charged: total,
+      service_fee: parseInt(billServiceFee) || 0,
+      customs_fee: parseInt(billCustomsFee) || 0,
+      delivery_fee: parseInt(billDeliveryFee) || 0,
+      total_cost: billTotal,
+    })
+    setCharged(true); setChargedAt(now)
+    setChargeLoading(false)
+    getProfile(order.user_id).then(setOrderCustomerProfile)
+    onRefresh()
+  }
+
   return (
     <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
       <div className={styles.modal}>
@@ -590,7 +632,8 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
           <>
             <div className={styles.tabs}>
               <button className={`${styles.tab} ${view === 'detail' ? styles.activeTab : ''}`} onClick={() => setView('detail')}>Details</button>
-              {order.status === 'pending' && <button className={`${styles.tab} ${view === 'calculate' ? styles.activeTab : ''}`} onClick={() => setView('calculate')}>Calculate Shipping</button>}
+              {order.status === 'pending' && <button className={`${styles.tab} ${view === 'calculate' ? styles.activeTab : ''}`} onClick={() => setView('calculate')}>Calculate</button>}
+              {order.shipping_price && <button className={`${styles.tab} ${view === 'billing' ? styles.activeTab : ''}`} onClick={() => setView('billing')}>💳 Billing</button>}
               {['pending', 'calculated'].includes(order.status) && <button className={`${styles.tab} ${view === 'reject' ? styles.activeTab : ''}`} onClick={() => setView('reject')}>Reject</button>}
             </div>
             {NEXT_STATUS[order.status] && (
@@ -605,26 +648,12 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
             )}
             {orderCustomerProfile && (
               <div style={{ display: 'flex', gap: 8, paddingBottom: 16 }}>
-                {(['confirmed', 'ordered', 'warehouse', 'transit', 'arrived', 'delivered'] as string[]).includes(order.status) && (
-                  <button className={styles.btnDanger} style={{ flex: 1, fontSize: 13 }} onClick={() => setShowDeductModal(true)}>
-                    💳 Deduct Balance
-                  </button>
-                )}
                 <button className={styles.btnGhost} style={{ flex: 1, fontSize: 13 }} onClick={() => setShowInlineTopUp(true)}>
                   + Add Balance
                 </button>
               </div>
             )}
           </>
-        )}
-        {showDeductModal && orderCustomerProfile && (
-          <DeductBalanceModal
-            order={order}
-            customerProfile={orderCustomerProfile}
-            adminName={adminName || 'Admin'}
-            onClose={() => setShowDeductModal(false)}
-            onDone={() => { getProfile(order.user_id).then(setOrderCustomerProfile); onRefresh() }}
-          />
         )}
         {showInlineTopUp && orderCustomerProfile && (
           <TopUpModal
@@ -872,6 +901,111 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
             </button>
           </div>
         )}
+        {view === 'billing' && (
+          <div>
+            {/* Cost breakdown */}
+            <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+                Cost Breakdown
+              </div>
+              {/* Item price — read only */}
+              {order.item_price ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
+                  <span>Item Price</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text)' }}>{order.item_price} {order.item_price_currency}</span>
+                </div>
+              ) : null}
+              {/* Shipping — read only */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
+                <span>Shipping Fee</span>
+                <span style={{ fontWeight: 600, color: 'var(--text)' }}>{(order.shipping_price ?? 0).toLocaleString()} IQD</span>
+              </div>
+              {/* Editable fees */}
+              {[
+                { label: 'Service Fee', val: billServiceFee, set: setBillServiceFee },
+                { label: 'Customs / Tax', val: billCustomsFee, set: setBillCustomsFee },
+                { label: 'Iraq Delivery Fee', val: billDeliveryFee, set: setBillDeliveryFee },
+              ].map(f => (
+                <div key={f.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 12 }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)', flexShrink: 0 }}>{f.label}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="number"
+                      value={f.val}
+                      onChange={e => f.set(e.target.value)}
+                      disabled={charged}
+                      style={{
+                        width: 90, padding: '5px 8px', fontSize: 13,
+                        background: 'var(--surface)', border: '1px solid var(--border)',
+                        borderRadius: 6, color: 'var(--text)', outline: 'none',
+                        textAlign: 'right', opacity: charged ? 0.6 : 1,
+                      }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>IQD</span>
+                  </div>
+                </div>
+              ))}
+              {/* Total */}
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 15, color: 'var(--gold)' }}>
+                <span>Total</span>
+                <span>{billTotal.toLocaleString()} IQD</span>
+              </div>
+            </div>
+
+            {/* Customer balance */}
+            {orderCustomerProfile && (
+              <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{orderCustomerProfile.full_name}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: orderCustomerProfile.balance >= billTotal ? 'var(--gold)' : '#ef4444', marginTop: 2 }}>
+                      {orderCustomerProfile.balance.toLocaleString()} IQD
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>After charge</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: orderCustomerProfile.balance >= billTotal ? 'var(--text)' : '#ef4444', marginTop: 2 }}>
+                      {(orderCustomerProfile.balance - billTotal).toLocaleString()} IQD
+                    </div>
+                  </div>
+                </div>
+                {orderCustomerProfile.balance < billTotal && (
+                  <div style={{ marginTop: 8, padding: '7px 10px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 7, fontSize: 12, color: '#ef4444' }}>
+                    ⚠️ Customer needs {(billTotal - orderCustomerProfile.balance).toLocaleString()} more IQD to proceed
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Charged state or charge button */}
+            {charged ? (
+              <div style={{ padding: '12px 16px', background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: 10, textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#16a34a' }}>
+                  ✅ Charged {order.total_charged?.toLocaleString() ?? billTotal.toLocaleString()} IQD
+                </div>
+                {chargedAt && (
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
+                    on {new Date(chargedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {chargeError && (
+                  <div className={styles.errorBox} style={{ marginBottom: 10 }}>{chargeError}</div>
+                )}
+                <button
+                  className={styles.btnDanger}
+                  style={{ width: '100%', fontSize: 14, fontWeight: 700 }}
+                  onClick={handleCharge}
+                  disabled={chargeLoading || !orderCustomerProfile || billTotal <= 0}
+                >
+                  {chargeLoading ? <Spinner /> : `💳 Charge Customer ${billTotal.toLocaleString()} IQD`}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -939,104 +1073,7 @@ function TopUpModal({ user, onClose, onDone }: { user: Profile; onClose: () => v
   )
 }
 
-// ── DeductBalanceModal ────────────────────────────────────────────────────────
 
-function DeductBalanceModal({
-  order,
-  customerProfile,
-  adminName,
-  onClose,
-  onDone,
-}: {
-  order: Order
-  customerProfile: Profile
-  adminName: string
-  onClose: () => void
-  onDone: () => void
-}) {
-  const defaultAmount = order.total_cost || order.shipping_price
-  const [amount, setAmount] = useState(defaultAmount?.toString() || '')
-  const [reason, setReason] = useState(order.total_cost ? `Full order cost for ${order.id}` : `Shipping fee for ${order.id}`)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const submit = async () => {
-    const amt = parseInt(amount)
-    if (!amt || amt <= 0) { setError('Enter a valid amount'); return }
-    if (amt > customerProfile.balance) { setError(`Amount exceeds customer balance (${customerProfile.balance.toLocaleString()} IQD)`); return }
-    setLoading(true); setError('')
-    const { error: err } = await deductBalance(
-      customerProfile.id,
-      customerProfile.balance,
-      amt,
-      order.shipping_currency || 'IQD',
-      `${reason} — by ${adminName}`,
-      order.id
-    )
-    setLoading(false)
-    if (err) { setError(err); return }
-    onDone(); onClose()
-  }
-
-  return (
-    <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className={styles.modal} style={{ maxWidth: 400 }}>
-        <div className={styles.modalHeader}>
-          <div className={styles.modalTitle}>💳 Deduct Balance</div>
-          <button className={styles.modalClose} onClick={onClose}>✕</button>
-        </div>
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Customer Balance</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--gold)' }}>
-            {customerProfile.balance?.toLocaleString()} IQD
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{customerProfile.full_name}</div>
-        </div>
-        {(order.shipping_price || order.total_cost) && (
-          <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}>
-            {(([
-              order.shipping_price ? ['Shipping',     order.shipping_price,  order.shipping_currency || 'IQD'] : null,
-              order.service_fee    ? ['Service Fee',  order.service_fee,     'IQD'] : null,
-              order.customs_fee    ? ['Customs/Tax',  order.customs_fee,     'IQD'] : null,
-              order.delivery_fee !== undefined ? ['Iraq Delivery', order.delivery_fee, 'IQD'] : null,
-            ] as ([string, number, string] | null)[]).filter((r): r is [string, number, string] => r !== null).map(([k, v, c], i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', marginBottom: 4 }}>
-                <span>{k}</span>
-                <span>{v === 0 ? 'Free' : `${v.toLocaleString()} ${c}`}</span>
-              </div>
-            )))}
-            {order.total_cost && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--gold)', borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
-                <span>Total</span><span>{order.total_cost.toLocaleString()} IQD</span>
-              </div>
-            )}
-          </div>
-        )}
-        {error && <div className={styles.errorBox}>{error}</div>}
-        <div className={styles.grid2}>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Amount to Deduct</label>
-            <input className={styles.input} type="number" value={amount} onChange={e => { setAmount(e.target.value); setError('') }} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Currency</label>
-            <input className={styles.input} value={order.shipping_currency || 'IQD'} readOnly style={{ opacity: 0.7 }} />
-          </div>
-        </div>
-        <div className={styles.formGroup}>
-          <label className={styles.label}>Reason</label>
-          <input className={styles.input} value={reason} onChange={e => setReason(e.target.value)} />
-        </div>
-        <div className={styles.modalFooter}>
-          <button className={styles.btnGhost} onClick={onClose}>Cancel</button>
-          <button className={styles.btnDanger} onClick={submit} disabled={loading || !amount}>
-            {loading ? <Spinner /> : 'Confirm Deduction'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ── CreateAgentModal ──────────────────────────────────────────────────────────
 

@@ -74,6 +74,9 @@ export interface Order {
   agent_warehouse_photo_url?: string
   ordered_at?: string
   warehoused_at?: string
+  total_charged?: number
+  is_charged?: boolean
+  charged_at?: string
   created_at: string
   profiles?: Pick<Profile, 'full_name' | 'email'>
 }
