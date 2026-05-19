@@ -301,7 +301,8 @@
   .sidebarOverlay { display: block; }
   .main { margin-left: 0; }
   .grid2 { grid-template-columns: 1fr; }
-  .body { padding: 16px 12px calc(70px + env(safe-area-inset-bottom)) !important; overflow-x: hidden !important; }
+  .body { padding: 16px 16px 100px 16px !important; box-sizing: border-box !important; width: 100% !important; overflow-x: hidden !important; }
+  .main { width: 100% !important; overflow-x: hidden !important; }
   .statCard, .card, .alertBox { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; }
 
   .topbar { padding: 0 16px; height: 56px; }
@@ -333,8 +334,10 @@
     display: flex;
     position: fixed;
     bottom: 0;
-    left: 0;
-    right: 0;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
     height: auto;
     min-height: 64px;
     padding-bottom: env(safe-area-inset-bottom);
