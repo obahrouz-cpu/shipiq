@@ -1045,6 +1045,7 @@ export default function Dashboard() {
     shop:              t('nav', 'shop'),
     orders:            t('nav', 'orders'),
     balance:           t('nav', 'balance'),
+    account:           '👤 Account',
     'admin-orders':    t('nav', 'adminOrders'),
     'admin-analytics': '📊 Analytics',
     'admin-customers': t('nav', 'customers'),
@@ -1449,6 +1450,19 @@ export default function Dashboard() {
             </div>
           )}
 
+          {page === 'account' && profile && (
+            <div className="fade-up">
+              <AccountSettings
+                profile={profile}
+                orders={orders}
+                mode="page"
+                onClose={() => handlePageChange('dashboard')}
+                onProfileUpdate={updated => setProfile(p => p ? { ...p, ...updated } : p)}
+                onSignOut={logout}
+              />
+            </div>
+          )}
+
           {page === 'admin-analytics' && (
             <div className="fade-up">
               <AdminAnalytics />
@@ -1543,8 +1557,8 @@ export default function Dashboard() {
             </button>
           ))}
           <button
-            className={`${styles.bottomNavItem} ${settingsOpen ? styles.bottomNavActive : ''}`}
-            onClick={() => setSettingsOpen(true)}
+            className={`${styles.bottomNavItem} ${page === 'account' ? styles.bottomNavActive : ''}`}
+            onClick={() => handlePageChange('account')}
           >
             <span className={styles.bottomNavIcon}>👤</span>
             <span>Account</span>

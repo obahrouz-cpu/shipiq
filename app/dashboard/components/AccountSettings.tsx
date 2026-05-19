@@ -65,6 +65,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 interface Props {
   profile: Profile
   orders: Order[]
+  mode?: 'panel' | 'page'
   onClose: () => void
   onProfileUpdate: (updated: Partial<Profile>) => void
   onSignOut: () => void
@@ -72,7 +73,8 @@ interface Props {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function AccountSettings({ profile, orders, onClose, onProfileUpdate, onSignOut }: Props) {
+export default function AccountSettings({ profile, orders, mode, onClose, onProfileUpdate, onSignOut }: Props) {
+  const isPageMode = mode === 'page'
   const supabase = useMemo(() => createClient(), [])
   const { language, t, setLanguage: applyLang } = useLanguage()
 
@@ -212,21 +214,23 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
 
   return (
     <>
-      <div className={styles.overlay} onClick={onClose} />
+      {!isPageMode && <div className={styles.overlay} onClick={onClose} />}
 
-      <div className={styles.panel} role="dialog" aria-label="Account Settings">
+      <div className={`${styles.panel} ${isPageMode ? styles.pageMode : ''}`} role="dialog" aria-label="Account Settings">
 
-        {/* ── Header ── */}
-        <div className={styles.header}>
-          <div>
-            <div className={styles.headerTitle}>{t('settings', 'title')}</div>
-            <div className={styles.headerSub}>{t('settings', 'sub')}</div>
+        {/* ── Header (panel mode only) ── */}
+        {!isPageMode && (
+          <div className={styles.header}>
+            <div>
+              <div className={styles.headerTitle}>{t('settings', 'title')}</div>
+              <div className={styles.headerSub}>{t('settings', 'sub')}</div>
+            </div>
+            <button className={styles.closeBtn} onClick={onClose} aria-label="Close">✕</button>
           </div>
-          <button className={styles.closeBtn} onClick={onClose} aria-label="Close">✕</button>
-        </div>
+        )}
 
         {/* ── Scrollable content ── */}
-        <div className={styles.content}>
+        <div className={`${styles.content} ${isPageMode ? styles.pageModeContent : ''}`}>
 
           {/* ── 0. MEMBERSHIP TIER (customers only) ── */}
           {profile.role === 'customer' && tierSettings.length > 0 && (() => {
@@ -533,7 +537,7 @@ export default function AccountSettings({ profile, orders, onClose, onProfileUpd
           </div>
 
           {/* ── Sign out ── */}
-          <button className={styles.signOutBtn} onClick={onSignOut}>
+          <button className={`${styles.signOutBtn} ${isPageMode ? styles.signOutBtnPage : ''}`} onClick={onSignOut}>
             {t('settings', 'signOut')}
           </button>
 
