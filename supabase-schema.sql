@@ -11,6 +11,8 @@ create table public.profiles (
   phone text,
   role text not null default 'customer', -- 'customer' or 'admin'
   balance bigint not null default 0,     -- stored in IQD (Iraqi Dinar)
+  tier text not null default 'bronze',   -- customer loyalty tier (bronze/silver/gold/platinum/vip)
+  total_spent numeric not null default 0,-- lifetime USD spent (sum of shipping_price / 1450 for confirmed+ orders)
   created_at timestamptz default now()
 );
 
@@ -152,6 +154,26 @@ create policy "Anyone can upload order photos"
 create policy "Anyone can view order photos"
   on storage.objects for select
   using (bucket_id = 'order-photos');
+
+-- ── Tier settings ─────────────────────────────────────────
+-- Populated by the admin UI; queried by the recalculate function
+-- create table public.tier_settings (
+--   tier       text primary key,
+--   name_en    text,
+--   name_ar    text,
+--   min_spend  numeric,
+--   color      text,
+--   icon       text,
+--   benefits   text,
+--   is_active  boolean default true
+-- );
+
+-- ── total_spent trigger ────────────────────────────────────
+-- See supabase-tier-migration.sql for the full trigger definition.
+-- The trigger fires on INSERT/UPDATE/DELETE on orders and calls
+-- recalculate_total_spent(user_id), which sums shipping_price/1450
+-- (IQD→USD) for all confirmed/ordered/warehouse/transit/arrived/delivered
+-- orders and updates profiles.total_spent + profiles.tier accordingly.
 
 -- ── Make yourself admin ────────────────────────────────────
 -- After you sign up, run this with YOUR email:
