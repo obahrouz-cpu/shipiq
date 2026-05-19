@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import ThemeToggle from '@/components/ThemeToggle'
 import {
   getSession, getProfile, getAdminOrders, getUserOrders,
   getCustomers, getUserTransactions, createOrder,
@@ -328,7 +329,7 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
               <div style={{ width: 80, height: 80, borderRadius: 8, background: 'var(--surface3)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', border: '1px solid var(--border)' }}>
                 {thumbLoading
                   ? <span className={styles.spinner} style={{ width: 18, height: 18, borderTopColor: 'var(--gold)' }} />
-                  : <img src={thumbUrl!} alt="" style={{ width: 80, height: 80, objectFit: 'contain' }} onError={() => setThumbUrl(null)} />
+                  : <img src={thumbUrl!} alt="" loading="lazy" style={{ width: 80, height: 80, objectFit: 'contain' }} onError={() => setThumbUrl(null)} />
                 }
               </div>
               <div>
@@ -535,6 +536,35 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
   const [waveSyncStatus, setWaveSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'failed'>(
     order.wave_sync_status === 'synced' ? 'synced' : order.wave_sync_status === 'failed' ? 'failed' : 'idle'
   )
+  const [copied, setCopied] = useState(false)
+
+  // Estimated delivery date based on country + ordered_at
+  const etaDays: Record<string, number> = { USA: 15, Turkey: 10, UAE: 7, China: 20 }
+  const orderCountry = order.country_origin || ''
+  const eta = order.ordered_at && etaDays[orderCountry]
+    ? (() => {
+        const d = new Date(order.ordered_at)
+        d.setDate(d.getDate() + etaDays[orderCountry])
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      })()
+    : null
+
+  const copyOrderDetails = () => {
+    const lines = [
+      `ShipIQ Order — ${order.id}`,
+      `Product: ${order.description}`,
+      order.url ? `URL: ${order.url}` : '',
+      order.item_price ? `Item Price: ${order.item_price} ${order.item_price_currency}` : '',
+      order.shipping_price ? `Shipping: ${order.shipping_price.toLocaleString()} IQD` : '',
+      order.total_cost ? `Total: ${order.total_cost.toLocaleString()} IQD` : '',
+      `Status: ${STATUS_CONFIG[order.status]?.label ?? order.status}`,
+      `Date: ${order.created_at?.split('T')[0]}`,
+    ].filter(Boolean).join('\n')
+    navigator.clipboard.writeText(lines).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   const s = STATUS_CONFIG[order.status]
 
@@ -652,8 +682,23 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
             <span className={styles.modalTitle}>{order.id}</span>
             <Badge status={order.status} />
           </div>
-          <button className={styles.modalClose} onClick={onClose}>✕</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={copyOrderDetails}
+              aria-label="Copy order details"
+              title="Copy order summary for WhatsApp"
+              style={{ fontSize: 13, padding: '5px 10px', background: copied ? 'rgba(22,163,74,0.1)' : 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, cursor: 'pointer', color: copied ? '#16a34a' : 'var(--text-muted)', fontWeight: 600 }}
+            >
+              {copied ? '✓ Copied' : '📋 Copy'}
+            </button>
+            <button className={styles.modalClose} onClick={onClose} aria-label="Close modal">✕</button>
+          </div>
         </div>
+        {eta && (
+          <div style={{ padding: '8px 20px', background: 'rgba(76,175,122,0.07)', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>
+            📅 Estimated delivery: {eta} ({orderCountry})
+          </div>
+        )}
         {isAdmin && (
           <>
             <div className={styles.tabs}>
@@ -797,7 +842,7 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
                     {order.agent_receipt_url && (
                       <div>
                         <a href={order.agent_receipt_url} target="_blank" rel="noopener noreferrer">
-                          <img src={order.agent_receipt_url} alt="receipt"
+                          <img src={order.agent_receipt_url} alt="receipt" loading="lazy"
                             style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--border)', display: 'block' }}
                             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                           />
@@ -808,7 +853,7 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
                     {order.agent_warehouse_photo_url && (
                       <div>
                         <a href={order.agent_warehouse_photo_url} target="_blank" rel="noopener noreferrer">
-                          <img src={order.agent_warehouse_photo_url} alt="warehouse"
+                          <img src={order.agent_warehouse_photo_url} alt="warehouse" loading="lazy"
                             style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--border)', display: 'block' }}
                             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                           />
@@ -1252,6 +1297,11 @@ export default function Dashboard() {
   const [wishlist, setWishlist] = useState<WishlistItem[]>([])
   const [wishlistOrderPrefill, setWishlistOrderPrefill] = useState<WishlistItem | null>(null)
   const fetchingPhotosRef = useRef<Set<string>>(new Set())
+  // Search & bulk select (admin)
+  const [adminSearch, setAdminSearch] = useState('')
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
+  const [bulkStatus, setBulkStatus] = useState('')
+  const [bulkLoading, setBulkLoading] = useState(false)
 
   const toast = useCallback((message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
@@ -1306,6 +1356,21 @@ export default function Dashboard() {
     router.push('/')
   }, [router])
 
+  const haptic = useCallback((ms = 10) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(ms)
+  }, [])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'Escape') { setSelectedOrder(null); setShowNewOrder(false); setSettingsOpen(false) }
+      if (e.key === 'n' && !e.ctrlKey && !e.metaKey) { setShowNewOrder(true); setPage('orders') }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   // ── Derived values — must stay above ALL early returns so hook count is stable ──
   const isAdmin = profile?.role === 'admin'
   const isAgent = profile?.role === 'agent'
@@ -1332,20 +1397,54 @@ export default function Dashboard() {
       }
       if (filters.urgency === 'urgent') result = result.filter(o => o.urgency)
       if (filters.urgency === 'normal') result = result.filter(o => !o.urgency)
+      // Quick search across ID, description, customer name, URL
+      if (adminSearch.trim()) {
+        const q = adminSearch.toLowerCase()
+        result = result.filter(o =>
+          o.id.toLowerCase().includes(q) ||
+          o.description?.toLowerCase().includes(q) ||
+          o.profiles?.full_name?.toLowerCase().includes(q) ||
+          o.url?.toLowerCase().includes(q)
+        )
+      }
     }
     if (filters.sort === 'oldest')     result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
     else if (filters.sort === 'price-high') result.sort((a, b) => (b.shipping_price ?? 0) - (a.shipping_price ?? 0))
     else if (filters.sort === 'price-low')  result.sort((a, b) => (a.shipping_price ?? 0) - (b.shipping_price ?? 0))
     else result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     return result
-  }, [orders, filters, isAdmin])
+  }, [orders, filters, isAdmin, adminSearch])
 
   // ── Early returns (all hooks are above this line) ────────────────────────────
   if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16 }}>
-      <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--gold)', letterSpacing: -0.5 }}>ShipIQ</div>
-      <div style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'Tajawal, sans-serif', marginTop: -8 }}>خدمة الشحن الذكي</div>
-      <div className={styles.spinner} style={{ width: 28, height: 28, borderWidth: 2, marginTop: 8 }} />
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '0 0 0 260px', display: 'flex', flexDirection: 'column' }}>
+      {/* Skeleton sidebar strip */}
+      <div style={{ position: 'fixed', left: 0, top: 0, width: 260, height: '100vh', background: 'var(--surface)', borderRight: '1px solid var(--border)', padding: '28px 16px' }}>
+        <div className="skeleton skeleton-title" style={{ width: 80, marginBottom: 32 }} />
+        {[1,2,3,4].map(i => <div key={i} className="skeleton skeleton-text" style={{ marginBottom: 12, width: `${60 + i * 8}%` }} />)}
+      </div>
+      {/* Skeleton main content */}
+      <div style={{ padding: '32px', flex: 1 }}>
+        <div style={{ marginBottom: 24 }}>
+          <div className="skeleton skeleton-title" style={{ width: 140, marginBottom: 8 }} />
+          <div className="skeleton skeleton-text" style={{ width: 200 }} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 24 }}>
+          {[1,2,3,4].map(i => (
+            <div key={i} className="skeleton-card" style={{ height: 90 }}>
+              <div className="skeleton" style={{ width: 36, height: 36, borderRadius: 10, marginBottom: 12 }} />
+              <div className="skeleton skeleton-text" style={{ width: '60%', marginBottom: 8 }} />
+              <div className="skeleton skeleton-title" style={{ width: '40%' }} />
+            </div>
+          ))}
+        </div>
+        <div className="skeleton-card" style={{ height: 200 }}>
+          {[1,2,3].map(i => <div key={i} className="skeleton skeleton-text" style={{ marginBottom: 14, width: `${70 + i * 5}%` }} />)}
+        </div>
+      </div>
+      <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', fontSize: 13, color: 'var(--text-dim)' }}>
+        Loading ShipIQ...
+      </div>
     </div>
   )
 
@@ -1416,12 +1515,14 @@ export default function Dashboard() {
             <div className={styles.pageTitle}>{pageTitle[page]}</div>
           </div>
           <div className={styles.topbarActions}>
+            <ThemeToggle />
             {!isAdmin && (
               <div
                 className={styles.balanceChip}
-                onClick={() => setShowTopUp(true)}
+                onClick={() => { setShowTopUp(true); haptic() }}
                 title="Top up wallet"
                 style={{ cursor: 'pointer' }}
+                aria-label="Open wallet top-up"
               >
                 <span>💳</span>
                 <span>{profile?.balance?.toLocaleString()} IQD</span>
@@ -1429,7 +1530,7 @@ export default function Dashboard() {
               </div>
             )}
             {!isAdmin && page === 'orders' && (
-              <button className={styles.btnPrimary} style={{ padding: '7px 16px', fontSize: 13 }} onClick={() => setShowNewOrder(true)}>+ New Order</button>
+              <button className={styles.btnPrimary} style={{ padding: '7px 16px', fontSize: 13 }} onClick={() => { setShowNewOrder(true); haptic() }} aria-label="Submit new order (N)">+ New Order</button>
             )}
           </div>
         </div>
@@ -1508,7 +1609,7 @@ export default function Dashboard() {
                             <div style={{ width: 40, height: 40, borderRadius: 6, background: 'var(--surface2)', border: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', fontSize: 18, position: 'relative', color: '#888' }}>
                               <span style={{ position: 'absolute' }}>🛍️</span>
                               {o.photo_url && (
-                                <img src={o.photo_url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                                <img src={o.photo_url} alt="" loading="lazy" style={{ width: 40, height: 40, objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
                               )}
                             </div>
                           </td>
@@ -1579,7 +1680,62 @@ export default function Dashboard() {
                     <div className={styles.pageHeading}>{t('adminOrders', 'title')}</div>
                     <div className={styles.pageSub}>{t('adminOrders', 'sub')}</div>
                   </div>
-                  <button className={styles.btnGhost} onClick={() => setShowExport(true)}>{t('adminOrders', 'export')}</button>
+                  <button className={styles.btnGhost} onClick={() => setShowExport(true)} aria-label="Export orders">{t('adminOrders', 'export')}</button>
+                </div>
+              )}
+              {isAdmin && (
+                <div style={{ marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                    <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--text-dim)', pointerEvents: 'none' }}>🔍</span>
+                    <input
+                      placeholder="Search by order ID, customer, description, URL..."
+                      value={adminSearch}
+                      onChange={e => setAdminSearch(e.target.value)}
+                      aria-label="Search orders"
+                      style={{
+                        width: '100%', padding: '9px 12px 9px 36px', fontSize: 13,
+                        background: 'var(--surface)', border: '1px solid var(--border)',
+                        borderRadius: 8, color: 'var(--text)', outline: 'none',
+                      }}
+                    />
+                    {adminSearch && (
+                      <button onClick={() => setAdminSearch('')} aria-label="Clear search" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', fontSize: 14 }}>✕</button>
+                    )}
+                  </div>
+                  {selectedOrderIds.size > 0 && (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{selectedOrderIds.size} selected</span>
+                      <select
+                        value={bulkStatus}
+                        onChange={e => setBulkStatus(e.target.value)}
+                        aria-label="Bulk status update"
+                        style={{ fontSize: 12, padding: '6px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text)', outline: 'none' }}
+                      >
+                        <option value="">Change status to...</option>
+                        {(['pending','calculated','confirmed','ordered','warehouse','transit','arrived','delivered','rejected'] as const).map(s => (
+                          <option key={s} value={s}>{STATUS_CONFIG[s]?.label ?? s}</option>
+                        ))}
+                      </select>
+                      <button
+                        disabled={!bulkStatus || bulkLoading}
+                        onClick={async () => {
+                          if (!bulkStatus) return
+                          setBulkLoading(true)
+                          await Promise.all(Array.from(selectedOrderIds).map(id => updateOrder(id, { status: bulkStatus })))
+                          setSelectedOrderIds(new Set()); setBulkStatus('')
+                          setBulkLoading(false); fetchData()
+                        }}
+                        style={{
+                          fontSize: 12, padding: '6px 14px', borderRadius: 7, cursor: bulkLoading ? 'not-allowed' : 'pointer',
+                          background: bulkStatus ? 'var(--gold)' : 'var(--surface)', color: bulkStatus ? 'var(--bg)' : 'var(--text-dim)',
+                          border: '1px solid var(--border)', fontWeight: 700, opacity: bulkLoading ? 0.6 : 1,
+                        }}
+                      >
+                        {bulkLoading ? '...' : 'Apply'}
+                      </button>
+                      <button onClick={() => setSelectedOrderIds(new Set())} aria-label="Clear selection" style={{ fontSize: 11, padding: '6px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 7, cursor: 'pointer', color: 'var(--text-dim)' }}>✕</button>
+                    </div>
+                  )}
                 </div>
               )}
               <OrderFilters isAdmin={isAdmin} value={filters} onChange={setFilters} />
@@ -1596,6 +1752,17 @@ export default function Dashboard() {
                   <div className={styles.tableWrapper}>
                     <table className={styles.table}>
                       <thead><tr>
+                        {isAdmin && (
+                          <th style={{ width: 36, padding: '0 8px' }}>
+                            <input
+                              type="checkbox"
+                              aria-label="Select all orders"
+                              checked={selectedOrderIds.size === filteredOrders.length && filteredOrders.length > 0}
+                              onChange={e => setSelectedOrderIds(e.target.checked ? new Set(filteredOrders.map(o => o.id)) : new Set())}
+                              style={{ cursor: 'pointer', accentColor: 'var(--gold)' }}
+                            />
+                          </th>
+                        )}
                         <th style={{ width: 56 }}></th>
                         <th className={styles.mobileHide}>{t('orders', 'id')}</th>
                         {isAdmin && <th>{t('orders', 'customer')}</th>}
@@ -1603,12 +1770,27 @@ export default function Dashboard() {
                       </tr></thead>
                       <tbody>
                         {filteredOrders.map(o => (
-                          <tr key={o.id} onClick={() => setSelectedOrder(o)} style={{ cursor: 'pointer' }}>
+                          <tr key={o.id} onClick={() => setSelectedOrder(o)} style={{ cursor: 'pointer', background: selectedOrderIds.has(o.id) ? 'rgba(201,168,76,0.04)' : undefined }}>
+                            {isAdmin && (
+                              <td style={{ padding: '0 8px' }} onClick={e => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Select order ${o.id}`}
+                                  checked={selectedOrderIds.has(o.id)}
+                                  onChange={e => {
+                                    const next = new Set(selectedOrderIds)
+                                    if (e.target.checked) next.add(o.id); else next.delete(o.id)
+                                    setSelectedOrderIds(next)
+                                  }}
+                                  style={{ cursor: 'pointer', accentColor: 'var(--gold)' }}
+                                />
+                              </td>
+                            )}
                             <td style={{ padding: '8px 12px' }}>
                               <div style={{ width: 40, height: 40, borderRadius: 6, background: 'var(--surface2)', border: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', fontSize: 18, position: 'relative', color: '#888' }}>
                                 <span style={{ position: 'absolute' }}>🛍️</span>
                                 {o.photo_url && (
-                                  <img src={o.photo_url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                                  <img src={o.photo_url} alt="" loading="lazy" style={{ width: 40, height: 40, objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
                                 )}
                               </div>
                             </td>

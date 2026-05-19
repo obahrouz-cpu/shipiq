@@ -217,7 +217,6 @@ export async function POST(req: NextRequest) {
   const provider = settings.accounting_provider || 'none'
 
   if (provider === 'none' || !provider) {
-    console.log('Accounting sync skipped — no provider configured')
     return NextResponse.json({ ok: true, skipped: true })
   }
 

@@ -3,7 +3,7 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(15, 14, 12, 0.92);
+  background: var(--nav-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
@@ -255,6 +255,187 @@
   background: var(--surface2);
   transform: translateY(-2px);
 }
+
+/* ── SCROLL ANIMATION ── */
+.sectionInner {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.visible {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+.statsBar {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+/* ── STICKY CTA ── */
+.stickyCta {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 200;
+  background: var(--gold);
+  color: #0f0e0c;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 13px 22px;
+  border-radius: 100px;
+  box-shadow: 0 6px 32px rgba(201,168,76,0.5);
+  animation: slideUp 0.35s ease forwards;
+  transition: all 0.18s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.stickyCta:hover {
+  background: var(--gold-light);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 40px rgba(201,168,76,0.55);
+}
+
+/* ── HERO ANIMATED TEXT ── */
+.heroAnimWrap {
+  position: relative;
+  display: inline-block;
+  min-width: 200px;
+  height: 1.2em;
+  vertical-align: bottom;
+}
+.heroAnimItem {
+  position: absolute;
+  left: 0; right: 0;
+  color: var(--gold);
+  opacity: 0;
+  white-space: nowrap;
+}
+
+/* ── TESTIMONIALS ── */
+.testimonialsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.testimonialCard {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  transition: all 0.22s;
+}
+.testimonialCard:hover {
+  transform: translateY(-4px);
+  border-color: var(--gold-dim);
+  box-shadow: var(--shadow);
+}
+.testimonialStars { font-size: 16px; margin-bottom: 14px; color: var(--gold); }
+.testimonialText {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin-bottom: 18px;
+  font-style: italic;
+}
+.testimonialAuthor { font-size: 13px; font-weight: 700; color: var(--text); }
+.testimonialCity { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+/* ── COMPARISON TABLE ── */
+.compareWrap {
+  overflow-x: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.compareTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compareTable th {
+  padding: 16px 20px;
+  font-weight: 700;
+  background: var(--surface2);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+}
+.compareTable th:first-child { text-align: left; }
+.compareTable th.compareHighlight {
+  background: rgba(201,168,76,0.12);
+  color: var(--gold);
+}
+.compareTable td {
+  padding: 14px 20px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.compareTable td:first-child { text-align: left; font-weight: 600; color: var(--text); }
+.compareTable tr:last-child td { border-bottom: none; }
+.compareTable td.compareHighlight {
+  background: rgba(201,168,76,0.05);
+  color: var(--text);
+  font-weight: 600;
+}
+.compareTable .checkYes { color: #4caf7a; font-size: 18px; }
+.compareTable .checkNo  { color: #6b6760; font-size: 18px; }
+
+/* ── SOCIAL PROOF NUMBERS ── */
+.socialProofBar {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.proofItem {
+  padding: 32px 48px;
+  text-align: center;
+  border-right: 1px solid var(--border);
+}
+.proofItem:last-child { border-right: none; }
+.proofNum {
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--gold);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.proofLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ── SOCIAL LINKS ── */
+.socialLinks {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.socialLink {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-decoration: none;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: all 0.18s;
+}
+.socialLink:hover { color: var(--gold); border-color: var(--gold-dim); }
+
+/* ── JSON-LD ── */
 
 /* ── STATS BAR ── */
 .statsBar {
@@ -656,9 +837,15 @@
 }
 
 /* ── RESPONSIVE ── */
+@media (max-width: 1000px) {
+  .testimonialsGrid { grid-template-columns: 1fr; max-width: 560px; margin: 0 auto; }
+  .proofItem { padding: 24px 28px; }
+}
+
 @media (max-width: 900px) {
   .countriesGrid { grid-template-columns: repeat(2, 1fr); }
   .whyGrid       { grid-template-columns: repeat(2, 1fr); }
+  .stickyCta { bottom: 80px; right: 16px; font-size: 13px; padding: 11px 18px; }
 }
 
 @media (max-width: 768px) {
@@ -668,7 +855,7 @@
     top: 64px;
     left: 0;
     right: 0;
-    background: rgba(15, 14, 12, 0.98);
+    background: var(--mobile-nav-bg);
     flex-direction: column;
     padding: 12px 20px 20px;
     border-bottom: 1px solid var(--border);

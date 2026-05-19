@@ -200,7 +200,6 @@ export async function POST(req: NextRequest) {
 
   const creds = await getWaveCredentials(supabase)
   if (!creds) {
-    console.log('Wave not configured — skipping sync')
     return NextResponse.json({ ok: false, error: 'Wave not configured' }, { status: 200 })
   }
 
