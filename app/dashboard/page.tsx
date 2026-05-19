@@ -25,6 +25,7 @@ import TierBadge from './components/TierBadge'
 import AdminTierSettings from './components/AdminTierSettings'
 const AdminAnalytics = dynamic(() => import('./components/AdminAnalytics'), { ssr: false })
 import AgentDashboard from './components/AgentDashboard'
+import AdminMobileAccount from './components/AdminMobileAccount'
 import type { TierSettings } from '@/lib/types'
 
 // ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
@@ -1045,7 +1046,7 @@ export default function Dashboard() {
     shop:              t('nav', 'shop'),
     orders:            t('nav', 'orders'),
     balance:           t('nav', 'balance'),
-    account:           '👤 Account',
+    account:           isAdmin ? '🔧 Admin Account' : '👤 Account',
     'admin-orders':    t('nav', 'adminOrders'),
     'admin-analytics': '📊 Analytics',
     'admin-customers': t('nav', 'customers'),
@@ -1452,14 +1453,26 @@ export default function Dashboard() {
 
           {page === 'account' && profile && (
             <div className="fade-up">
-              <AccountSettings
-                profile={profile}
-                orders={orders}
-                mode="page"
-                onClose={() => handlePageChange('dashboard')}
-                onProfileUpdate={updated => setProfile(p => p ? { ...p, ...updated } : p)}
-                onSignOut={logout}
-              />
+              {isAdmin ? (
+                <AdminMobileAccount
+                  profile={profile}
+                  orders={orders}
+                  users={users}
+                  pendingCount={pendingCount}
+                  onNavigate={handlePageChange}
+                  onShowSettings={() => setShowTierSettings(true)}
+                  onSignOut={logout}
+                />
+              ) : (
+                <AccountSettings
+                  profile={profile}
+                  orders={orders}
+                  mode="page"
+                  onClose={() => handlePageChange('dashboard')}
+                  onProfileUpdate={updated => setProfile(p => p ? { ...p, ...updated } : p)}
+                  onSignOut={logout}
+                />
+              )}
             </div>
           )}
 
@@ -1533,6 +1546,37 @@ export default function Dashboard() {
 
         </div>
       </div>
+
+      {/* Mobile bottom navigation — admin */}
+      {isAdmin && (
+        <nav className={styles.bottomNav}>
+          {[
+            { id: 'admin-orders',    icon: '📋', label: 'Orders',    badge: pendingCount },
+            { id: 'admin-customers', icon: '👥', label: 'Customers' },
+            { id: 'admin-analytics', icon: '📊', label: 'Analytics' },
+          ].map(n => (
+            <button
+              key={n.id}
+              className={`${styles.bottomNavItem} ${page === n.id ? styles.bottomNavActive : ''}`}
+              onClick={() => handlePageChange(n.id)}
+              style={{ position: 'relative' }}
+            >
+              {n.badge !== undefined && n.badge > 0 && (
+                <span className={styles.bottomNavBadge}>{n.badge}</span>
+              )}
+              <span className={styles.bottomNavIcon}>{n.icon}</span>
+              <span>{n.label}</span>
+            </button>
+          ))}
+          <button
+            className={`${styles.bottomNavItem} ${page === 'account' ? styles.bottomNavActive : ''}`}
+            onClick={() => handlePageChange('account')}
+          >
+            <span className={styles.bottomNavIcon}>👤</span>
+            <span>Account</span>
+          </button>
+        </nav>
+      )}
 
       {/* Mobile bottom navigation — customers only */}
       {!isAdmin && !isAgent && (
