@@ -58,12 +58,13 @@ function safeBg(hex: string): string {
 
 // ── StorePanel ────────────────────────────────────────────────────────────────
 
-function StorePanel({ store, onClose }: { store: Store; onClose: () => void }) {
+function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; onClose: () => void; userId?: string; onWishlistSave?: (url: string) => void }) {
   const [url, setUrl] = useState('')
   const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null)
   const [scrapeLoading, setScrapeLoading] = useState(false)
   const [scrapeError, setScrapeError] = useState('')
   const [trendyolKg, setTrendyolKg] = useState<number | null>(null)
+  const [wishSaved, setWishSaved] = useState(false)
 
   const detectedStore = url ? STORES.find(s => url.toLowerCase().includes(s.domain)) ?? null : null
   const displayStore = detectedStore ?? store
@@ -235,6 +236,21 @@ function StorePanel({ store, onClose }: { store: Store; onClose: () => void }) {
               ℹ️ Paste this URL when submitting your order — our team will confirm the exact shipping cost.
             </div>
           )}
+
+          {url && url.startsWith('http') && onWishlistSave && (
+            <button
+              onClick={() => { onWishlistSave(url); setWishSaved(true); setTimeout(() => setWishSaved(false), 2500) }}
+              style={{
+                marginTop: 10, width: '100%', padding: '9px', fontSize: 13, fontWeight: 600,
+                background: wishSaved ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.08)',
+                color: wishSaved ? '#16a34a' : '#ef4444',
+                border: `1px solid ${wishSaved ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.2)'}`,
+                borderRadius: 8, cursor: 'pointer',
+              }}
+            >
+              {wishSaved ? '✓ Saved to Wishlist!' : '❤️ Save to Wishlist'}
+            </button>
+          )}
         </div>
 
         <div className={styles.panelDivider} />
@@ -265,7 +281,7 @@ function StorePanel({ store, onClose }: { store: Store; onClose: () => void }) {
 
 // ── ShopSection ───────────────────────────────────────────────────────────────
 
-export default function ShopSection() {
+export default function ShopSection({ userId, onWishlistSave }: { userId?: string; onWishlistSave?: (url: string) => void }) {
   const [countryFilter, setCountryFilter] = useState('All')
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
@@ -379,7 +395,7 @@ export default function ShopSection() {
 
       {/* Slide-in panel */}
       {selectedStore && (
-        <StorePanel store={selectedStore} onClose={() => setSelectedStore(null)} />
+        <StorePanel store={selectedStore} onClose={() => setSelectedStore(null)} userId={userId} onWishlistSave={onWishlistSave} />
       )}
     </div>
   )

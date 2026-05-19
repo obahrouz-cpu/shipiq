@@ -6,10 +6,10 @@ import {
   getSession, getProfile, getAdminOrders, getUserOrders,
   getCustomers, getUserTransactions, createOrder,
   updateOrder, topUpBalance, deductBalance, signOut,
-  getTierSettings,
+  getTierSettings, getWishlist, addToWishlist, removeFromWishlist,
 } from '@/lib/api'
 import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
-import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult } from '@/lib/types'
+import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
@@ -28,6 +28,7 @@ import AgentDashboard from './components/AgentDashboard'
 import AdminMobileAccount from './components/AdminMobileAccount'
 import ShippingCalculator from './components/ShippingCalculator'
 import AdminSettings from './components/AdminSettings'
+import WishlistPage from './components/WishlistPage'
 import type { TierSettings } from '@/lib/types'
 
 // ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
@@ -195,14 +196,22 @@ const DELIVERY_OPTIONS_MODAL = [
 
 // ── SubmitOrderModal ──────────────────────────────────────────────────────────
 
-function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose: () => void; onDone: () => void }) {
+function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: {
+  userId: string
+  onClose: () => void
+  onDone: () => void
+  prefill?: { url?: string; description?: string; note?: string; photo_url?: string }
+  onWishlistSave?: (data: { url: string; description?: string; notes?: string; photo_url?: string }) => Promise<void>
+}) {
   const [form, setForm] = useState<OrderForm>({
-    url: '', description: '', category: 'Electronics', qty: 1,
-    itemPrice: '', itemPriceCurrency: 'USD', note: '', urgency: false,
+    url: prefill?.url || '', description: prefill?.description || '', category: 'Electronics', qty: 1,
+    itemPrice: '', itemPriceCurrency: 'USD', note: prefill?.note || '', urgency: false,
     deliveryPreference: 'pickup', deliveryCity: '',
   })
   const [photo, setPhoto] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
+  const [wishSaving, setWishSaving] = useState(false)
+  const [wishSaved, setWishSaved] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null)
@@ -210,7 +219,7 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
   const [estimateError, setEstimateError] = useState('')
   const [trendyolKg, setTrendyolKg]     = useState<number | null>(null)
   const [boutiqaatKg, setBoutiqaatKg]   = useState<number | null>(null)
-  const [thumbUrl, setThumbUrl] = useState<string | null>(null)
+  const [thumbUrl, setThumbUrl] = useState<string | null>(prefill?.photo_url ?? null)
   const [thumbLoading, setThumbLoading] = useState(false)
 
   const handle = <K extends keyof OrderForm>(k: K, v: OrderForm[K]) => setForm(p => ({ ...p, [k]: v }))
@@ -270,6 +279,15 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
     setLoading(false)
     if (err) { setError(err); return }
     onDone(); onClose()
+  }
+
+  const saveToWishlist = async () => {
+    if (!form.url) { setError('Enter a URL first'); return }
+    setWishSaving(true)
+    await onWishlistSave?.({ url: form.url, description: form.description, notes: form.note, photo_url: thumbUrl ?? undefined })
+    setWishSaving(false)
+    setWishSaved(true)
+    setTimeout(() => setWishSaved(false), 3000)
   }
 
   const isUrlSupported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
@@ -469,6 +487,21 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
         </div>
         <div className={styles.modalFooter}>
           <button className={styles.btnGhost} onClick={onClose}>Cancel</button>
+          {onWishlistSave && (
+            <button
+              onClick={saveToWishlist}
+              disabled={wishSaving || !form.url}
+              style={{
+                padding: '10px 16px', fontSize: 13, fontWeight: 600, borderRadius: 8, cursor: 'pointer',
+                background: wishSaved ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.08)',
+                color: wishSaved ? '#16a34a' : '#ef4444',
+                border: `1px solid ${wishSaved ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.2)'}`,
+                opacity: wishSaving ? 0.7 : 1,
+              }}
+            >
+              {wishSaved ? '✓ Saved!' : wishSaving ? '...' : '❤️ Wishlist'}
+            </button>
+          )}
           <button className={styles.btnPrimary} onClick={submit} disabled={loading || !form.url || !form.description}>
             {loading ? <Spinner /> : 'Submit Order · إرسال'}
           </button>
@@ -1104,6 +1137,8 @@ export default function Dashboard() {
   const [tierSettings, setTierSettings]   = useState<TierSettings[]>([])
   const [showTierSettings, setShowTierSettings] = useState(false)
   const [showCreateAgent, setShowCreateAgent] = useState(false)
+  const [wishlist, setWishlist] = useState<WishlistItem[]>([])
+  const [wishlistOrderPrefill, setWishlistOrderPrefill] = useState<WishlistItem | null>(null)
   const fetchingPhotosRef = useRef<Set<string>>(new Set())
 
   const toast = useCallback((message: string, type: Toast['type'] = 'success') => {
@@ -1123,8 +1158,8 @@ export default function Dashboard() {
       const [allOrders, allUsers] = await Promise.all([getAdminOrders(), getCustomers()])
       setOrders(allOrders); setUsers(allUsers)
     } else if (prof.role === 'customer') {
-      const [myOrders, txns] = await Promise.all([getUserOrders(session.user.id), getUserTransactions(session.user.id)])
-      setOrders(myOrders); setTransactions(txns)
+      const [myOrders, txns, wl] = await Promise.all([getUserOrders(session.user.id), getUserTransactions(session.user.id), getWishlist(session.user.id)])
+      setOrders(myOrders); setTransactions(txns); setWishlist(wl)
     }
     // agents: AgentDashboard fetches its own data
     if (prof.role !== 'agent') getTierSettings().then(setTierSettings)
@@ -1215,6 +1250,7 @@ export default function Dashboard() {
         { id: 'dashboard',  icon: '⊞',  label: t('nav', 'dashboard') },
         { id: 'shop',       icon: '🛍️', label: t('nav', 'shop') },
         { id: 'calculator', icon: '🧮', label: 'Calculator' },
+        { id: 'wishlist',   icon: '❤️', label: 'Wishlist', badge: wishlist.length || undefined },
         { id: 'orders',     icon: '📦', label: t('nav', 'orders'), badge: calculatedCount },
         { id: 'balance',    icon: '💳', label: t('nav', 'balance') },
       ]
@@ -1223,6 +1259,7 @@ export default function Dashboard() {
     dashboard:         t('nav', 'dashboard'),
     shop:              t('nav', 'shop'),
     calculator:        '🧮 Calculator',
+    wishlist:          '❤️ Wishlist',
     orders:            t('nav', 'orders'),
     balance:           t('nav', 'balance'),
     account:           isAdmin ? '🔧 Admin Account' : '👤 Account',
@@ -1385,13 +1422,32 @@ export default function Dashboard() {
                   <div className={styles.pageSub}>{t('shop', 'sub')}</div>
                 </div>
               </div>
-              <ShopSection />
+              <ShopSection
+                userId={profile?.id}
+                onWishlistSave={profile ? async (url: string) => {
+                  await addToWishlist(profile.id, { url })
+                  const wl = await getWishlist(profile.id)
+                  setWishlist(wl)
+                  toast('Saved to wishlist! · تم الحفظ', 'success')
+                } : undefined}
+              />
             </div>
           )}
 
           {page === 'calculator' && !isAdmin && (
             <div className="fade-up">
               <ShippingCalculator />
+            </div>
+          )}
+
+          {page === 'wishlist' && !isAdmin && profile && (
+            <div className="fade-up">
+              <WishlistPage
+                items={wishlist}
+                onOrderNow={item => { setWishlistOrderPrefill(item); setShowNewOrder(true) }}
+                onRemove={id => setWishlist(prev => prev.filter(w => w.id !== id))}
+                onRefresh={() => getWishlist(profile.id).then(setWishlist)}
+              />
             </div>
           )}
 
@@ -1790,7 +1846,7 @@ export default function Dashboard() {
           {[
             { id: 'dashboard',  icon: '⊞',  label: 'Home' },
             { id: 'shop',       icon: '🛍️', label: 'Shop' },
-            { id: 'calculator', icon: '🧮', label: 'Calc' },
+            { id: 'wishlist',   icon: '❤️', label: 'Saved', badge: wishlist.length || undefined },
             { id: 'orders',     icon: '📦', label: 'Orders', badge: calculatedCount },
             { id: 'balance',    icon: '💳', label: 'Balance' },
           ].map(n => (
@@ -1817,7 +1873,18 @@ export default function Dashboard() {
         </nav>
       )}
 
-      {showNewOrder && profile && <SubmitOrderModal userId={profile.id} onClose={() => setShowNewOrder(false)} onDone={() => { fetchData(); toast('Order submitted! · تم إرسال الطلب') }} />}
+      {showNewOrder && profile && (
+        <SubmitOrderModal
+          userId={profile.id}
+          onClose={() => { setShowNewOrder(false); setWishlistOrderPrefill(null) }}
+          onDone={() => { fetchData(); toast('Order submitted! · تم إرسال الطلب') }}
+          prefill={wishlistOrderPrefill ? { url: wishlistOrderPrefill.url, description: wishlistOrderPrefill.description, note: wishlistOrderPrefill.notes, photo_url: wishlistOrderPrefill.photo_url } : undefined}
+          onWishlistSave={async (data) => {
+            const { error } = await addToWishlist(profile.id, data)
+            if (!error) { const wl = await getWishlist(profile.id); setWishlist(wl); toast('Saved to wishlist!') }
+          }}
+        />
+      )}
       {showTopUp && profile && <WalletTopUp userId={profile.id} open={true} onClose={() => setShowTopUp(false)} onSuccess={() => { fetchData(); toast('Top-up request sent! · تم إرسال طلب الشحن') }} />}
       {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} adminName={isAdmin ? (profile?.full_name || 'Admin') : undefined} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} />}
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}

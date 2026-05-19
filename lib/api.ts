@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { createClient } from './supabase'
-import type { Order, OrderForm, Profile, Transaction, TierSettings } from './types'
+import type { Order, OrderForm, Profile, Transaction, TierSettings, WishlistItem } from './types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -306,4 +306,30 @@ export async function getAgents(): Promise<Profile[]> {
     .eq('role', 'agent')
     .order('created_at', { ascending: false })
   return data || []
+}
+
+// ── Wishlist ──────────────────────────────────────────────────────────────────
+
+export async function getWishlist(userId: string): Promise<WishlistItem[]> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('wishlist')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+  return data || []
+}
+
+export async function addToWishlist(
+  userId: string,
+  item: { url: string; description?: string; photo_url?: string; notes?: string }
+): Promise<{ error: string | null }> {
+  const supabase = createClient()
+  const { error } = await supabase.from('wishlist').insert({ user_id: userId, ...item })
+  return { error: error?.message ?? null }
+}
+
+export async function removeFromWishlist(itemId: string): Promise<void> {
+  const supabase = createClient()
+  await supabase.from('wishlist').delete().eq('id', itemId)
 }

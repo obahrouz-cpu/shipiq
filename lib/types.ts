@@ -78,6 +78,16 @@ export interface Order {
   profiles?: Pick<Profile, 'full_name' | 'email'>
 }
 
+export interface WishlistItem {
+  id: string
+  user_id: string
+  url: string
+  description?: string
+  photo_url?: string
+  notes?: string
+  created_at: string
+}
+
 export interface Transaction {
   id: string
   user_id: string
