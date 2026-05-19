@@ -623,7 +623,7 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
     // Fire-and-forget Wave sync
     if (orderCustomerProfile) {
       setWaveSyncStatus('syncing')
-      fetch('/api/wave/sync', {
+      fetch('/api/accounting/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1049,7 +1049,7 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
                     onClick={() => {
                       if (!orderCustomerProfile) return
                       setWaveSyncStatus('syncing')
-                      fetch('/api/wave/sync', {
+                      fetch('/api/accounting/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

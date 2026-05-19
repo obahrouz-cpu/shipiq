@@ -135,10 +135,10 @@ export default function AdminSettings() {
   const [feeSaved,      setFeeSaved]      = useState(false)
   const [fxSaving,      setFxSaving]      = useState(false)
   const [fxSaved,       setFxSaved]       = useState(false)
-  const [waveSaving,    setWaveSaving]    = useState(false)
-  const [waveSaved,     setWaveSaved]     = useState(false)
-  const [waveTestLoading, setWaveTestLoading] = useState(false)
-  const [waveTestResult,  setWaveTestResult]  = useState<{ ok: boolean; msg: string } | null>(null)
+  const [acctSaving,     setAcctSaving]     = useState(false)
+  const [acctSaved,      setAcctSaved]      = useState(false)
+  const [acctTestLoading, setAcctTestLoading] = useState(false)
+  const [acctTestResult,  setAcctTestResult]  = useState<{ ok: boolean; msg: string } | null>(null)
 
   useEffect(() => {
     loadSettings().then(s => { setSettings(s); setLoaded(true) })
@@ -320,74 +320,129 @@ export default function AdminSettings() {
         />
       </Section>
 
-      {/* ── SECTION 5: Wave Accounting ── */}
-      <Section title="Wave Accounting Integration">
-        <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 14, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
-          When enabled, charging a customer automatically creates a paid invoice in Wave. Get your credentials from{' '}
-          <a href="https://developer.waveapps.com/hc/en-us/articles/360019762711" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)' }}>Wave Developer Settings</a>.
+      {/* ── SECTION 5: Accounting Integration ── */}
+      <Section title="Accounting Integration">
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 16, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          When a customer is charged, ShipIQ can automatically create a paid invoice in your accounting software.
+          Save your credentials first, then use Test Connection to verify.
         </div>
-        <Field label="Enable Wave Sync">
-          <Toggle
-            checked={settings.wave_enabled !== 'false'}
-            onChange={v => set('wave_enabled', v ? 'true' : 'false')}
-            label="Automatically create invoices in Wave after charging"
-          />
+
+        {/* Provider selector */}
+        <Field label="Accounting Provider">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {([
+              { id: 'none', label: 'None — no automatic sync' },
+              { id: 'wave', label: 'Wave Accounting' },
+              { id: 'zoho', label: 'Zoho Books' },
+            ] as { id: string; label: string }[]).map(opt => (
+              <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="accounting_provider"
+                  value={opt.id}
+                  checked={(settings.accounting_provider ?? 'none') === opt.id}
+                  onChange={() => { set('accounting_provider', opt.id); setAcctTestResult(null) }}
+                  style={{ accentColor: 'var(--gold)', width: 15, height: 15 }}
+                />
+                <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{opt.label}</span>
+              </label>
+            ))}
+          </div>
         </Field>
-        <Field label="Wave Access Token" hint="Full Access token from Wave → Settings → Developer → Tokens">
-          <input
-            style={inputStyle}
-            type="password"
-            placeholder="Full Access token..."
-            value={settings.wave_access_token ?? ''}
-            onChange={e => set('wave_access_token', e.target.value)}
-          />
-        </Field>
-        <Field label="Wave Business ID" hint="Found in the Wave URL: app.waveapps.com/businesses/{ID}/...">
-          <input
-            style={inputStyle}
-            placeholder="QnVzaW5lc3M6..."
-            value={settings.wave_business_id ?? ''}
-            onChange={e => set('wave_business_id', e.target.value)}
-          />
-        </Field>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+
+        {/* Wave credentials */}
+        {(settings.accounting_provider ?? 'none') === 'wave' && (
+          <>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 12 }}>
+              Get your credentials from Wave → Settings → Developer → Tokens.
+              The Business ID is in the URL: <code style={{ color: 'var(--gold)' }}>app.waveapps.com/businesses/{'<ID>'}/...</code>
+            </div>
+            <Field label="Wave Access Token">
+              <input
+                style={inputStyle}
+                type="password"
+                placeholder="Full Access token..."
+                value={settings.wave_access_token ?? ''}
+                onChange={e => set('wave_access_token', e.target.value)}
+              />
+            </Field>
+            <Field label="Wave Business ID">
+              <input
+                style={inputStyle}
+                placeholder="QnVzaW5lc3M6..."
+                value={settings.wave_business_id ?? ''}
+                onChange={e => set('wave_business_id', e.target.value)}
+              />
+            </Field>
+          </>
+        )}
+
+        {/* Zoho credentials */}
+        {(settings.accounting_provider ?? 'none') === 'zoho' && (
+          <>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 12 }}>
+              Get credentials from Zoho Books → Settings → Developer Space → Self Client.
+              The Organization ID is under Settings → Organization → Organization Profile.
+            </div>
+            <Field label="Zoho Access Token">
+              <input
+                style={inputStyle}
+                type="password"
+                placeholder="1000.xxxxx..."
+                value={settings.zoho_access_token ?? ''}
+                onChange={e => set('zoho_access_token', e.target.value)}
+              />
+            </Field>
+            <Field label="Zoho Organization ID">
+              <input
+                style={inputStyle}
+                placeholder="123456789"
+                value={settings.zoho_org_id ?? ''}
+                onChange={e => set('zoho_org_id', e.target.value)}
+              />
+            </Field>
+          </>
+        )}
+
+        {/* Save + test */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
           <SaveBtn
-            loading={waveSaving}
-            saved={waveSaved}
-            onClick={() => save(['wave_enabled', 'wave_access_token', 'wave_business_id'], setWaveSaving, setWaveSaved)}
+            loading={acctSaving}
+            saved={acctSaved}
+            onClick={() => save(
+              ['accounting_provider', 'wave_access_token', 'wave_business_id', 'zoho_access_token', 'zoho_org_id'],
+              setAcctSaving, setAcctSaved
+            )}
           />
-          <button
-            onClick={async () => {
-              setWaveTestLoading(true)
-              setWaveTestResult(null)
-              try {
-                const res = await fetch('/api/wave')
-                const data = await res.json()
-                if (data.ok) {
-                  const names = data.businesses?.map((b: { name: string }) => b.name).join(', ') ?? ''
-                  setWaveTestResult({ ok: true, msg: `Connected · ${names}` })
-                } else {
-                  setWaveTestResult({ ok: false, msg: data.error ?? 'Connection failed' })
+          {(settings.accounting_provider === 'wave' || settings.accounting_provider === 'zoho') && (
+            <button
+              onClick={async () => {
+                setAcctTestLoading(true)
+                setAcctTestResult(null)
+                try {
+                  const res = await fetch(`/api/accounting/test?provider=${settings.accounting_provider}`)
+                  const data = await res.json()
+                  setAcctTestResult({ ok: data.ok, msg: data.msg ?? (data.ok ? 'Connected' : 'Failed') })
+                } catch (e) {
+                  setAcctTestResult({ ok: false, msg: String(e) })
                 }
-              } catch (e) {
-                setWaveTestResult({ ok: false, msg: String(e) })
-              }
-              setWaveTestLoading(false)
-            }}
-            disabled={waveTestLoading}
-            style={{
-              padding: '9px 20px', fontSize: 13, fontWeight: 700,
-              background: 'var(--surface)', color: 'var(--text)',
-              border: '1px solid var(--border)', borderRadius: 8,
-              cursor: waveTestLoading ? 'not-allowed' : 'pointer',
-              opacity: waveTestLoading ? 0.7 : 1,
-            }}
-          >
-            {waveTestLoading ? 'Testing...' : '🔌 Test Connection'}
-          </button>
-          {waveTestResult && (
-            <span style={{ fontSize: 13, color: waveTestResult.ok ? '#16a34a' : '#ef4444', fontWeight: 600 }}>
-              {waveTestResult.ok ? '✅' : '❌'} {waveTestResult.msg}
+                setAcctTestLoading(false)
+              }}
+              disabled={acctTestLoading}
+              style={{
+                padding: '9px 20px', fontSize: 13, fontWeight: 700,
+                background: 'var(--surface)', color: 'var(--text)',
+                border: '1px solid var(--border)', borderRadius: 8,
+                cursor: acctTestLoading ? 'not-allowed' : 'pointer',
+                opacity: acctTestLoading ? 0.7 : 1,
+              }}
+            >
+              {acctTestLoading ? 'Testing...' : '🔌 Test Connection'}
+            </button>
+          )}
+          {acctTestResult && (
+            <span style={{ fontSize: 13, color: acctTestResult.ok ? '#16a34a' : '#ef4444', fontWeight: 600 }}>
+              {acctTestResult.ok ? '✅' : '❌'} {acctTestResult.msg}
             </span>
           )}
         </div>
