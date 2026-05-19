@@ -8,9 +8,10 @@ import {
   getCustomers, getUserTransactions, createOrder,
   updateOrder, topUpBalance, deductBalance, signOut,
   getTierSettings, getWishlist, addToWishlist, removeFromWishlist,
+  getUserDeliveryRequests, getAdminDeliveryRequests,
 } from '@/lib/api'
 import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
-import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem } from '@/lib/types'
+import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem, DeliveryRequest } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
@@ -30,6 +31,8 @@ import AdminMobileAccount from './components/AdminMobileAccount'
 import ShippingCalculator from './components/ShippingCalculator'
 import AdminSettings from './components/AdminSettings'
 import WishlistPage from './components/WishlistPage'
+import DeliveryRequestModal from './components/DeliveryRequestModal'
+import AdminDeliveries from './components/AdminDeliveries'
 import type { TierSettings } from '@/lib/types'
 
 // ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
@@ -1302,6 +1305,9 @@ export default function Dashboard() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
   const [bulkStatus, setBulkStatus] = useState('')
   const [bulkLoading, setBulkLoading] = useState(false)
+  // Delivery
+  const [deliveryRequests, setDeliveryRequests] = useState<DeliveryRequest[]>([])
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false)
 
   const toast = useCallback((message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
@@ -1317,11 +1323,11 @@ export default function Dashboard() {
     setProfile(prof)
     if (prof.language) setLanguage(prof.language)
     if (prof.role === 'admin') {
-      const [allOrders, allUsers] = await Promise.all([getAdminOrders(), getCustomers()])
-      setOrders(allOrders); setUsers(allUsers)
+      const [allOrders, allUsers, delivReqs] = await Promise.all([getAdminOrders(), getCustomers(), getAdminDeliveryRequests()])
+      setOrders(allOrders); setUsers(allUsers); setDeliveryRequests(delivReqs)
     } else if (prof.role === 'customer') {
-      const [myOrders, txns, wl] = await Promise.all([getUserOrders(session.user.id), getUserTransactions(session.user.id), getWishlist(session.user.id)])
-      setOrders(myOrders); setTransactions(txns); setWishlist(wl)
+      const [myOrders, txns, wl, delivReqs] = await Promise.all([getUserOrders(session.user.id), getUserTransactions(session.user.id), getWishlist(session.user.id), getUserDeliveryRequests(session.user.id)])
+      setOrders(myOrders); setTransactions(txns); setWishlist(wl); setDeliveryRequests(delivReqs)
     }
     // agents: AgentDashboard fetches its own data
     if (prof.role !== 'agent') getTierSettings().then(setTierSettings)
@@ -1450,12 +1456,16 @@ export default function Dashboard() {
 
   if (isAgent && profile) return <AgentDashboard profile={profile} onSignOut={logout} />
 
+  const pendingDeliveryCount = deliveryRequests.filter(d => d.status === 'pending').length
+  const activeDeliveryCount  = deliveryRequests.filter(d => d.status === 'out_for_delivery').length
+
   const navItems: NavItem[] = isAdmin
     ? [
-        { id: 'admin-orders',    icon: '📋', label: t('nav', 'adminOrders'), badge: pendingCount },
-        { id: 'admin-analytics', icon: '📊', label: 'Analytics' },
-        { id: 'admin-customers', icon: '👥', label: t('nav', 'customers') },
-        { id: 'admin-settings',  icon: '⚙️', label: 'Settings' },
+        { id: 'admin-orders',     icon: '📋', label: t('nav', 'adminOrders'), badge: pendingCount },
+        { id: 'admin-deliveries', icon: '🚚', label: 'Deliveries', badge: pendingDeliveryCount || undefined },
+        { id: 'admin-analytics',  icon: '📊', label: 'Analytics' },
+        { id: 'admin-customers',  icon: '👥', label: t('nav', 'customers') },
+        { id: 'admin-settings',   icon: '⚙️', label: 'Settings' },
       ]
     : [
         { id: 'dashboard',  icon: '⊞',  label: t('nav', 'dashboard') },
@@ -1464,20 +1474,23 @@ export default function Dashboard() {
         { id: 'wishlist',   icon: '❤️', label: 'Wishlist', badge: wishlist.length || undefined },
         { id: 'orders',     icon: '📦', label: t('nav', 'orders'), badge: calculatedCount },
         { id: 'balance',    icon: '💳', label: t('nav', 'balance') },
+        { id: 'deliveries', icon: '🚚', label: 'Deliveries', badge: activeDeliveryCount || undefined },
       ]
 
   const pageTitle: Record<string, string> = {
-    dashboard:         t('nav', 'dashboard'),
-    shop:              t('nav', 'shop'),
-    calculator:        '🧮 Calculator',
-    wishlist:          '❤️ Wishlist',
-    orders:            t('nav', 'orders'),
-    balance:           t('nav', 'balance'),
-    account:           isAdmin ? '🔧 Admin Account' : '👤 Account',
-    'admin-orders':    t('nav', 'adminOrders'),
-    'admin-analytics': '📊 Analytics',
-    'admin-customers': t('nav', 'customers'),
-    'admin-settings':  '⚙️ Settings',
+    dashboard:          t('nav', 'dashboard'),
+    shop:               t('nav', 'shop'),
+    calculator:         '🧮 Calculator',
+    wishlist:           '❤️ Wishlist',
+    orders:             t('nav', 'orders'),
+    balance:            t('nav', 'balance'),
+    deliveries:         '🚚 My Deliveries',
+    account:            isAdmin ? '🔧 Admin Account' : '👤 Account',
+    'admin-orders':     t('nav', 'adminOrders'),
+    'admin-deliveries': '🚚 Deliveries',
+    'admin-analytics':  '📊 Analytics',
+    'admin-customers':  t('nav', 'customers'),
+    'admin-settings':   '⚙️ Settings',
   }
 
   return (
@@ -1577,6 +1590,35 @@ export default function Dashboard() {
                   <span style={{ color: 'var(--gold)', fontSize: 18 }}>›</span>
                 </div>
               )}
+              {!isAdmin && (() => {
+                const pendingDelivReqs = deliveryRequests.filter(d => !['completed','cancelled'].includes(d.status))
+                const unscheduled = orders.filter(o =>
+                  o.status === 'arrived' &&
+                  !pendingDelivReqs.some(d => d.order_ids.includes(o.id))
+                )
+                if (unscheduled.length === 0) return null
+                return (
+                  <div
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px',
+                      background: 'rgba(34,197,94,0.07)', border: '1.5px dashed rgba(34,197,94,0.35)',
+                      borderRadius: 12, marginBottom: 14, cursor: 'pointer', transition: 'background 0.15s',
+                    }}
+                    onClick={() => setShowDeliveryModal(true)}
+                  >
+                    <span style={{ fontSize: 26, flexShrink: 0 }}>📦</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>
+                        {unscheduled.length} order{unscheduled.length > 1 ? 's' : ''} arrived in Iraq!
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
+                        Tap to schedule pickup or home delivery · اضغط لجدولة التوصيل
+                      </div>
+                    </div>
+                    <span style={{ color: 'var(--green)', fontSize: 20, flexShrink: 0 }}>›</span>
+                  </div>
+                )
+              })()}
               {calculatedCount > 0 && (
                 <div className={styles.alertBox}>
                   <div>
@@ -2001,6 +2043,100 @@ export default function Dashboard() {
             </div>
           )}
 
+          {page === 'deliveries' && !isAdmin && profile && (
+            <div className="fade-up">
+              <div className={styles.pageHeader}>
+                <div>
+                  <div className={styles.pageHeading}>🚚 My Deliveries · توصيلاتي</div>
+                  <div className={styles.pageSub}>Track your delivery requests from warehouse to door</div>
+                </div>
+                {(() => {
+                  const pendingDelivReqs = deliveryRequests.filter(d => !['completed','cancelled'].includes(d.status))
+                  const hasUnscheduled = orders.some(o => o.status === 'arrived' && !pendingDelivReqs.some(d => d.order_ids.includes(o.id)))
+                  return hasUnscheduled ? (
+                    <button className={styles.btnPrimary} onClick={() => setShowDeliveryModal(true)}>📦 New Request</button>
+                  ) : null
+                })()}
+              </div>
+              {deliveryRequests.length === 0 ? (
+                <div className={styles.empty}>
+                  <div className={styles.emptyIcon}>🚚</div>
+                  <div className={styles.emptyTitle}>No delivery requests yet</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>When your orders arrive, come here to schedule delivery</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {deliveryRequests.map(req => {
+                    const statusCfg = ({
+                      pending:          { label: 'Pending',          color: 'var(--orange)', icon: '⏳' },
+                      scheduled:        { label: 'Scheduled',        color: 'var(--blue)',   icon: '📅' },
+                      out_for_delivery: { label: 'Out for Delivery', color: 'var(--gold)',   icon: '🚗' },
+                      completed:        { label: 'Delivered',        color: 'var(--green)',  icon: '✅' },
+                      cancelled:        { label: 'Cancelled',        color: '#ef4444',       icon: '✕'  },
+                    } as Record<string, { label: string; color: string; icon: string }>)[req.status] ?? { label: req.status, color: 'var(--text-dim)', icon: '?' }
+                    const typeLabel = ({ pickup: '🏢 Pickup from office', home_erbil: '🚗 Home delivery — Erbil', home_baghdad: '🚗 Home delivery — Baghdad' } as Record<string, string>)[req.delivery_preference] ?? req.delivery_preference
+                    return (
+                      <div key={req.id} className={styles.card} style={{ padding: '16px 20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'monospace' }}>{req.id}</div>
+                          <span style={{
+                            fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20,
+                            background: `color-mix(in srgb, ${statusCfg.color} 12%, transparent)`,
+                            color: statusCfg.color, border: `1px solid color-mix(in srgb, ${statusCfg.color} 35%, transparent)`,
+                          }}>
+                            {statusCfg.icon} {statusCfg.label}
+                          </span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 10 }}>
+                          <div>
+                            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3 }}>Orders</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+                              {req.order_ids.map((id, i) => <div key={i} style={{ fontFamily: 'monospace' }}>{id}</div>)}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3 }}>Type</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{typeLabel}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3 }}>Fee</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: req.delivery_fee > 0 ? 'var(--gold)' : 'var(--green)' }}>
+                              {req.delivery_fee > 0 ? `${req.delivery_fee.toLocaleString()} IQD` : 'Free'}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3 }}>Requested</div>
+                            <div style={{ fontSize: 13, color: 'var(--text)' }}>{req.created_at?.split('T')[0]}</div>
+                          </div>
+                        </div>
+                        {req.delivery_address && (
+                          <div style={{ padding: '8px 12px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                            📍 {req.delivery_address}
+                          </div>
+                        )}
+                        {req.delivery_notes && (
+                          <div style={{ marginTop: 8, padding: '7px 12px', background: 'rgba(91,155,213,0.06)', border: '1px solid rgba(91,155,213,0.2)', borderRadius: 7, fontSize: 12, color: 'var(--text-muted)' }}>
+                            📝 {req.delivery_notes}
+                          </div>
+                        )}
+                        {req.scheduled_at && (
+                          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-dim)' }}>
+                            📅 Scheduled: {new Date(req.scheduled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
+                        )}
+                        {req.completed_at && (
+                          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>
+                            ✅ Delivered on {new Date(req.completed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {page === 'account' && profile && (
             <div className="fade-up">
               {isAdmin ? (
@@ -2029,6 +2165,12 @@ export default function Dashboard() {
           {page === 'admin-analytics' && (
             <div className="fade-up">
               <AdminAnalytics />
+            </div>
+          )}
+
+          {page === 'admin-deliveries' && isAdmin && (
+            <div className="fade-up">
+              <AdminDeliveries onToast={toast} />
             </div>
           )}
 
@@ -2107,9 +2249,10 @@ export default function Dashboard() {
       {isAdmin && (
         <nav className={styles.bottomNav}>
           {[
-            { id: 'admin-orders',    icon: '📋', label: 'Orders',    badge: pendingCount },
-            { id: 'admin-customers', icon: '👥', label: 'Customers' },
-            { id: 'admin-analytics', icon: '📊', label: 'Analytics' },
+            { id: 'admin-orders',     icon: '📋', label: 'Orders',     badge: pendingCount },
+            { id: 'admin-deliveries', icon: '🚚', label: 'Deliveries', badge: pendingDeliveryCount || undefined },
+            { id: 'admin-customers',  icon: '👥', label: 'Customers' },
+            { id: 'admin-analytics',  icon: '📊', label: 'Analytics' },
           ].map(n => (
             <button
               key={n.id}
@@ -2167,6 +2310,18 @@ export default function Dashboard() {
         </nav>
       )}
 
+      {showDeliveryModal && profile && !isAdmin && (
+        <DeliveryRequestModal
+          profile={profile}
+          arrivedOrders={orders.filter(o => {
+            if (o.status !== 'arrived') return false
+            const active = deliveryRequests.filter(d => !['completed','cancelled'].includes(d.status))
+            return !active.some(d => d.order_ids.includes(o.id))
+          })}
+          onClose={() => setShowDeliveryModal(false)}
+          onDone={() => { fetchData(); toast('Delivery request submitted! · تم إرسال طلب التوصيل') }}
+        />
+      )}
       {showNewOrder && profile && (
         <SubmitOrderModal
           userId={profile.id}

@@ -94,6 +94,24 @@ export interface WishlistItem {
   created_at: string
 }
 
+export interface DeliveryRequest {
+  id: string
+  user_id: string
+  order_ids: string[]
+  delivery_preference: string
+  delivery_city?: string
+  delivery_address?: string
+  delivery_lat?: number
+  delivery_lng?: number
+  delivery_notes?: string
+  delivery_fee: number
+  status: string
+  created_at: string
+  scheduled_at?: string
+  completed_at?: string
+  profiles?: Pick<Profile, 'full_name' | 'email' | 'phone'>
+}
+
 export interface Transaction {
   id: string
   user_id: string

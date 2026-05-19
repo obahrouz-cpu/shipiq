@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { createClient } from './supabase'
-import type { Order, OrderForm, Profile, Transaction, TierSettings, WishlistItem } from './types'
+import type { Order, OrderForm, Profile, Transaction, TierSettings, WishlistItem, DeliveryRequest } from './types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -332,4 +332,49 @@ export async function addToWishlist(
 export async function removeFromWishlist(itemId: string): Promise<void> {
   const supabase = createClient()
   await supabase.from('wishlist').delete().eq('id', itemId)
+}
+
+// ── Delivery Requests ─────────────────────────────────────────────────────────
+
+export async function createDeliveryRequest(
+  userId: string,
+  data: {
+    order_ids: string[]
+    delivery_preference: string
+    delivery_address?: string
+    delivery_notes?: string
+    delivery_fee: number
+  }
+): Promise<{ error: string | null }> {
+  const supabase = createClient()
+  const { error } = await supabase.from('delivery_requests').insert({
+    user_id: userId,
+    status: 'pending',
+    ...data,
+  })
+  return { error: error?.message ?? null }
+}
+
+export async function getUserDeliveryRequests(userId: string): Promise<DeliveryRequest[]> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('delivery_requests')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+  return data || []
+}
+
+export async function getAdminDeliveryRequests(): Promise<DeliveryRequest[]> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('delivery_requests')
+    .select('*, profiles!user_id(full_name, email, phone)')
+    .order('created_at', { ascending: false })
+  return data || []
+}
+
+export async function updateDeliveryRequest(id: string, updates: Record<string, unknown>): Promise<void> {
+  const supabase = createClient()
+  await supabase.from('delivery_requests').update(updates).eq('id', id)
 }
