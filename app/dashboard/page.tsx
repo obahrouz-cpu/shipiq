@@ -730,6 +730,29 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
                 )}
               </div>
             )}
+            {isAdmin && orderCustomerProfile && order.delivery_preference && order.delivery_preference !== 'pickup' && orderCustomerProfile.delivery_lat && (
+              <div style={{ marginTop: 16, padding: '14px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+                  📍 Customer Delivery Address
+                </div>
+                {orderCustomerProfile.delivery_address && (
+                  <div style={{ fontSize: 12, color: 'var(--text)', marginBottom: 6, lineHeight: 1.5 }}>{orderCustomerProfile.delivery_address}</div>
+                )}
+                {orderCustomerProfile.delivery_city && (
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>City: <strong style={{ color: 'var(--text)' }}>{orderCustomerProfile.delivery_city}</strong></div>
+                )}
+                {orderCustomerProfile.delivery_notes && (
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic', marginBottom: 8 }}>{orderCustomerProfile.delivery_notes}</div>
+                )}
+                <a
+                  href={`https://www.google.com/maps?q=${orderCustomerProfile.delivery_lat},${orderCustomerProfile.delivery_lng}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 12, color: 'var(--gold)', textDecoration: 'none', fontWeight: 600 }}
+                >
+                  Open in Google Maps ↗
+                </a>
+              </div>
+            )}
             {order.status === 'calculated' && !isAdmin && (
               <button
                 className={styles.btnPrimary}
@@ -1283,6 +1306,20 @@ export default function Dashboard() {
                   tiers={tierSettings.length > 0 ? tierSettings : FALLBACK_TIERS}
                   language={language as 'en' | 'ar'}
                 />
+              )}
+              {!isAdmin && profile && !profile.delivery_lat && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                  background: 'rgba(201,168,76,0.06)', border: '1px dashed rgba(201,168,76,0.3)',
+                  borderRadius: 10, marginBottom: 14, cursor: 'pointer',
+                }} onClick={() => handlePageChange('account')}>
+                  <span style={{ fontSize: 22, flexShrink: 0 }}>📍</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>Set your delivery address</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>Required for home delivery orders · اضغط لإضافة عنوانك</div>
+                  </div>
+                  <span style={{ color: 'var(--gold)', fontSize: 18 }}>›</span>
+                </div>
               )}
               {calculatedCount > 0 && (
                 <div className={styles.alertBox}>

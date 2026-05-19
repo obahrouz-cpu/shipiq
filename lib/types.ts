@@ -27,6 +27,11 @@ export interface Profile {
   tier?: string
   total_spent?: number
   assigned_country?: string
+  delivery_lat?: number
+  delivery_lng?: number
+  delivery_address?: string
+  delivery_city?: string
+  delivery_notes?: string
   created_at: string
 }
 

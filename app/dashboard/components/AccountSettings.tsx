@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { updateLanguage, getTierSettings } from '@/lib/api'
 import type { Profile, Order, TierSettings } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
+import DeliveryAddress from './DeliveryAddress'
 import styles from './AccountSettings.module.css'
 
 // ── Phone helpers (same rules as signup) ──────────────────────────────────────
@@ -77,6 +78,7 @@ export default function AccountSettings({ profile, orders, mode, onClose, onProf
   const isPageMode = mode === 'page'
   const supabase = useMemo(() => createClient(), [])
   const { language, t, setLanguage: applyLang } = useLanguage()
+  const [localProfile, setLocalProfile] = useState(profile)
 
   // ── Profile: name ──────────────────────────────────────────────────────────
   const [editingName, setEditingName]   = useState(false)
@@ -469,6 +471,21 @@ export default function AccountSettings({ profile, orders, mode, onClose, onProf
               </div>
             </div>
           </div>
+
+          {/* ── 2c. DELIVERY ADDRESS (customers only) ── */}
+          {profile.role === 'customer' && (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>Delivery Address</div>
+              <DeliveryAddress
+                profile={localProfile}
+                onSaved={updates => {
+                  const merged = { ...localProfile, ...updates }
+                  setLocalProfile(merged)
+                  onProfileUpdate(updates)
+                }}
+              />
+            </div>
+          )}
 
           {/* ── 3. SECURITY ── */}
           <div className={styles.section}>
