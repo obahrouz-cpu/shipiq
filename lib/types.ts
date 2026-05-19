@@ -77,6 +77,9 @@ export interface Order {
   total_charged?: number
   is_charged?: boolean
   charged_at?: string
+  wave_invoice_id?: string
+  wave_synced_at?: string
+  wave_sync_status?: string
   created_at: string
   profiles?: Pick<Profile, 'full_name' | 'email'>
 }

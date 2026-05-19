@@ -135,6 +135,10 @@ export default function AdminSettings() {
   const [feeSaved,      setFeeSaved]      = useState(false)
   const [fxSaving,      setFxSaving]      = useState(false)
   const [fxSaved,       setFxSaved]       = useState(false)
+  const [waveSaving,    setWaveSaving]    = useState(false)
+  const [waveSaved,     setWaveSaved]     = useState(false)
+  const [waveTestLoading, setWaveTestLoading] = useState(false)
+  const [waveTestResult,  setWaveTestResult]  = useState<{ ok: boolean; msg: string } | null>(null)
 
   useEffect(() => {
     loadSettings().then(s => { setSettings(s); setLoaded(true) })
@@ -316,7 +320,80 @@ export default function AdminSettings() {
         />
       </Section>
 
-      {/* ── SECTION 5: Exchange Rate ── */}
+      {/* ── SECTION 5: Wave Accounting ── */}
+      <Section title="Wave Accounting Integration">
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 14, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          When enabled, charging a customer automatically creates a paid invoice in Wave. Get your credentials from{' '}
+          <a href="https://developer.waveapps.com/hc/en-us/articles/360019762711" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)' }}>Wave Developer Settings</a>.
+        </div>
+        <Field label="Enable Wave Sync">
+          <Toggle
+            checked={settings.wave_enabled !== 'false'}
+            onChange={v => set('wave_enabled', v ? 'true' : 'false')}
+            label="Automatically create invoices in Wave after charging"
+          />
+        </Field>
+        <Field label="Wave Access Token" hint="Full Access token from Wave → Settings → Developer → Tokens">
+          <input
+            style={inputStyle}
+            type="password"
+            placeholder="Full Access token..."
+            value={settings.wave_access_token ?? ''}
+            onChange={e => set('wave_access_token', e.target.value)}
+          />
+        </Field>
+        <Field label="Wave Business ID" hint="Found in the Wave URL: app.waveapps.com/businesses/{ID}/...">
+          <input
+            style={inputStyle}
+            placeholder="QnVzaW5lc3M6..."
+            value={settings.wave_business_id ?? ''}
+            onChange={e => set('wave_business_id', e.target.value)}
+          />
+        </Field>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <SaveBtn
+            loading={waveSaving}
+            saved={waveSaved}
+            onClick={() => save(['wave_enabled', 'wave_access_token', 'wave_business_id'], setWaveSaving, setWaveSaved)}
+          />
+          <button
+            onClick={async () => {
+              setWaveTestLoading(true)
+              setWaveTestResult(null)
+              try {
+                const res = await fetch('/api/wave')
+                const data = await res.json()
+                if (data.ok) {
+                  const names = data.businesses?.map((b: { name: string }) => b.name).join(', ') ?? ''
+                  setWaveTestResult({ ok: true, msg: `Connected · ${names}` })
+                } else {
+                  setWaveTestResult({ ok: false, msg: data.error ?? 'Connection failed' })
+                }
+              } catch (e) {
+                setWaveTestResult({ ok: false, msg: String(e) })
+              }
+              setWaveTestLoading(false)
+            }}
+            disabled={waveTestLoading}
+            style={{
+              padding: '9px 20px', fontSize: 13, fontWeight: 700,
+              background: 'var(--surface)', color: 'var(--text)',
+              border: '1px solid var(--border)', borderRadius: 8,
+              cursor: waveTestLoading ? 'not-allowed' : 'pointer',
+              opacity: waveTestLoading ? 0.7 : 1,
+            }}
+          >
+            {waveTestLoading ? 'Testing...' : '🔌 Test Connection'}
+          </button>
+          {waveTestResult && (
+            <span style={{ fontSize: 13, color: waveTestResult.ok ? '#16a34a' : '#ef4444', fontWeight: 600 }}>
+              {waveTestResult.ok ? '✅' : '❌'} {waveTestResult.msg}
+            </span>
+          )}
+        </div>
+      </Section>
+
+      {/* ── SECTION 6: Exchange Rate ── */}
       <Section title="IQD Exchange Rate">
         <Field label="Rate Mode">
           <Toggle

@@ -532,6 +532,9 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
   const [chargeError, setChargeError] = useState('')
   const [charged, setCharged] = useState(order.is_charged ?? false)
   const [chargedAt, setChargedAt] = useState(order.charged_at ?? '')
+  const [waveSyncStatus, setWaveSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'failed'>(
+    order.wave_sync_status === 'synced' ? 'synced' : order.wave_sync_status === 'failed' ? 'failed' : 'idle'
+  )
 
   const s = STATUS_CONFIG[order.status]
 
@@ -616,6 +619,29 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
     setChargeLoading(false)
     getProfile(order.user_id).then(setOrderCustomerProfile)
     onRefresh()
+
+    // Fire-and-forget Wave sync
+    if (orderCustomerProfile) {
+      setWaveSyncStatus('syncing')
+      fetch('/api/wave/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: order.id,
+          customer_name: orderCustomerProfile.full_name,
+          customer_email: orderCustomerProfile.email,
+          description: `ShipIQ Order ${order.id}: ${order.description}`,
+          shipping_iqd: billShipping,
+          service_fee_iqd: parseInt(billServiceFee) || 0,
+          customs_fee_iqd: parseInt(billCustomsFee) || 0,
+          delivery_fee_iqd: parseInt(billDeliveryFee) || 0,
+          total_iqd: total,
+        }),
+      })
+        .then(r => r.json())
+        .then(data => setWaveSyncStatus(data.ok ? 'synced' : 'failed'))
+        .catch(() => setWaveSyncStatus('failed'))
+    }
   }
 
   return (
@@ -1003,6 +1029,55 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
                   {chargeLoading ? <Spinner /> : `💳 Charge Customer ${billTotal.toLocaleString()} IQD`}
                 </button>
               </>
+            )}
+
+            {/* Wave sync status */}
+            {waveSyncStatus !== 'idle' && (
+              <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                background: waveSyncStatus === 'synced' ? 'rgba(22,163,74,0.08)' : waveSyncStatus === 'failed' ? 'rgba(239,68,68,0.08)' : 'rgba(201,168,76,0.06)',
+                border: `1px solid ${waveSyncStatus === 'synced' ? 'rgba(22,163,74,0.25)' : waveSyncStatus === 'failed' ? 'rgba(239,68,68,0.2)' : 'rgba(201,168,76,0.2)'}`,
+                color: waveSyncStatus === 'synced' ? '#16a34a' : waveSyncStatus === 'failed' ? '#ef4444' : 'var(--gold)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <span>
+                  {waveSyncStatus === 'syncing' && '⏳ Syncing to Wave...'}
+                  {waveSyncStatus === 'synced'  && '✅ Synced to Wave'}
+                  {waveSyncStatus === 'failed'  && '⚠️ Wave sync failed (check Settings → Wave)'}
+                </span>
+                {waveSyncStatus === 'failed' && charged && (
+                  <button
+                    onClick={() => {
+                      if (!orderCustomerProfile) return
+                      setWaveSyncStatus('syncing')
+                      fetch('/api/wave/sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          order_id: order.id,
+                          customer_name: orderCustomerProfile.full_name,
+                          customer_email: orderCustomerProfile.email,
+                          description: `ShipIQ Order ${order.id}: ${order.description}`,
+                          shipping_iqd: billShipping,
+                          service_fee_iqd: parseInt(billServiceFee) || 0,
+                          customs_fee_iqd: parseInt(billCustomsFee) || 0,
+                          delivery_fee_iqd: parseInt(billDeliveryFee) || 0,
+                          total_iqd: billTotal,
+                        }),
+                      })
+                        .then(r => r.json())
+                        .then(data => setWaveSyncStatus(data.ok ? 'synced' : 'failed'))
+                        .catch(() => setWaveSyncStatus('failed'))
+                    }}
+                    style={{
+                      fontSize: 11, padding: '3px 8px', borderRadius: 5, cursor: 'pointer',
+                      background: 'rgba(239,68,68,0.12)', color: '#ef4444',
+                      border: '1px solid rgba(239,68,68,0.25)', fontWeight: 700,
+                    }}
+                  >
+                    Retry Sync
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
