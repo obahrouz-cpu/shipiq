@@ -56,6 +56,12 @@ export interface Order {
   status: OrderStatus
   shipping_price?: number
   shipping_currency?: string
+  service_fee?: number
+  customs_fee?: number
+  delivery_fee?: number
+  total_cost?: number
+  delivery_preference?: string
+  delivery_city?: string
   weight?: string
   reject_reason?: string
   country_origin?: string
@@ -101,6 +107,8 @@ export interface OrderForm {
   itemPriceCurrency: string
   note: string
   urgency: boolean
+  deliveryPreference: string
+  deliveryCity: string
 }
 
 export interface AuthForm {

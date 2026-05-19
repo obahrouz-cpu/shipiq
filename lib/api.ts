@@ -141,6 +141,8 @@ export async function createOrder(
     urgency: form.urgency,
     photo_url: photoUrl ?? autoImageUrl ?? null,
     country_origin: detectCountryFromUrl(form.url),
+    delivery_preference: form.deliveryPreference || 'pickup',
+    delivery_city: form.deliveryCity || null,
     status: 'pending',
   })
 

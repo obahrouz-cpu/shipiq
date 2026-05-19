@@ -184,12 +184,20 @@ const NEXT_LABEL: Record<string, string> = {
   arrived:   'Mark as Delivered 📬',
 }
 
+const DELIVERY_OPTIONS_MODAL = [
+  { id: 'pickup',       label: 'Pickup at office',        fee: 0    },
+  { id: 'home_erbil',   label: 'Home delivery — Erbil',   fee: 3000 },
+  { id: 'home_baghdad', label: 'Home delivery — Baghdad', fee: 5000 },
+  { id: 'other',        label: 'Other city — contact us', fee: null },
+] as const
+
 // ── SubmitOrderModal ──────────────────────────────────────────────────────────
 
 function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose: () => void; onDone: () => void }) {
   const [form, setForm] = useState<OrderForm>({
     url: '', description: '', category: 'Electronics', qty: 1,
     itemPrice: '', itemPriceCurrency: 'USD', note: '', urgency: false,
+    deliveryPreference: 'pickup', deliveryCity: '',
   })
   const [photo, setPhoto] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
@@ -281,6 +289,9 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
     : null
   const activeEstimate = shippingEstimate || trendyolEstimate || boutiqaatEstimate
 
+  const deliveryOptModal = DELIVERY_OPTIONS_MODAL.find(d => d.id === form.deliveryPreference)
+  const estimateDeliveryFeeIqd = deliveryOptModal?.fee ?? 0
+
   return (
     <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
       <div className={styles.modal}>
@@ -336,12 +347,31 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
         )}
         {activeEstimate && !estimateLoading && (
           <div style={{ padding: '14px 16px', background: 'rgba(201,168,76,0.06)', border: '1px dashed rgba(201,168,76,0.35)', borderRadius: 10, marginTop: -12, marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>≈ Shipping Estimate · تقدير الشحن</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>≈ Cost Estimate · تقدير التكلفة</span>
               <span style={{ fontSize: 10, color: 'var(--gold-dim)', background: 'rgba(201,168,76,0.12)', padding: '2px 8px', borderRadius: 20, border: '1px solid rgba(201,168,76,0.2)', fontWeight: 600, letterSpacing: '0.5px' }}>APPROXIMATE</span>
             </div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', marginBottom: 6 }}>
-              {activeEstimate.min.toLocaleString()} – {activeEstimate.max.toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--gold-dim)' }}>IQD</span>
+            {form.itemPrice && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid rgba(201,168,76,0.12)' }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Item Price · سعر المنتج</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{form.itemPrice} {form.itemPriceCurrency}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Shipping · الشحن</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)' }}>
+                {activeEstimate.min.toLocaleString()} – {activeEstimate.max.toLocaleString()} IQD
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Iraq Delivery · التوصيل</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+                {deliveryOptModal?.fee === null ? 'Contact us' : deliveryOptModal?.fee === 0 ? 'Free' : `${(estimateDeliveryFeeIqd).toLocaleString()} IQD`}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 6, marginBottom: 8, borderTop: '1px solid rgba(201,168,76,0.12)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Service Fee · رسوم الخدمة</span>
+              <span style={{ fontSize: 11, color: 'var(--text-dim)', fontStyle: 'italic' }}>TBD</span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
               {activeEstimate.kg} kg {trendyolEstimate ? 'estimated' : 'billable'} weight{form.qty > 1 ? ` × ${form.qty} items` : ''} · Final price confirmed by ShipIQ
@@ -393,6 +423,41 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
           </div>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setPhoto(e.target.files?.[0] || null)} />
         </div>
+        <div className={styles.formGroup}>
+          <label className={styles.label}>Delivery in Iraq · التوصيل في العراق</label>
+          <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+            {DELIVERY_OPTIONS_MODAL.map((opt, i) => (
+              <label
+                key={opt.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', cursor: 'pointer',
+                  borderBottom: i < DELIVERY_OPTIONS_MODAL.length - 1 ? '1px solid var(--border)' : 'none',
+                  background: form.deliveryPreference === opt.id ? 'rgba(201,168,76,0.06)' : 'transparent',
+                }}
+              >
+                <input
+                  type="radio" name="deliveryPref" value={opt.id}
+                  checked={form.deliveryPreference === opt.id}
+                  onChange={() => handle('deliveryPreference', opt.id)}
+                  style={{ accentColor: 'var(--gold)', width: 15, height: 15, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>{opt.label}</span>
+                <span style={{ fontSize: 11, color: opt.fee === 0 ? 'var(--green)' : 'var(--text-dim)', marginLeft: 'auto' }}>
+                  {opt.fee === null ? 'Contact us' : opt.fee === 0 ? 'Free' : `${opt.fee.toLocaleString()} IQD`}
+                </span>
+              </label>
+            ))}
+          </div>
+          {form.deliveryPreference === 'other' && (
+            <input
+              className={styles.input}
+              style={{ marginTop: 8 }}
+              placeholder="Enter your city · اكتب مدينتك"
+              value={form.deliveryCity}
+              onChange={e => handle('deliveryCity', e.target.value)}
+            />
+          )}
+        </div>
         <div className={styles.urgencyRow} onClick={() => handle('urgency', !form.urgency)}>
           <div className={`${styles.checkbox} ${form.urgency ? styles.checked : ''}`}>{form.urgency && <span>✓</span>}</div>
           <div>
@@ -415,7 +480,10 @@ function SubmitOrderModal({ userId, onClose, onDone }: { userId: string; onClose
 
 function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { order: Order; isAdmin: boolean; adminName?: string; onClose: () => void; onRefresh: () => void }) {
   const [view, setView] = useState<'detail' | 'calculate' | 'reject'>('detail')
-  const [shipping, setShipping] = useState({ price: '', currency: 'IQD', weight: '' })
+  const autoDeliveryFee =
+    order.delivery_preference === 'home_erbil'   ? '3000' :
+    order.delivery_preference === 'home_baghdad' ? '5000' : '0'
+  const [shipping, setShipping] = useState({ price: '', currency: 'IQD', weight: '', serviceFee: '', customsFee: '', deliveryFee: autoDeliveryFee })
   const [rejectReason, setRejectReason] = useState('')
   const [loading, setLoading] = useState(false)
   const [orderCustomerProfile, setOrderCustomerProfile] = useState<Profile | null>(null)
@@ -435,12 +503,23 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
     setLoading(false); onRefresh(); onClose()
   }
 
-  const handleCalculate = () => applyUpdate({
-    status: 'calculated',
-    shipping_price: parseInt(shipping.price),
-    shipping_currency: shipping.currency,
-    weight: shipping.weight,
-  })
+  const handleCalculate = () => {
+    const shippingPrice = parseInt(shipping.price) || 0
+    const serviceFee    = parseInt(shipping.serviceFee) || 0
+    const customsFee    = parseInt(shipping.customsFee) || 0
+    const deliveryFee   = parseInt(shipping.deliveryFee) || 0
+    const totalCost     = shippingPrice + serviceFee + customsFee + deliveryFee
+    applyUpdate({
+      status: 'calculated',
+      shipping_price: shippingPrice,
+      shipping_currency: 'IQD',
+      weight: shipping.weight,
+      service_fee: serviceFee,
+      customs_fee: customsFee,
+      delivery_fee: deliveryFee,
+      total_cost: totalCost,
+    })
+  }
 
   const handleConfirm = async () => {
     if (loading) return                        // prevent double-tap
@@ -579,11 +658,33 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
               ))}
             {order.shipping_price && (
               <div className={styles.priceBox}>
-                <div className={styles.priceLabel}>Estimated Shipping Cost</div>
-                <div>
-                  <span className={styles.priceBig}>{order.shipping_price.toLocaleString()}</span>
-                  <span className={styles.priceCurrency}>{order.shipping_currency}</span>
-                </div>
+                <div className={styles.priceLabel}>{order.total_cost ? '💰 Total Cost Breakdown' : 'Estimated Shipping Cost'}</div>
+                {order.total_cost ? (
+                  <div>
+                    {(([
+                      ['Shipping',    order.shipping_price,  order.shipping_currency || 'IQD'],
+                      order.service_fee  ? ['Service Fee', order.service_fee,  'IQD'] : null,
+                      order.customs_fee  ? ['Customs/Tax', order.customs_fee,  'IQD'] : null,
+                      order.delivery_fee !== undefined ? ['Iraq Delivery', order.delivery_fee, 'IQD'] : null,
+                    ] as ([string, number, string] | null)[]).filter((r): r is [string, number, string] => r !== null).map(([k, v, c], i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginBottom: 5 }}>
+                        <span>{k}</span>
+                        <span style={{ fontWeight: 600 }}>
+                          {v === 0 ? 'Free' : `${v.toLocaleString()} ${c}`}
+                        </span>
+                      </div>
+                    )))}
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4 }}>
+                      <span className={styles.priceBig}>{order.total_cost.toLocaleString()}</span>
+                      <span className={styles.priceCurrency}> IQD</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <span className={styles.priceBig}>{order.shipping_price.toLocaleString()}</span>
+                    <span className={styles.priceCurrency}>{order.shipping_currency}</span>
+                  </div>
+                )}
               </div>
             )}
             {isAdmin && (order.agent_receipt_url || order.agent_warehouse_photo_url || order.ordered_at || order.warehoused_at) && (
@@ -646,23 +747,57 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
             <AutoCalculate url={order.url} onResult={(weight: string) => {
               setShipping(p => ({ ...p, weight }))
             }} />
+            {order.delivery_preference && order.delivery_preference !== 'pickup' && (
+              <div style={{ marginBottom: 14, padding: '8px 12px', background: 'rgba(91,155,213,0.08)', border: '1px solid rgba(91,155,213,0.2)', borderRadius: 8, fontSize: 12, color: 'var(--blue)' }}>
+                🚚 Delivery preference: <strong>{order.delivery_preference.replace('_', ' ')}</strong>
+                {order.delivery_city ? ` — ${order.delivery_city}` : ''}
+              </div>
+            )}
             <div className={styles.grid2}>
               <div className={styles.formGroup}>
-                <label className={styles.label}>Shipping Price</label>
+                <label className={styles.label}>Shipping Price (IQD)</label>
                 <input className={styles.input} type="number" placeholder="e.g. 35000" value={shipping.price} onChange={e => setShipping(p => ({ ...p, price: e.target.value }))} />
               </div>
               <div className={styles.formGroup}>
-                <label className={styles.label}>Currency</label>
-                <select className={styles.input} value={shipping.currency} onChange={e => setShipping(p => ({ ...p, currency: e.target.value }))}>
-                  <option value="IQD">IQD — دينار</option>
-                  <option value="USD">USD — دولار</option>
-                </select>
+                <label className={styles.label}>Service Fee (IQD)</label>
+                <input className={styles.input} type="number" placeholder="e.g. 5000" value={shipping.serviceFee} onChange={e => setShipping(p => ({ ...p, serviceFee: e.target.value }))} />
+              </div>
+            </div>
+            <div className={styles.grid2}>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Customs / Tax (IQD)</label>
+                <input className={styles.input} type="number" placeholder="e.g. 0" value={shipping.customsFee} onChange={e => setShipping(p => ({ ...p, customsFee: e.target.value }))} />
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Iraq Delivery Fee (IQD)</label>
+                <input className={styles.input} type="number" placeholder="0" value={shipping.deliveryFee} onChange={e => setShipping(p => ({ ...p, deliveryFee: e.target.value }))} />
               </div>
             </div>
             <div className={styles.formGroup}>
               <label className={styles.label}>Estimated Weight</label>
               <input className={styles.input} placeholder="e.g. 0.5 kg" value={shipping.weight} onChange={e => setShipping(p => ({ ...p, weight: e.target.value }))} />
             </div>
+            {shipping.price && (
+              <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Total Summary</div>
+                {[
+                  ['Shipping',     parseInt(shipping.price) || 0],
+                  ['Service Fee',  parseInt(shipping.serviceFee) || 0],
+                  ['Customs/Tax',  parseInt(shipping.customsFee) || 0],
+                  ['Iraq Delivery',parseInt(shipping.deliveryFee) || 0],
+                ].map(([k, v], i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+                    <span>{k}</span><span>{(v as number).toLocaleString()} IQD</span>
+                  </div>
+                ))}
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4, display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: 'var(--gold)' }}>
+                  <span>TOTAL</span>
+                  <span>
+                    {((parseInt(shipping.price)||0)+(parseInt(shipping.serviceFee)||0)+(parseInt(shipping.customsFee)||0)+(parseInt(shipping.deliveryFee)||0)).toLocaleString()} IQD
+                  </span>
+                </div>
+              </div>
+            )}
             <button className={styles.btnPrimary} style={{ width: '100%' }} onClick={handleCalculate} disabled={loading || !shipping.price}>
               {loading ? <Spinner /> : 'Save & Notify Customer'}
             </button>
@@ -761,8 +896,9 @@ function DeductBalanceModal({
   onClose: () => void
   onDone: () => void
 }) {
-  const [amount, setAmount] = useState(order.shipping_price?.toString() || '')
-  const [reason, setReason] = useState(`Shipping fee for ${order.id}`)
+  const defaultAmount = order.total_cost || order.shipping_price
+  const [amount, setAmount] = useState(defaultAmount?.toString() || '')
+  const [reason, setReason] = useState(order.total_cost ? `Full order cost for ${order.id}` : `Shipping fee for ${order.id}`)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -798,9 +934,24 @@ function DeductBalanceModal({
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{customerProfile.full_name}</div>
         </div>
-        {order.shipping_price && (
-          <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--surface2)', borderRadius: 8, fontSize: 13, color: 'var(--text-muted)' }}>
-            Shipping price: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{order.shipping_price.toLocaleString()} {order.shipping_currency}</span>
+        {(order.shipping_price || order.total_cost) && (
+          <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}>
+            {(([
+              order.shipping_price ? ['Shipping',     order.shipping_price,  order.shipping_currency || 'IQD'] : null,
+              order.service_fee    ? ['Service Fee',  order.service_fee,     'IQD'] : null,
+              order.customs_fee    ? ['Customs/Tax',  order.customs_fee,     'IQD'] : null,
+              order.delivery_fee !== undefined ? ['Iraq Delivery', order.delivery_fee, 'IQD'] : null,
+            ] as ([string, number, string] | null)[]).filter((r): r is [string, number, string] => r !== null).map(([k, v, c], i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', marginBottom: 4 }}>
+                <span>{k}</span>
+                <span>{v === 0 ? 'Free' : `${v.toLocaleString()} ${c}`}</span>
+              </div>
+            )))}
+            {order.total_cost && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--gold)', borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
+                <span>Total</span><span>{order.total_cost.toLocaleString()} IQD</span>
+              </div>
+            )}
           </div>
         )}
         {error && <div className={styles.errorBox}>{error}</div>}
