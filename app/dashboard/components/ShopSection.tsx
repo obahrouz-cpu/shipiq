@@ -131,6 +131,166 @@ function safeBg(hex: string): string {
   return lum > 0.55 ? '#555555' : hex
 }
 
+// ── AutoCalcModal ─────────────────────────────────────────────────────────────
+
+function AutoCalcModal({ onClose }: { onClose: () => void }) {
+  const [url, setUrl] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<ScrapeResult | null>(null)
+  const [error, setError] = useState('')
+  const [trendyolKg, setTrendyolKg] = useState<number | null>(null)
+
+  const isTrendyolUrl = url.toLowerCase().includes('trendyol.com')
+
+  async function calculate() {
+    if (!url.trim() || loading) return
+    setLoading(true)
+    setResult(null)
+    setError('')
+    setTrendyolKg(null)
+    try {
+      const res = await fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
+      const data: ScrapeResult = await res.json()
+      if (data.found && data.billable_weight_kg) {
+        setResult(data)
+      } else {
+        setError(data.reason || 'Could not calculate estimate for this product.')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to reach the estimate service.')
+    }
+    setLoading(false)
+  }
+
+  const rates = SHIPPING_RATES[result?.site?.country ?? ''] ?? { min: 10000, max: 18000 }
+  const totalKg = result?.billable_weight_kg ?? 0
+  const estimate = totalKg > 0
+    ? { min: Math.round(rates.min * totalKg), max: Math.round(rates.max * totalKg), kg: totalKg }
+    : null
+
+  const turkeyRates = SHIPPING_RATES['Turkey'] ?? { min: 5000, max: 8000 }
+  const trendyolEstimate = !estimate && trendyolKg && trendyolKg > 0
+    ? { min: Math.round(turkeyRates.min * trendyolKg), max: Math.round(turkeyRates.max * trendyolKg), kg: trendyolKg }
+    : null
+
+  return (
+    <>
+      <div className={styles.panelOverlay} onClick={onClose} />
+      <div className={styles.panel}>
+
+        {/* ── Drag handle (mobile only) ── */}
+        <div className={styles.dragHandle}>
+          <div className={styles.dragHandleBar} />
+        </div>
+
+        {/* ── Header ── */}
+        <div className={styles.panelHeader}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className={styles.autoCalcTitle}>⚡ Auto Calculate</div>
+            <div className={styles.autoCalcSub}>
+              Paste any product URL and get an instant shipping estimate before submitting your order
+            </div>
+          </div>
+          <button className={styles.panelClose} onClick={onClose} aria-label="Close">✕</button>
+        </div>
+
+        {/* ── Input + Calculate ── */}
+        <div className={styles.panelSection}>
+          <div className={styles.panelInputWrap}>
+            <input
+              className={styles.panelInput}
+              placeholder="Paste product link here..."
+              value={url}
+              onChange={e => { setUrl(e.target.value); setResult(null); setError('') }}
+              onKeyDown={e => e.key === 'Enter' && calculate()}
+              autoComplete="off"
+              spellCheck={false}
+              autoFocus
+            />
+            {url && (
+              <button
+                className={styles.panelInputClear}
+                onClick={() => { setUrl(''); setResult(null); setError('') }}
+                aria-label="Clear"
+              >✕</button>
+            )}
+          </div>
+
+          <button
+            className={styles.calcBtn}
+            onClick={calculate}
+            disabled={loading || !url.trim()}
+          >
+            {loading ? <><span className={styles.spinner} /> Calculating…</> : 'Calculate →'}
+          </button>
+
+          {/* Trendyol weight estimator */}
+          {isTrendyolUrl && !loading && !result && url && (
+            <TrendyolWeightEstimator onWeightSelect={kg => setTrendyolKg(kg)} />
+          )}
+
+          {/* Error */}
+          {error && !loading && (
+            <div className={styles.estimateError}>⚠️ {error}</div>
+          )}
+
+          {/* Scraper estimate */}
+          {estimate && !loading && (
+            <div className={styles.estimateBox}>
+              <div className={styles.estimateHeader}>
+                <span className={styles.estimateLabel}>≈ Shipping Estimate</span>
+                <span className={styles.estimateBadge}>APPROXIMATE</span>
+              </div>
+              <div className={styles.estimateRange}>
+                ${(estimate.min / IQD_PER_USD).toFixed(2)} – ${(estimate.max / IQD_PER_USD).toFixed(2)}
+                <span className={styles.estimateCurrency}> USD</span>
+              </div>
+              <div className={styles.estimateSub}>
+                {estimate.kg} kg billable weight · Final price confirmed by ShipIQ
+              </div>
+              {result?.product_name && (
+                <div className={styles.estimateProduct}>📦 {result.product_name}</div>
+              )}
+            </div>
+          )}
+
+          {/* Trendyol estimate */}
+          {trendyolEstimate && !loading && (
+            <div className={styles.estimateBox}>
+              <div className={styles.estimateHeader}>
+                <span className={styles.estimateLabel}>≈ Shipping Estimate</span>
+                <span className={styles.estimateBadge}>APPROXIMATE</span>
+              </div>
+              <div className={styles.estimateRange}>
+                ${(trendyolEstimate.min / IQD_PER_USD).toFixed(2)} – ${(trendyolEstimate.max / IQD_PER_USD).toFixed(2)}
+                <span className={styles.estimateCurrency}> USD</span>
+              </div>
+              <div className={styles.estimateSub}>
+                {trendyolEstimate.kg} kg estimated weight · Final price confirmed by ShipIQ
+              </div>
+            </div>
+          )}
+
+          {/* Supported sites */}
+          <div className={styles.autoCalcNote}>
+            Works best with Amazon, eBay, Trendyol, Noon and more
+          </div>
+          <div className={styles.supportedSites}>
+            {SUPPORTED_SITES.map((site: string) => (
+              <span key={site} className={styles.siteBadge}>{site}</span>
+            ))}
+          </div>
+        </div>
+
+      </div>
+    </>
+  )
+}
+
 // ── StorePanel ────────────────────────────────────────────────────────────────
 
 function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; onClose: () => void; userId?: string; onWishlistSave?: (url: string) => void }) {
@@ -143,7 +303,7 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
 
   const detectedStore = url ? STORES.find(s => url.toLowerCase().includes(s.domain)) ?? null : null
   const displayStore = detectedStore ?? store
-  const isSupported = SUPPORTED_SITES.some(s => url.toLowerCase().includes(s))
+  const isSupported = SUPPORTED_SITES.some((s: string) => url.toLowerCase().includes(s))
   const isTrendyolUrl = url.toLowerCase().includes('trendyol.com')
 
   useEffect(() => {
@@ -185,7 +345,6 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
     ? { min: Math.round(rates.min * totalKg), max: Math.round(rates.max * totalKg), kg: totalKg }
     : null
 
-  // Estimate computed from the Trendyol estimator selection
   const turkeyRates = SHIPPING_RATES['Turkey'] ?? { min: 5000, max: 8000 }
   const trendyolEstimate = !estimate && trendyolKg && trendyolKg > 0
     ? { min: Math.round(turkeyRates.min * trendyolKg), max: Math.round(turkeyRates.max * trendyolKg), kg: trendyolKg }
@@ -359,6 +518,7 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
 export default function ShopSection({ userId, onWishlistSave }: { userId?: string; onWishlistSave?: (url: string) => void }) {
   const [countryFilter, setCountryFilter] = useState('All')
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
+  const [autoCalcOpen, setAutoCalcOpen] = useState(false)
 
   const filtered = countryFilter === 'All'
     ? STORES
@@ -385,7 +545,7 @@ export default function ShopSection({ userId, onWishlistSave }: { userId?: strin
         </div>
         <button
           className={styles.autoCalcBtn}
-          onClick={() => setSelectedStore(STORES[0])}
+          onClick={() => setAutoCalcOpen(true)}
         >
           ⚡ Auto Calculate
         </button>
@@ -414,7 +574,12 @@ export default function ShopSection({ userId, onWishlistSave }: { userId?: strin
         ))}
       </div>
 
-      {/* Slide-in panel */}
+      {/* Auto Calculate modal */}
+      {autoCalcOpen && (
+        <AutoCalcModal onClose={() => setAutoCalcOpen(false)} />
+      )}
+
+      {/* Store panel */}
       {selectedStore && (
         <StorePanel store={selectedStore} onClose={() => setSelectedStore(null)} userId={userId} onWishlistSave={onWishlistSave} />
       )}
