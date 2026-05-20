@@ -1,7 +1,6 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
-import { createClient } from '@/lib/supabase'
-import { updateLanguage, getTierSettings } from '@/lib/api'
+import { useState, useEffect } from 'react'
+import { updateLanguage, getTierSettings, updateProfile, changePassword } from '@/lib/api'
 import type { Profile, Order, TierSettings } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import DeliveryAddress from './DeliveryAddress'
@@ -76,7 +75,6 @@ interface Props {
 
 export default function AccountSettings({ profile, orders, mode, onClose, onProfileUpdate, onSignOut }: Props) {
   const isPageMode = mode === 'page'
-  const supabase = useMemo(() => createClient(), [])
   const { language, t, setLanguage: applyLang } = useLanguage()
   const [localProfile, setLocalProfile] = useState(profile)
 
@@ -124,8 +122,7 @@ export default function AccountSettings({ profile, orders, mode, onClose, onProf
   async function saveName() {
     if (!name.trim()) return
     setNameLoading(true); setNameMsg(null)
-    const { error } = await supabase
-      .from('profiles').update({ full_name: name.trim() }).eq('id', profile.id)
+    const { error } = await updateProfile(profile.id, { full_name: name.trim() })
     setNameLoading(false)
     if (error) {
       setNameMsg({ ok: false, text: 'Failed to save. Please try again.' })
@@ -152,8 +149,7 @@ export default function AccountSettings({ profile, orders, mode, onClose, onProf
     }
     const normalized = `+964${digits}`
     setPhoneLoading(true); setPhoneMsg(null)
-    const { error } = await supabase
-      .from('profiles').update({ phone: normalized }).eq('id', profile.id)
+    const { error } = await updateProfile(profile.id, { phone: normalized })
     setPhoneLoading(false)
     if (error) {
       setPhoneMsg({ ok: false, text: 'Failed to save. Please try again.' })
@@ -186,21 +182,15 @@ export default function AccountSettings({ profile, orders, mode, onClose, onProf
     } catch {}
   }
 
-  async function changePassword() {
+  async function handleChangePassword() {
     if (!currentPw) { setPwMsg({ ok: false, text: 'Please enter your current password.' }); return }
     if (newPw.length < 6) { setPwMsg({ ok: false, text: 'New password must be at least 6 characters.' }); return }
     if (newPw !== confirmPw) { setPwMsg({ ok: false, text: 'Passwords do not match.' }); return }
     setPwLoading(true); setPwMsg(null)
-    // Verify current password by re-authenticating
-    const { error: authErr } = await supabase.auth.signInWithPassword({ email: profile.email, password: currentPw })
-    if (authErr) {
-      setPwMsg({ ok: false, text: 'Current password is incorrect.' })
-      setPwLoading(false); return
-    }
-    const { error } = await supabase.auth.updateUser({ password: newPw })
+    const { error } = await changePassword(profile.email, currentPw, newPw)
     setPwLoading(false)
     if (error) {
-      setPwMsg({ ok: false, text: error.message })
+      setPwMsg({ ok: false, text: error })
     } else {
       setPwMsg({ ok: true, text: 'Password changed successfully!' })
       setCurrentPw(''); setNewPw(''); setConfirmPw('')
@@ -513,9 +503,9 @@ export default function AccountSettings({ profile, orders, mode, onClose, onProf
                   placeholder="Confirm new password · تأكيد كلمة المرور"
                   value={confirmPw}
                   onChange={e => setConfirmPw(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && changePassword()}
+                  onKeyDown={e => e.key === 'Enter' && handleChangePassword()}
                 />
-                <button className={styles.btnSave} onClick={changePassword} disabled={pwLoading}>
+                <button className={styles.btnSave} onClick={handleChangePassword} disabled={pwLoading}>
                   {pwLoading ? <Spinner /> : t('settings', 'changePw')}
                 </button>
                 {pwMsg && <Feedback ok={pwMsg.ok} text={pwMsg.text} />}

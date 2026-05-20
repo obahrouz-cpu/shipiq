@@ -1,7 +1,6 @@
 'use client'
-import { useState, useMemo } from 'react'
-import { createClient } from '@/lib/supabase'
-import { updateLanguage } from '@/lib/api'
+import { useState } from 'react'
+import { updateLanguage, changePassword } from '@/lib/api'
 import type { Profile, Order } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 
@@ -17,7 +16,6 @@ interface Props {
 
 export default function AdminMobileAccount({ profile, orders, users, pendingCount, onNavigate, onShowSettings, onSignOut }: Props) {
   const { language, setLanguage: applyLang } = useLanguage()
-  const supabase = useMemo(() => createClient(), [])
 
   const [showPw, setShowPw] = useState(false)
   const [currentPw, setCurrentPw] = useState('')
@@ -34,17 +32,15 @@ export default function AdminMobileAccount({ profile, orders, users, pendingCoun
     try { await updateLanguage(profile.id, lang) } catch {}
   }
 
-  async function changePassword() {
+  async function handleChangePassword() {
     if (!currentPw) { setPwMsg({ ok: false, text: 'Enter your current password.' }); return }
     if (newPw.length < 6) { setPwMsg({ ok: false, text: 'New password must be 6+ characters.' }); return }
     if (newPw !== confirmPw) { setPwMsg({ ok: false, text: 'Passwords do not match.' }); return }
     setPwLoading(true); setPwMsg(null)
-    const { error: authErr } = await supabase.auth.signInWithPassword({ email: profile.email, password: currentPw })
-    if (authErr) { setPwMsg({ ok: false, text: 'Current password is incorrect.' }); setPwLoading(false); return }
-    const { error } = await supabase.auth.updateUser({ password: newPw })
+    const { error } = await changePassword(profile.email, currentPw, newPw)
     setPwLoading(false)
     if (error) {
-      setPwMsg({ ok: false, text: error.message })
+      setPwMsg({ ok: false, text: error })
     } else {
       setPwMsg({ ok: true, text: 'Password changed!' })
       setCurrentPw(''); setNewPw(''); setConfirmPw('')
@@ -173,7 +169,7 @@ export default function AdminMobileAccount({ profile, orders, users, pendingCoun
                 }}
               />
             ))}
-            <button onClick={changePassword} disabled={pwLoading} style={{
+            <button onClick={handleChangePassword} disabled={pwLoading} style={{
               padding: '10px', fontSize: 13, fontWeight: 700,
               background: 'var(--gold)', color: 'var(--bg)',
               border: 'none', borderRadius: 8, cursor: pwLoading ? 'not-allowed' : 'pointer', opacity: pwLoading ? 0.7 : 1,

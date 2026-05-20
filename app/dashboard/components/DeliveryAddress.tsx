@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import { createClient } from '@/lib/supabase'
+import { updateProfile } from '@/lib/api'
 import type { Profile } from '@/lib/types'
 
 const MapPicker = dynamic(() => import('./MapPicker'), { ssr: false })
@@ -82,7 +82,6 @@ export default function DeliveryAddress({ profile, onSaved, onClose, compact = f
   async function save() {
     setSaving(true)
     setMsg(null)
-    const supabase = createClient()
     const updates = {
       delivery_lat: lat,
       delivery_lng: lng,
@@ -90,10 +89,10 @@ export default function DeliveryAddress({ profile, onSaved, onClose, compact = f
       delivery_city: city,
       delivery_notes: notes,
     }
-    const { error } = await supabase.from('profiles').update(updates).eq('id', profile.id)
+    const { error } = await updateProfile(profile.id, updates)
     setSaving(false)
     if (error) {
-      setMsg({ ok: false, text: error.message })
+      setMsg({ ok: false, text: error })
     } else {
       setMsg({ ok: true, text: 'Address saved!' })
       setMode('view')

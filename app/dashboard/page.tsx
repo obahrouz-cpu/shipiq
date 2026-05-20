@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -67,11 +67,11 @@ function detectOrderCountry(url: string): string {
 
 // ── Small shared components ───────────────────────────────────────────────────
 
-function Badge({ status }: { status: string }) {
+const Badge = React.memo(function Badge({ status }: { status: string }) {
   const { language } = useLanguage()
   const s = STATUS_CONFIG[status] || STATUS_CONFIG.pending
   return <span className={`${styles.badge} ${styles[s.cls]}`}>{s.icon} {language === 'ar' ? s.labelAr : s.label}</span>
-}
+})
 
 function Spinner() {
   return <span className={styles.spinner} />
@@ -1297,10 +1297,12 @@ function CreateAgentModal({ onClose, onDone }: { onClose: () => void; onDone: ()
     if (!form.name || !form.email || !form.password) { setError('Name, email and password are required'); return }
     if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
     setLoading(true); setError('')
+    const session = await getSession()
+    if (!session) { setError('Session expired — please sign in again'); setLoading(false); return }
     const res = await fetch('/api/create-agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, access_token: session.access_token }),
     })
     const data = await res.json()
     setLoading(false)
@@ -1365,7 +1367,7 @@ export default function Dashboard() {
   const [users, setUsers]               = useState<Profile[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [page, setPage]                 = useState('dashboard')
-  const handlePageChange = (newPage: string) => { setPage(newPage); setSettingsOpen(false) }
+  const handlePageChange = useCallback((newPage: string) => { setPage(newPage); setSettingsOpen(false) }, [])
   const [loading, setLoading]           = useState(true)
   const [showNewOrder, setShowNewOrder] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)

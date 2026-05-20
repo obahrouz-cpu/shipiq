@@ -213,6 +213,45 @@ export async function updateLanguage(userId: string, language: 'en' | 'ar'): Pro
   await supabase.from('profiles').update({ language }).eq('id', userId)
 }
 
+export async function updateProfile(
+  userId: string,
+  updates: Partial<Pick<Profile, 'full_name' | 'phone' | 'delivery_lat' | 'delivery_lng' | 'delivery_address' | 'delivery_city' | 'delivery_notes'>>
+): Promise<{ error: string | null }> {
+  const supabase = createClient()
+  const { error } = await supabase.from('profiles').update(updates).eq('id', userId)
+  return { error: error?.message ?? null }
+}
+
+export async function changePassword(
+  email: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<{ error: string | null }> {
+  const supabase = createClient()
+  const { error: authErr } = await supabase.auth.signInWithPassword({ email, password: currentPassword })
+  if (authErr) return { error: 'Current password is incorrect.' }
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  return { error: error?.message ?? null }
+}
+
+export async function getAppSettings(): Promise<{ settings: Record<string, string>; error: string | null; count: number }> {
+  const supabase = createClient()
+  const { data, error } = await supabase.from('app_settings').select('*')
+  if (error) return { settings: {}, error: error.message, count: 0 }
+  const settings = (data ?? []).reduce(
+    (acc: Record<string, string>, row: { key: string; value: string }) => ({ ...acc, [row.key]: row.value }),
+    {}
+  )
+  return { settings, error: null, count: data?.length ?? 0 }
+}
+
+export async function saveAppSettings(keys: string[], values: Record<string, string>): Promise<{ error: string | null }> {
+  const supabase = createClient()
+  const rows = keys.map(k => ({ key: k, value: values[k] ?? '', updated_at: new Date().toISOString() }))
+  const { error } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
+  return { error: error?.message ?? null }
+}
+
 // ── Transactions ──────────────────────────────────────────────────────────────
 
 export async function getUserTransactions(userId: string): Promise<Transaction[]> {

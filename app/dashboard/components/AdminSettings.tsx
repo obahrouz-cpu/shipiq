@@ -1,36 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@/lib/supabase'
+import { getAppSettings, saveAppSettings } from '@/lib/api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Settings = Record<string, string>
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function loadSettings(): Promise<{ settings: Settings; error: string | null; count: number }> {
-  const supabase = createClient()
-  const { data, error } = await supabase.from('app_settings').select('*')
-
-  if (error) {
-    console.error('[AdminSettings] loadSettings error:', error)
-    return { settings: {}, error: error.message, count: 0 }
-  }
-
-  const settings = (data ?? []).reduce(
-    (acc: Settings, row: { key: string; value: string }) => ({ ...acc, [row.key]: row.value }),
-    {} as Settings
-  )
-
-  return { settings, error: null, count: data?.length ?? 0 }
-}
-
-async function saveKeys(keys: string[], values: Settings): Promise<{ error: string | null }> {
-  const supabase = createClient()
-  const rows = keys.map(k => ({ key: k, value: values[k] ?? '', updated_at: new Date().toISOString() }))
-  const { error } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
-  return { error: error?.message ?? null }
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -162,7 +136,7 @@ export default function AdminSettings() {
 
   // Fetch once on mount — runs regardless of whether the WhatsApp section is collapsed.
   useEffect(() => {
-    loadSettings().then(({ settings, error, count }) => {
+    getAppSettings().then(({ settings, error, count }) => {
       setSettings(settings)
       setLoadError(error)
       setRowCount(count)
@@ -180,7 +154,7 @@ export default function AdminSettings() {
     setSaved: (v: boolean) => void
   ) {
     setSaving(true)
-    await saveKeys(keys, settings)
+    await saveAppSettings(keys, settings)
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
