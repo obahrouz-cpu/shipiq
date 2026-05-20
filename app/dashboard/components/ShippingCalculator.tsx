@@ -141,10 +141,21 @@ export default function ShippingCalculator() {
   const wLabel  = unit === 'metric' ? 'Weight (kg) · الوزن' : 'Weight (lbs) · الوزن'
   const dimUnit = unit === 'metric' ? 'cm' : 'in'
 
-  const totalUsd = result
+  const hasItemPrice = !!result && result.itemPriceUsd > 0
+  // Service fee is a rough 5–10% of the item price (varies per order).
+  const serviceFeeLow  = hasItemPrice ? result!.itemPriceUsd * 0.05 : 0
+  const serviceFeeHigh = hasItemPrice ? result!.itemPriceUsd * 0.10 : 0
+
+  const baseUsd = result
     ? (result.itemPriceUsd || 0) + (result.shippingUsd ?? 0) + (result.deliveryFeeUsd ?? 0)
     : 0
-  const hasMeaningfulTotal = result && !result.shippingContactOnly && !result.deliveryContactOnly && totalUsd > 0
+  const totalLowUsd  = baseUsd + serviceFeeLow
+  const totalHighUsd = baseUsd + serviceFeeHigh
+  const totalMidIqd  = result ? Math.round((totalLowUsd + totalHighUsd) / 2 * result.iqdPerUsd / 1000) * 1000 : 0
+
+  // We can only show a meaningful total when shipping + delivery are both known.
+  const hasMeaningfulTotal = result && !result.shippingContactOnly && !result.deliveryContactOnly && baseUsd > 0
+  const isRangeTotal = hasMeaningfulTotal && hasItemPrice
 
   return (
     <div className={styles.root}>
@@ -315,28 +326,36 @@ export default function ShippingCalculator() {
         <div className={styles.result} style={{ textAlign: 'left', padding: '24px 28px', marginTop: 28 }}>
 
           <div className={styles.resultLabel} style={{ textAlign: 'center', marginBottom: 18 }}>
-            📦 Cost Breakdown · تفاصيل التكلفة
+            📦 Full Cost Estimate · تقدير التكلفة الكاملة
           </div>
 
           {/* Breakdown rows */}
           <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(201,168,76,0.12)', marginBottom: 16 }}>
 
-            {result.itemPriceUsd > 0 && (
+            {hasItemPrice && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid rgba(201,168,76,0.08)' }}>
                 <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Item Price · سعر المنتج</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>${result.itemPriceUsd.toFixed(2)}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>~${result.itemPriceUsd.toFixed(2)}</span>
               </div>
             )}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid rgba(201,168,76,0.08)' }}>
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Shipping Cost · الشحن</span>
               {result.shippingUsd !== null
-                ? <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)' }}>${result.shippingUsd.toFixed(2)}</span>
+                ? <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)' }}>~${result.shippingUsd.toFixed(2)}</span>
                 : <span style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic' }}>Contact us for rates</span>
               }
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid rgba(201,168,76,0.08)' }}>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Service Fee · رسوم الخدمة <span style={{ color: 'var(--text-dim)' }}>(~5–10%)</span></span>
+              {hasItemPrice
+                ? <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>~${Math.round(serviceFeeLow)}–{Math.round(serviceFeeHigh)}</span>
+                : <span style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic' }}>~5–10%</span>
+              }
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px' }}>
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Iraq Delivery · التوصيل</span>
               {result.deliveryContactOnly
                 ? <span style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic' }}>Contact us</span>
@@ -344,11 +363,6 @@ export default function ShippingCalculator() {
                   ? <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>Free</span>
                   : <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>${result.deliveryFeeUsd!.toFixed(2)}</span>
               }
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px' }}>
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Service Fee · رسوم الخدمة</span>
-              <span style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic' }}>Calculated by admin</span>
             </div>
 
           </div>
@@ -359,9 +373,14 @@ export default function ShippingCalculator() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Estimated Total</span>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--gold)', letterSpacing: '-0.5px' }}>~${totalUsd.toFixed(2)}</div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--gold)', letterSpacing: '-0.5px' }}>
+                    {isRangeTotal
+                      ? <>~${Math.round(totalLowUsd)}–{Math.round(totalHighUsd)}</>
+                      : <>~${totalLowUsd.toFixed(2)}</>
+                    }
+                  </div>
                   <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>
-                    ≈ {Math.round(totalUsd * result.iqdPerUsd).toLocaleString()} IQD
+                    ≈ {(isRangeTotal ? totalMidIqd : Math.round(totalLowUsd * result.iqdPerUsd)).toLocaleString()} IQD
                   </div>
                 </div>
               </div>
