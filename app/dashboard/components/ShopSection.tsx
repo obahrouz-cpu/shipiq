@@ -46,22 +46,66 @@ function StoreLogo({
   )
 }
 
-// ── Card logo: Supabase storage (svg → png → jpg → name text) ─────────────────
+// ── Card logo: Supabase storage (explicit filename map → name text) ───────────
 
 const LOGO_BASE = 'https://pzlckjasayitxcblvkjg.supabase.co/storage/v1/object/public/store-logos'
-const LOGO_EXTS = ['svg', 'png', 'jpg']
+
+const LOGO_FILES: Record<string, string> = {
+  'amazon.com': 'Amazon.com.png',
+  'ebay.com': 'eBay.com.png',
+  'bhphotovideo.com': 'bhphotovideo.com.png',
+  'bestbuy.com': 'Bestbuy.com.png',
+  'newegg.com': 'Newegg.com.png',
+  'walmart.com': 'walmart.com.png',
+  'target.com': 'target.com.png',
+  'macys.com': 'Macys.com.png',
+  'nike.com': 'nike.com.png',
+  'adidas.com': 'Adidas.com.png',
+  'sephora.com': 'Sephora.com.png',
+  'iherb.com': 'iHerb.com.png',
+  'colehaan.com': 'Colehaan.com.png',
+  'nordstrom.com': 'Nordstorm.com.png',
+  'jomashop.com': 'jomashop.com.png',
+  'skechers.com': 'Skechers.com.png',
+  'lyst.com': 'Lyst.com.png',
+  'guess.com': 'Guess.com.png',
+  'michaelkors.com': 'Michaelkors.com.png',
+  'amazon.ae': 'Amazon.ae.png',
+  'noon.com': 'Noon.com.png',
+  'namshi.com': 'Namshi.com.png',
+  'sharafdg.com': 'sharafdg.com.png',
+  'brandsforless.ae': 'Brandsforless.ae.png',
+  'boutiqaat.com': 'boutiqaat.com.png',
+  'trendyol.com': 'trendyol.com.png',
+  'hepsiburada.com': 'Hepsiburada.com.png',
+  'n11.com': 'N11.com.png',
+  'lcwaikiki.com': 'lcwaikiki.com.png',
+  'mavi.com': 'mavi.com.png',
+  'aliexpress.com': 'Aliexpress.com.png',
+  'shein.com': 'shein.com.png',
+  'banggood.com': 'banggood.com.png',
+  'dhgate.com': 'Dhgate.com.png',
+  'zaful.com': 'zaful.com.png',
+}
+
+function getLogoUrl(domain: string): string | null {
+  const filename = LOGO_FILES[domain.toLowerCase()]
+  if (!filename) return null
+  return `${LOGO_BASE}/${encodeURIComponent(filename)}`
+}
 
 function CardLogo({ domain, name }: { domain: string; name: string }) {
-  const [extIdx, setExtIdx] = useState(0)
+  const [failed, setFailed] = useState(false)
+  const url = getLogoUrl(domain)
 
-  if (extIdx >= LOGO_EXTS.length) return <div className={styles.storeLogoText}>{name}</div>
+  if (!url || failed) return <div className={styles.storeLogoText}>{name}</div>
 
   return (
     <img
-      src={`${LOGO_BASE}/${domain}.${LOGO_EXTS[extIdx]}`}
+      src={url}
       alt={name}
       className={styles.storeLogoImg}
-      onError={() => setExtIdx(i => i + 1)}
+      onError={() => setFailed(true)}
     />
   )
 }
