@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import ShippingCalculator from './dashboard/components/ShippingCalculator'
+import FAQChatbot from './dashboard/components/FAQChatbot'
 import ThemeToggle from '@/components/ThemeToggle'
 import styles from './landing.module.css'
 
@@ -641,6 +642,8 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      <FAQChatbot />
     </div>
   )
 }
