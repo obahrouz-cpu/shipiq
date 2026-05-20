@@ -49,16 +49,24 @@ function StoreLogo({
 // ── Card logo: clean logo-only (Clearbit → first-letter fallback) ─────────────
 
 function CardLogo({ domain, name }: { domain: string; name: string }) {
+  // Clearbit first (better for text wordmarks), Google favicon as fallback
+  const [src, setSrc] = useState(`https://logo.clearbit.com/${domain}?size=128`)
   const [failed, setFailed] = useState(false)
 
   if (failed) return <div className={styles.storeLogoText}>{name}</div>
 
   return (
     <img
-      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=128`}
+      src={src}
       alt={name}
       className={styles.storeLogoImg}
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (src.includes('clearbit.com')) {
+          setSrc(`https://www.google.com/s2/favicons?domain=${domain}&sz=128`)
+        } else {
+          setFailed(true)
+        }
+      }}
     />
   )
 }
@@ -360,9 +368,7 @@ export default function ShopSection({ userId, onWishlistSave }: { userId?: strin
               setSelectedStore(store)
             }}
           >
-            <div className={styles.storeLogoBox}>
-              <CardLogo domain={store.domain} name={store.name} />
-            </div>
+            <CardLogo domain={store.domain} name={store.name} />
           </button>
         ))}
       </div>
