@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { updateLanguage, getTierSettings, updateProfile, changePassword } from '@/lib/api'
 import type { Profile, Order, TierSettings } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
+import type { Lang } from '@/lib/useLanguage'
 import DeliveryAddress from './DeliveryAddress'
 import styles from './AccountSettings.module.css'
 
@@ -174,7 +175,7 @@ export default function AccountSettings({ profile, orders, mode, onClose, onProf
     setTimeout(() => setNotifMsg(null), 2500)
   }
 
-  async function handleLangChange(lang: 'en' | 'ar') {
+  async function handleLangChange(lang: Lang) {
     applyLang(lang)
     try {
       await updateLanguage(profile.id, lang)
@@ -448,13 +449,18 @@ export default function AccountSettings({ profile, orders, mode, onClose, onProf
             <div className={styles.card}>
               <div className={styles.langRow}>
                 <div className={styles.langOptions}>
-                  {(['en', 'ar'] as const).map(l => (
+                  {([
+                    { code: 'en',     label: '🇬🇧 English' },
+                    { code: 'ar',     label: '🇮🇶 العربية' },
+                    { code: 'sorani', label: '🏔️ سۆرانی' },
+                    { code: 'badini', label: '🏔️ بادینی' },
+                  ] as { code: Lang; label: string }[]).map(({ code, label }) => (
                     <button
-                      key={l}
-                      className={`${styles.langBtn} ${language === l ? styles.langBtnActive : ''}`}
-                      onClick={() => handleLangChange(l)}
+                      key={code}
+                      className={`${styles.langBtn} ${language === code ? styles.langBtnActive : ''}`}
+                      onClick={() => handleLangChange(code)}
                     >
-                      {l === 'en' ? '🇬🇧 English' : '🇮🇶 العربية'}
+                      {label}
                     </button>
                   ))}
                 </div>

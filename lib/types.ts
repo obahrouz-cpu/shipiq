@@ -23,7 +23,7 @@ export interface Profile {
   phone?: string
   balance: number
   role: 'admin' | 'customer' | 'agent'
-  language?: 'en' | 'ar'
+  language?: 'en' | 'ar' | 'sorani' | 'badini'
   tier?: string
   total_spent?: number
   assigned_country?: string

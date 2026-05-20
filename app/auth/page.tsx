@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { googleSignIn, emailSignIn, emailSignUp } from '@/lib/api'
 import type { AuthForm } from '@/lib/types'
+import { useLanguage } from '@/lib/useLanguage'
 import styles from './auth.module.css'
 
 // ── Phone helpers ─────────────────────────────────────────────────────────────
@@ -27,6 +28,8 @@ function isValidIraqiPhone(phone: string): boolean {
 
 export default function AuthPage() {
   const router = useRouter()
+  const { language, setLanguage } = useLanguage()
+  const isAr = language === 'ar'
   const [tab, setTab]         = useState<'login' | 'register'>('login')
   const [form, setForm]       = useState<AuthForm>({ name: '', email: '', phone: '', password: '' })
   const [loading, setLoading] = useState(false)
@@ -90,9 +93,17 @@ export default function AuthPage() {
   }
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} dir={isAr ? 'rtl' : 'ltr'}>
       <div className={styles.bg} />
       <div className={styles.card}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button
+            onClick={() => setLanguage(isAr ? 'en' : 'ar')}
+            style={{ padding: '5px 12px', fontSize: 12, fontWeight: 700, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}
+          >
+            {isAr ? 'English' : 'عربي'}
+          </button>
+        </div>
         <div className={styles.logo}>
           <div className={styles.logoMark}>ShipIQ</div>
           <div className={`${styles.logoSub} ar`}>شيب آي كيو — خدمة الشحن الذكي</div>

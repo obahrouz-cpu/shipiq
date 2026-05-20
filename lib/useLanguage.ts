@@ -8,6 +8,8 @@ export type { Lang }
 const LS_KEY  = 'shipiq_lang'
 const EV_NAME = 'shipiq:lang_change'
 
+const RTL_LANGS: Lang[] = ['ar', 'sorani', 'badini']
+
 function readStored(): Lang {
   if (typeof window === 'undefined') return 'en'
   return (localStorage.getItem(LS_KEY) as Lang) ?? 'en'
@@ -15,9 +17,10 @@ function readStored(): Lang {
 
 function applyToDocument(lang: Lang) {
   if (typeof document === 'undefined') return
-  document.documentElement.dir  = lang === 'ar' ? 'rtl' : 'ltr'
+  const isRtl = RTL_LANGS.includes(lang)
+  document.documentElement.dir  = isRtl ? 'rtl' : 'ltr'
   document.documentElement.lang = lang
-  document.body.classList.toggle('ar', lang === 'ar')
+  document.body.classList.toggle('ar', isRtl)
 }
 
 export function useLanguage() {
@@ -55,4 +58,18 @@ export function useLanguage() {
   }, [language])
 
   return { language, t, setLanguage }
+}
+
+// Call this after loading a user profile to sync language preference.
+// Uses localStorage as primary cache; only updates if profile differs.
+export function syncLangFromProfile(profileLang: string | null | undefined) {
+  if (typeof window === 'undefined' || !profileLang) return
+  const stored = localStorage.getItem(LS_KEY) as Lang | null
+  if (stored === profileLang) return
+  const valid: Lang[] = ['en', 'ar', 'sorani', 'badini']
+  if (!valid.includes(profileLang as Lang)) return
+  const lang = profileLang as Lang
+  localStorage.setItem(LS_KEY, lang)
+  applyToDocument(lang)
+  window.dispatchEvent(new Event(EV_NAME))
 }

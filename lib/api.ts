@@ -208,7 +208,7 @@ export async function deductBalance(
   return { error: null }
 }
 
-export async function updateLanguage(userId: string, language: 'en' | 'ar'): Promise<void> {
+export async function updateLanguage(userId: string, language: 'en' | 'ar' | 'sorani' | 'badini'): Promise<void> {
   const supabase = createClient()
   await supabase.from('profiles').update({ language }).eq('id', userId)
 }
