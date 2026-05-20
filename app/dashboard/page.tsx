@@ -11,6 +11,7 @@ import {
   getUserDeliveryRequests, getAdminDeliveryRequests,
   getOrderUnreadCounts,
 } from '@/lib/api'
+import { createClient } from '@/lib/supabase'
 import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
 import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem, DeliveryRequest, OrderNote } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
@@ -592,6 +593,44 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
   )
   const [copied, setCopied] = useState(false)
 
+  // Agent photo state (local mirror so remove/replace reflects without refetch)
+  const [lightboxUrl, setLightboxUrl]       = useState<string | null>(null)
+  const [localReceiptUrl, setLocalReceiptUrl]     = useState<string | null>(order.agent_receipt_url ?? null)
+  const [localWarehouseUrl, setLocalWarehouseUrl] = useState<string | null>(order.agent_warehouse_photo_url ?? null)
+  const [confirmRemove, setConfirmRemove]   = useState<'receipt' | 'warehouse' | null>(null)
+  const [replaceType, setReplaceType]       = useState<'receipt' | 'warehouse' | null>(null)
+  const [replaceLoading, setReplaceLoading] = useState(false)
+  const replaceInputRef = useRef<HTMLInputElement>(null)
+
+  const handleRemovePhoto = async (type: 'receipt' | 'warehouse') => {
+    setConfirmRemove(null)
+    const update = type === 'receipt' ? { agent_receipt_url: null } : { agent_warehouse_photo_url: null }
+    await updateOrder(order.id, update as Record<string, unknown>)
+    if (type === 'receipt') setLocalReceiptUrl(null)
+    else setLocalWarehouseUrl(null)
+  }
+
+  const handleReplacePhoto = async (file: File) => {
+    if (!replaceType) return
+    setReplaceLoading(true)
+    const supabase = createClient()
+    const ext = file.name.split('.').pop() || 'jpg'
+    const folder = replaceType === 'receipt' ? 'receipts' : 'warehouse'
+    const fileName = `${folder}/admin/${order.id}-replace-${Date.now()}.${ext}`
+    const { error: uploadError } = await supabase.storage.from('agent-uploads').upload(fileName, file)
+    if (!uploadError) {
+      const { data: urlData } = supabase.storage.from('agent-uploads').getPublicUrl(fileName)
+      const update = replaceType === 'receipt'
+        ? { agent_receipt_url: urlData.publicUrl }
+        : { agent_warehouse_photo_url: urlData.publicUrl }
+      await updateOrder(order.id, update as Record<string, unknown>)
+      if (replaceType === 'receipt') setLocalReceiptUrl(urlData.publicUrl)
+      else setLocalWarehouseUrl(urlData.publicUrl)
+    }
+    setReplaceType(null)
+    setReplaceLoading(false)
+  }
+
   // Estimated delivery date based on country + ordered_at
   const etaDays: Record<string, number> = { USA: 15, Turkey: 10, UAE: 7, China: 20 }
   const orderCountry = order.country_origin || ''
@@ -739,6 +778,47 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
   return (
     <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
       <div className={styles.modal}>
+        {/* ── Lightbox ── */}
+        {lightboxUrl && (
+          <div
+            onClick={() => setLightboxUrl(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          >
+            <button onClick={() => setLightboxUrl(null)} style={{ position: 'fixed', top: 16, right: 16, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2001 }}>✕</button>
+            <img
+              src={lightboxUrl}
+              alt="Full size"
+              onClick={e => e.stopPropagation()}
+              style={{ maxWidth: '100%', maxHeight: '90vh', borderRadius: 10, objectFit: 'contain', boxShadow: '0 8px 60px rgba(0,0,0,0.8)' }}
+            />
+          </div>
+        )}
+
+        {/* ── Confirm Remove ── */}
+        {confirmRemove && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '24px 24px 20px', width: 340, maxWidth: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>🗑️ Remove Photo?</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 20 }}>
+                Remove this photo? The agent will need to re-upload.
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setConfirmRemove(null)} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Cancel</button>
+                <button onClick={() => handleRemovePhoto(confirmRemove)} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.15)', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Remove</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Hidden replace file input ── */}
+        <input
+          ref={replaceInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleReplacePhoto(f); e.target.value = '' }}
+        />
+
         <div className={styles.modalHeader}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span className={styles.modalTitle}>{order.id}</span>
@@ -842,6 +922,49 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
                 })}
               </div>
             )}
+            {/* ── Agent photos (customer view) ── */}
+            {!isAdmin && (localReceiptUrl || localWarehouseUrl) && (
+              <div style={{ marginBottom: 18, padding: '14px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+                  📸 Order Photos · صور الطلب
+                </div>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                  {localReceiptUrl && (
+                    <div style={{ textAlign: 'center' }}>
+                      <img
+                        src={localReceiptUrl}
+                        alt="Purchase Receipt"
+                        loading="lazy"
+                        onClick={() => setLightboxUrl(localReceiptUrl)}
+                        style={{ width: 80, height: 80, borderRadius: 10, objectFit: 'cover', border: '1px solid var(--border)', display: 'block', cursor: 'pointer', transition: 'transform 0.15s' }}
+                        onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
+                        onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+                        onError={e => { (e.currentTarget as HTMLImageElement).parentElement!.style.display = 'none' }}
+                      />
+                      <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 4 }}>🧾 Purchase Receipt</div>
+                      <div style={{ fontSize: 9, color: 'var(--text-dim)', direction: 'rtl' }}>إيصال الشراء</div>
+                    </div>
+                  )}
+                  {localWarehouseUrl && (
+                    <div style={{ textAlign: 'center' }}>
+                      <img
+                        src={localWarehouseUrl}
+                        alt="Warehouse Photo"
+                        loading="lazy"
+                        onClick={() => setLightboxUrl(localWarehouseUrl)}
+                        style={{ width: 80, height: 80, borderRadius: 10, objectFit: 'cover', border: '1px solid var(--border)', display: 'block', cursor: 'pointer', transition: 'transform 0.15s' }}
+                        onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
+                        onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+                        onError={e => { (e.currentTarget as HTMLImageElement).parentElement!.style.display = 'none' }}
+                      />
+                      <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 4 }}>🏭 Warehouse Photo</div>
+                      <div style={{ fontSize: 9, color: 'var(--text-dim)', direction: 'rtl' }}>صورة المستودع</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {([
               ['Product URL', order.url, true],
               ['Description', order.description],
@@ -895,7 +1018,7 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
                 )}
               </div>
             )}
-            {isAdmin && (order.agent_receipt_url || order.agent_warehouse_photo_url || order.ordered_at || order.warehoused_at) && (
+            {isAdmin && (localReceiptUrl || localWarehouseUrl || order.ordered_at || order.warehoused_at) && (
               <div style={{ marginTop: 16, padding: '14px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
                   🤝 Agent Activity
@@ -910,29 +1033,40 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
                     🏭 Warehoused: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{order.warehoused_at.split('T')[0]}</span>
                   </div>
                 )}
-                {(order.agent_receipt_url || order.agent_warehouse_photo_url) && (
-                  <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                    {order.agent_receipt_url && (
-                      <div>
-                        <a href={order.agent_receipt_url} target="_blank" rel="noopener noreferrer">
-                          <img src={order.agent_receipt_url} alt="receipt" loading="lazy"
-                            style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--border)', display: 'block' }}
+                {(localReceiptUrl || localWarehouseUrl) && (
+                  <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
+                    {(['receipt', 'warehouse'] as const).map(type => {
+                      const url = type === 'receipt' ? localReceiptUrl : localWarehouseUrl
+                      if (!url) return null
+                      return (
+                        <div key={type}>
+                          <img
+                            src={url}
+                            alt={type}
+                            loading="lazy"
+                            onClick={() => setLightboxUrl(url)}
+                            style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--border)', display: 'block', cursor: 'zoom-in' }}
                             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                           />
-                        </a>
-                        <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 3, textAlign: 'center' }}>Receipt</div>
-                      </div>
-                    )}
-                    {order.agent_warehouse_photo_url && (
-                      <div>
-                        <a href={order.agent_warehouse_photo_url} target="_blank" rel="noopener noreferrer">
-                          <img src={order.agent_warehouse_photo_url} alt="warehouse" loading="lazy"
-                            style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--border)', display: 'block' }}
-                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                          />
-                        </a>
-                        <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 3, textAlign: 'center' }}>Warehouse</div>
-                      </div>
+                          <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 3, textAlign: 'center' }}>
+                            {type === 'receipt' ? '🧾 Receipt' : '🏭 Warehouse'}
+                          </div>
+                          <div style={{ display: 'flex', gap: 4, marginTop: 5 }}>
+                            <button
+                              onClick={() => { setReplaceType(type); replaceInputRef.current?.click() }}
+                              disabled={replaceLoading}
+                              style={{ flex: 1, padding: '3px 6px', fontSize: 10, fontWeight: 600, borderRadius: 5, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }}
+                            >🔄 Replace</button>
+                            <button
+                              onClick={() => setConfirmRemove(type)}
+                              style={{ flex: 1, padding: '3px 6px', fontSize: 10, fontWeight: 600, borderRadius: 5, border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.06)', color: '#ef4444', cursor: 'pointer' }}
+                            >🗑️ Remove</button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {replaceLoading && (
+                      <div style={{ fontSize: 12, color: 'var(--text-dim)', alignSelf: 'center' }}>Uploading…</div>
                     )}
                   </div>
                 )}
