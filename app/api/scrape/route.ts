@@ -167,6 +167,28 @@ function parseDimensionsToCm(dimStr: string): { l: number; w: number; h: number 
   return { l, w, h }
 }
 
+function validateWeight(kg: number | null): number | null {
+  if (kg === null) return null
+  if (kg < 0.01 || kg > 50) {
+    console.log(`[scrape] Rejected weight ${kg} kg as invalid, using estimator`)
+    return null
+  }
+  return kg
+}
+
+function validateDims(dims: { l: number; w: number; h: number } | null): { l: number; w: number; h: number } | null {
+  if (!dims) return null
+  if (dims.l > 200 || dims.w > 200 || dims.h > 200) {
+    console.log(`[scrape] Rejected dimensions ${dims.l}x${dims.w}x${dims.h} cm as invalid (> 200cm)`)
+    return null
+  }
+  if ((dims.l * dims.w * dims.h) / 5000 > 50) {
+    console.log(`[scrape] Rejected dimensions — dimensional weight > 50 kg`)
+    return null
+  }
+  return dims
+}
+
 // Generic spec extraction over rendered HTML: title, weight, dimensions, image.
 function genericHtmlScan(html: string): {
   productName: string | null
@@ -242,7 +264,9 @@ function buildWeightResponse(opts: {
   dims: { l: number; w: number; h: number } | null
   imageUrl?: string | null
 }) {
-  const { siteInfo, productName, category, weightKg, dims, imageUrl } = opts
+  const { siteInfo, productName, category, imageUrl } = opts
+  const weightKg = validateWeight(opts.weightKg)
+  const dims = validateDims(opts.dims)
   const dimensionalWeightKg = dims ? Math.round((dims.l * dims.w * dims.h) / 5000 * 100) / 100 : null
   const billableWeightKg = weightKg && dimensionalWeightKg
     ? Math.max(weightKg, dimensionalWeightKg)
@@ -318,8 +342,8 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      const weightKg = rawWeight ? parseWeightToKg(rawWeight) : null
-      const dims = rawDimensions ? parseDimensionsToCm(rawDimensions) : null
+      const weightKg = validateWeight(rawWeight ? parseWeightToKg(rawWeight) : null)
+      const dims = validateDims(rawDimensions ? parseDimensionsToCm(rawDimensions) : null)
       return buildWeightResponse({ siteInfo, productName, category, weightKg, dims, imageUrl })
     }
 
@@ -353,6 +377,8 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        weightKg = validateWeight(weightKg)
+
         if (!weightKg) {
           return NextResponse.json({
             found: false,
@@ -378,18 +404,51 @@ export async function POST(req: NextRequest) {
 
         const scan = genericHtmlScan(html)
         let productName = scan.productName ? scan.productName.replace(/ \| Trendyol.*$/, '').trim() : 'Trendyol Product'
-        let weightKg = scan.weightKg
+        // Do NOT use scan.weightKg for Trendyol — generic scan grabs wrong numbers.
+        // Weight is extracted only from the spec table and JSON-LD below.
+        let weightKg: number | null = null
         let dims = scan.dims
 
         const catMatch = html.match(/"categoryName"\s*:\s*"([^"]+)"/) || html.match(/"pattern"\s*:\s*"([^"]+)"/)
         const category = catMatch ? catMatch[1] : null
 
-        // Turkish-language attribute fallbacks
-        if (!weightKg) {
-          const wMatch = html.match(/"attributeName"\s*:\s*"A[ğg]ırlık"\s*,\s*"attributeValue"\s*:\s*"([^"]+)"/)
-            || html.match(/[Aa][ğg]ırlık[^:]*:\s*<[^>]*>([^<]+)/)
-          if (wMatch) weightKg = parseWeightToKg(wMatch[1])
+        // 1. Spec table rows — Trendyol stores weight in grams in these rows
+        const weightTableKeys = ['Ağırlık', 'Net Ağırlık', 'Paket Ağırlığı']
+        const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi
+        let trM: RegExpExecArray | null
+        while ((trM = trRe.exec(html)) !== null && !weightKg) {
+          const cells = trM[1].match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi) || []
+          if (cells.length >= 2 && cells[0] && cells[1]) {
+            const key = stripTags(cells[0]).trim()
+            const val = stripTags(cells[1]).trim()
+            if (weightTableKeys.some(k => key.includes(k)) && val) {
+              const num = parseFloat(val.replace(/[^0-9.]/g, ''))
+              if (!isNaN(num) && num > 0) {
+                weightKg = val.toLowerCase().includes('kg')
+                  ? Math.round(num * 100) / 100
+                  : Math.round(num / 1000 * 100) / 100
+                console.log('[scrape] Trendyol weight from spec table:', key, '=', val, '->', weightKg, 'kg')
+              }
+            }
+          }
         }
+
+        // 2. JSON-LD structured data
+        if (!weightKg) {
+          const jsonLdTags = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || []
+          for (const tag of jsonLdTags) {
+            try {
+              const parsed = JSON.parse(tag.replace(/<script[^>]*>|<\/script>/gi, ''))
+              const node = Array.isArray(parsed) ? parsed[0] : parsed
+              if (!weightKg && node?.weight) {
+                const w = typeof node.weight === 'object' ? (node.weight.value ?? '') : node.weight
+                weightKg = parseWeightToKg(String(w))
+                console.log('[scrape] Trendyol weight from JSON-LD:', node.weight, '->', weightKg)
+              }
+            } catch { /* skip */ }
+          }
+        }
+
         if (!dims) {
           const dMatch = html.match(/(\d+(?:[.,]\d+)?)\s*[Xx]\s*(\d+(?:[.,]\d+)?)\s*[Xx]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm)/)
           if (dMatch) {
@@ -400,6 +459,10 @@ export async function POST(req: NextRequest) {
             dims = { l: Math.round(l * 10) / 10, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 }
           }
         }
+
+        // Validate before returning — rejects obviously wrong values
+        weightKg = validateWeight(weightKg)
+        dims = validateDims(dims)
 
         if (!weightKg && !dims) {
           return NextResponse.json({
@@ -476,6 +539,8 @@ export async function POST(req: NextRequest) {
         }
 
         const detectedCategory = detectAliExpressCategory(category || productName)
+        weightKg = validateWeight(weightKg)
+        dims = validateDims(dims)
 
         if (!weightKg && !dims) {
           return NextResponse.json({
@@ -505,7 +570,7 @@ export async function POST(req: NextRequest) {
 
         const scan = genericHtmlScan(html)
         const productName = scan.productName ? scan.productName.replace(/\s*[|\-–]\s*noon.*$/i, '').trim() : 'Noon Product'
-        const weightKg = scan.weightKg
+        let weightKg = validateWeight(scan.weightKg)
 
         let categoryRaw = ''
         const catMatch = html.match(/"categoryName"\s*:\s*"([^"]+)"/)
@@ -541,7 +606,7 @@ export async function POST(req: NextRequest) {
 
         const scan = genericHtmlScan(html)
         const productName = scan.productName ? scan.productName.replace(/\s*[|\-–]\s*(boutiqaat|بوتيكات).*$/i, '').trim() : 'Boutiqaat Product'
-        const weightKg = scan.weightKg
+        const weightKg = validateWeight(scan.weightKg)
 
         if (!weightKg) {
           return NextResponse.json({
@@ -574,7 +639,10 @@ export async function POST(req: NextRequest) {
         const stripSuffix = siteInfo.site === 'newegg.com' ? /\s*-\s*Newegg\.com.*$/i : /\s*[-|]\s*Best Buy.*$/i
         const productName = scan.productName ? scan.productName.replace(stripSuffix, '').trim() : `${label} Product`
 
-        if (!scan.weightKg && !scan.dims) {
+        const validWeightKg = validateWeight(scan.weightKg)
+        const validDims = validateDims(scan.dims)
+
+        if (!validWeightKg && !validDims) {
           return NextResponse.json({
             found: false,
             reason: `Could not extract weight/dimensions from ${label}. Specs vary by product — please enter manually.`,
@@ -583,7 +651,7 @@ export async function POST(req: NextRequest) {
           })
         }
 
-        return buildWeightResponse({ siteInfo, productName, category, weightKg: scan.weightKg, dims: scan.dims, imageUrl: scan.imageUrl })
+        return buildWeightResponse({ siteInfo, productName, category, weightKg: validWeightKg, dims: validDims, imageUrl: scan.imageUrl })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
         console.error(`[scrape] ${label} error:`, msg)
