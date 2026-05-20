@@ -113,7 +113,7 @@ export async function createOrder(
   form: OrderForm,
   photo: File | null,
   autoImageUrl?: string | null
-): Promise<{ error: string | null }> {
+): Promise<{ error: string | null; orderId: string | null }> {
   const supabase = createClient()
   let photoUrl: string | null = null
 
@@ -129,7 +129,7 @@ export async function createOrder(
     }
   }
 
-  const { error } = await supabase.from('orders').insert({
+  const { data, error } = await supabase.from('orders').insert({
     user_id: userId,
     url: form.url,
     description: form.description,
@@ -144,9 +144,9 @@ export async function createOrder(
     delivery_preference: form.deliveryPreference || 'pickup',
     delivery_city: form.deliveryCity || null,
     status: 'pending',
-  })
+  }).select('id').single()
 
-  return { error: error?.message ?? null }
+  return { error: error?.message ?? null, orderId: data?.id ?? null }
 }
 
 export async function updateOrder(

@@ -193,6 +193,25 @@ const NEXT_STATUS: Record<string, string> = {
   arrived:   'delivered',
 }
 
+// Maps an order status to its WhatsApp notification event.
+const STATUS_EVENT: Record<string, string> = {
+  ordered:   'item_ordered',
+  warehouse: 'at_warehouse',
+  transit:   'in_transit',
+  arrived:   'arrived_city',
+  delivered: 'delivered',
+  rejected:  'rejected',
+}
+
+// Fire-and-forget WhatsApp notification — silent-fail, never blocks the UI.
+function notifyWhatsapp(orderId: string, event: string, extra?: Record<string, unknown>): void {
+  fetch('/api/whatsapp/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId, event, ...extra }),
+  }).catch(() => {})
+}
+
 const NEXT_LABEL: Record<string, string> = {
   confirmed: 'Mark as Ordered 🛒',
   ordered:   'Mark as At Warehouse 🏭',
@@ -292,9 +311,10 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
     if (!form.url || !form.description) { setError('URL and description are required'); return }
     if (!form.url.startsWith('http')) { setError('URL must start with http:// or https://'); return }
     setLoading(true); setError('')
-    const { error: err } = await createOrder(userId, form, photo, thumbUrl)
+    const { error: err, orderId } = await createOrder(userId, form, photo, thumbUrl)
     setLoading(false)
     if (err) { setError(err); return }
+    if (orderId) notifyWhatsapp(orderId, 'order_received')
     onDone(); onClose()
   }
 
@@ -608,9 +628,10 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
     })
   }, [order.id, isAdmin])
 
-  const applyUpdate = async (updates: Record<string, unknown>) => {
+  const applyUpdate = async (updates: Record<string, unknown>, event?: string, extra?: Record<string, unknown>) => {
     setLoading(true)
     await updateOrder(order.id, updates)
+    if (event) notifyWhatsapp(order.id, event, extra)
     setLoading(false); onRefresh(); onClose()
   }
 
@@ -629,7 +650,7 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
       customs_fee: customsFee,
       delivery_fee: deliveryFee,
       total_cost: totalCost,
-    })
+    }, 'price_calculated')
   }
 
   const handleConfirm = async () => {
@@ -649,6 +670,7 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
       console.error('confirmOrder error:', data.error)
       return
     }
+    notifyWhatsapp(order.id, 'order_confirmed')
     onRefresh(); onClose()
   }
 
@@ -754,7 +776,7 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
             </div>
             {NEXT_STATUS[order.status] && (
               <div style={{ padding: '0 0 16px' }}>
-                <button className={styles.btnPrimary} style={{ width: '100%' }} onClick={() => applyUpdate({ status: NEXT_STATUS[order.status] })} disabled={loading}>
+                <button className={styles.btnPrimary} style={{ width: '100%' }} onClick={() => applyUpdate({ status: NEXT_STATUS[order.status] }, STATUS_EVENT[NEXT_STATUS[order.status]])} disabled={loading}>
                   {loading ? <Spinner /> : NEXT_LABEL[order.status]}
                 </button>
               </div>
@@ -1012,7 +1034,7 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
               <label className={styles.label}>Rejection Reason</label>
               <textarea className={styles.textarea} placeholder="e.g. Item not available..." value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
             </div>
-            <button className={styles.btnDanger} style={{ width: '100%' }} onClick={() => applyUpdate({ status: 'rejected', reject_reason: rejectReason })}>
+            <button className={styles.btnDanger} style={{ width: '100%' }} onClick={() => applyUpdate({ status: 'rejected', reject_reason: rejectReason }, 'rejected', { reason: rejectReason })}>
               Reject Order
             </button>
           </div>
@@ -1208,7 +1230,9 @@ function TopUpModal({ user, onClose, onDone }: { user: Profile; onClose: () => v
 
   const submit = async () => {
     setLoading(true)
-    await topUpBalance(user.id, user.balance, parseInt(amount), currency, reason)
+    const addAmount = parseInt(amount) || 0
+    await topUpBalance(user.id, user.balance, addAmount, currency, reason)
+    notifyWhatsapp('', 'balance_added', { userId: user.id, amount: addAmount, balance: user.balance + addAmount })
     setLoading(false); onDone(); onClose()
   }
 
@@ -1834,7 +1858,10 @@ export default function Dashboard() {
                         onClick={async () => {
                           if (!bulkStatus) return
                           setBulkLoading(true)
-                          await Promise.all(Array.from(selectedOrderIds).map(id => updateOrder(id, { status: bulkStatus })))
+                          const ids = Array.from(selectedOrderIds)
+                          await Promise.all(ids.map(id => updateOrder(id, { status: bulkStatus })))
+                          const bulkEvent = STATUS_EVENT[bulkStatus]
+                          if (bulkEvent) ids.forEach(id => notifyWhatsapp(id, bulkEvent))
                           setSelectedOrderIds(new Set()); setBulkStatus('')
                           setBulkLoading(false); fetchData()
                         }}

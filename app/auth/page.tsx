@@ -39,6 +39,13 @@ export default function AuthPage() {
 
   const handle = (k: keyof AuthForm, v: string) => setForm(p => ({ ...p, [k]: v }))
 
+  // Where to send the user after auth — supports ?redirect=/some/path (relative only).
+  function postAuthDest(): string {
+    if (typeof window === 'undefined') return '/dashboard'
+    const param = new URLSearchParams(window.location.search).get('redirect')
+    return param && param.startsWith('/') ? param : '/dashboard'
+  }
+
   function validatePhone(display: string): boolean {
     const digits = display.replace(/\D/g, '')
     if (!digits) {
@@ -66,7 +73,7 @@ export default function AuthPage() {
     const { session, error: err } = await emailSignIn(form.email, form.password)
     if (err) { setError(err); setLoading(false); return }
     if (session) {
-      window.location.href = '/dashboard'
+      window.location.href = postAuthDest()
     } else {
       setError('No session returned — your email may not be confirmed yet.')
     }
@@ -79,7 +86,7 @@ export default function AuthPage() {
     setLoading(true); setError('')
     const { error: err } = await emailSignUp(form.email, form.password, form.name, form.phone)
     if (err) { setError(err); setLoading(false); return }
-    router.push('/dashboard')
+    router.push(postAuthDest())
   }
 
   return (

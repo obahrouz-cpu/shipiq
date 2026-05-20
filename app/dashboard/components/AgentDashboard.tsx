@@ -11,6 +11,24 @@ const COUNTRY_FLAGS: Record<string, string> = {
   China:  '🇨🇳',
 }
 
+// Maps an order status to its WhatsApp notification event.
+const STATUS_EVENT: Record<string, string> = {
+  ordered:   'item_ordered',
+  warehouse: 'at_warehouse',
+  transit:   'in_transit',
+  arrived:   'arrived_city',
+  delivered: 'delivered',
+}
+
+// Fire-and-forget WhatsApp notification — silent-fail.
+function notifyWhatsapp(orderId: string, event: string): void {
+  fetch('/api/whatsapp/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId, event }),
+  }).catch(() => {})
+}
+
 const STATUS_CFG: Record<string, { label: string; cls: string; icon: string }> = {
   confirmed: { label: 'Confirmed',  cls: 'badgeConfirmed', icon: '✅' },
   ordered:   { label: 'Ordered',    cls: 'badgeOrdered',   icon: '🛒' },
@@ -52,6 +70,7 @@ function ActionModal({
       : await agentMarkWarehouse(order.id, file, agentId)
     setLoading(false)
     if (result.error) { setError(result.error); return }
+    notifyWhatsapp(order.id, isOrdered ? 'item_ordered' : 'at_warehouse')
     onDone()
   }
 
@@ -131,6 +150,7 @@ function OrderCard({
   const directUpdate = async (status: string) => {
     setUpdating(true)
     await updateOrder(order.id, { status })
+    if (STATUS_EVENT[status]) notifyWhatsapp(order.id, STATUS_EVENT[status])
     setUpdating(false)
     onRefresh()
   }
