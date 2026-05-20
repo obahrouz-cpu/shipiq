@@ -349,6 +349,7 @@
     -webkit-backdrop-filter: blur(20px);
   }
   .bottomNavItem {
+    position: relative;
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -374,19 +375,21 @@
   .bottomNavActive .bottomNavIcon { filter: drop-shadow(0 0 6px rgba(201,168,76,0.5)); }
   .bottomNavBadge {
     position: absolute;
-    top: 8px;
+    top: -4px;
+    right: -4px;
+    z-index: 1;
     background: var(--gold);
-    color: var(--bg);
-    font-size: 9px;
+    color: #fff;
+    font-size: 10px;
     font-weight: 700;
     min-width: 16px;
     height: 16px;
     border-radius: 10px;
-    display: flex;
+    border: 2px solid var(--bg);
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 0 4px;
-    margin-left: 14px;
   }
 
   /* Hide non-essential table columns on mobile */
