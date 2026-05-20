@@ -46,19 +46,22 @@ function StoreLogo({
   )
 }
 
-// ── Card logo: clean logo-only (Clearbit → first-letter fallback) ─────────────
+// ── Card logo: Supabase storage (svg → png → jpg → name text) ─────────────────
+
+const LOGO_BASE = 'https://pzlckjasayitxcblvkjg.supabase.co/storage/v1/object/public/store-logos'
+const LOGO_EXTS = ['svg', 'png', 'jpg']
 
 function CardLogo({ domain, name }: { domain: string; name: string }) {
-  const [failed, setFailed] = useState(false)
+  const [extIdx, setExtIdx] = useState(0)
 
-  if (failed) return <div className={styles.storeLogoText}>{name}</div>
+  if (extIdx >= LOGO_EXTS.length) return <div className={styles.storeLogoText}>{name}</div>
 
   return (
     <img
-      src={`https://logo.clearbit.com/${domain}`}
+      src={`${LOGO_BASE}/${domain}.${LOGO_EXTS[extIdx]}`}
       alt={name}
       className={styles.storeLogoImg}
-      onError={() => setFailed(true)}
+      onError={() => setExtIdx(i => i + 1)}
     />
   )
 }
