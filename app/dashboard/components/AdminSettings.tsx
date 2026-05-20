@@ -8,11 +8,30 @@ type Settings = Record<string, string>
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function loadSettings(): Promise<Settings> {
+async function loadSettings(): Promise<{ settings: Settings; error: string | null; count: number }> {
   const supabase = createClient()
-  const { data } = await supabase.from('app_settings').select('key, value')
-  if (!data) return {}
-  return Object.fromEntries(data.map((r: { key: string; value: string }) => [r.key, r.value]))
+  const { data, error } = await supabase.from('app_settings').select('*')
+
+  if (error) {
+    console.error('[AdminSettings] loadSettings error:', error)
+    return { settings: {}, error: error.message, count: 0 }
+  }
+
+  console.log('[AdminSettings] app_settings raw rows:', data)
+
+  const settings = (data ?? []).reduce(
+    (acc: Settings, row: { key: string; value: string }) => ({ ...acc, [row.key]: row.value }),
+    {} as Settings
+  )
+
+  console.log('[AdminSettings] mapped settings keys:', Object.keys(settings))
+  console.log('[AdminSettings] template values:', {
+    msg_order_received: settings.msg_order_received,
+    msg_price_calculated: settings.msg_price_calculated,
+    msg_order_confirmed: settings.msg_order_confirmed,
+  })
+
+  return { settings, error: null, count: data?.length ?? 0 }
 }
 
 async function saveKeys(keys: string[], values: Settings): Promise<{ error: string | null }> {
@@ -132,6 +151,8 @@ const notifyKeyOf = (msgKey: string) => msgKey.replace('msg_', 'notify_')
 export default function AdminSettings() {
   const [settings, setSettings] = useState<Settings>({})
   const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [rowCount, setRowCount] = useState(0)
 
   // Per-section save state
   const [waOpen,   setWaOpen]   = useState(false)
@@ -148,8 +169,14 @@ export default function AdminSettings() {
   const [acctTestLoading, setAcctTestLoading] = useState(false)
   const [acctTestResult,  setAcctTestResult]  = useState<{ ok: boolean; msg: string } | null>(null)
 
+  // Fetch once on mount — runs regardless of whether the WhatsApp section is collapsed.
   useEffect(() => {
-    loadSettings().then(s => { setSettings(s); setLoaded(true) })
+    loadSettings().then(({ settings, error, count }) => {
+      setSettings(settings)
+      setLoadError(error)
+      setRowCount(count)
+      setLoaded(true)
+    })
   }, [])
 
   const set = useCallback((key: string, value: string) => {
@@ -186,7 +213,7 @@ export default function AdminSettings() {
   if (!loaded) {
     return (
       <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-dim)', fontSize: 13 }}>
-        Loading settings...
+        ⏳ Loading settings from Supabase...
       </div>
     )
   }
@@ -226,6 +253,16 @@ export default function AdminSettings() {
         {/* Body — only when expanded */}
         {waOpen && (
           <div style={{ padding: '16px' }}>
+            {/* Load status — confirms the fetch ran and how many rows came back */}
+            {loadError ? (
+              <div style={{ fontSize: 12, color: '#ef4444', marginBottom: 12, padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)' }}>
+                ⚠️ Failed to load settings: {loadError}
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 12 }}>
+                Loaded {rowCount} setting{rowCount === 1 ? '' : 's'} from Supabase.
+              </div>
+            )}
             {/* WhatsApp number fields */}
             <Field label="Admin WhatsApp (your number for notifications)" hint="You will receive order alerts here · +964 7XX XXX XXXX">
               <input
