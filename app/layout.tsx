@@ -31,12 +31,21 @@ export const viewport: Viewport = {
 // Inline script prevents flash of wrong theme before React hydrates
 const themeScript = `(function(){try{var t=localStorage.getItem('shipiq_theme');var m=window.matchMedia('(prefers-color-scheme: light)').matches;var theme=t||(m?'light':'dark');document.documentElement.setAttribute('data-theme',theme);}catch(e){}})()`
 
+const swScript = `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js');});}`
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#c9a84c" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="ShipIQ" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: swScript }} />
       </head>
       <body>{children}</body>
     </html>
