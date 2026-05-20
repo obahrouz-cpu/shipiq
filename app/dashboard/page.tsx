@@ -100,6 +100,7 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
   const detectedSite = SUPPORTED_SITES.find(site => url.toLowerCase().includes(site))
   const isTrendyol          = url.toLowerCase().includes('trendyol.com')
   const isBoutiqaatOrNoon   = url.toLowerCase().includes('boutiqaat.com') || url.toLowerCase().includes('noon.com')
+  const isAliExpress        = url.toLowerCase().includes('aliexpress.com')
 
   const calculate = async () => {
     setLoading(true); setError(''); setResult(null)
@@ -130,7 +131,7 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
           <button className={styles.btnPrimary} style={{ width: '100%', marginBottom: 16 }} onClick={calculate} disabled={loading}>
             {loading ? <><span className={styles.spinner} /> Fetching product info...</> : '🤖 Auto Calculate from URL'}
           </button>
-          {error && !isTrendyol && <div className={styles.errorBox}>{error}</div>}
+          {error && !isTrendyol && !isAliExpress && <div className={styles.errorBox}>{error}</div>}
           {result?.found && (
             <div className={styles.infoBox} style={{ marginBottom: 16 }}>
               <div style={{ fontWeight: 700, marginBottom: 12 }}>✅ {result.product_name}</div>
@@ -159,6 +160,11 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
             />
           )}
           {isBoutiqaatOrNoon && !result?.found && (
+            <BoutiqaatWeightEstimator
+              onWeightSelect={kg => onResult(`${kg} kg (estimated)`, '')}
+            />
+          )}
+          {isAliExpress && !result?.found && (
             <BoutiqaatWeightEstimator
               onWeightSelect={kg => onResult(`${kg} kg (estimated)`, '')}
             />
@@ -226,6 +232,7 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
   const [estimateError, setEstimateError] = useState('')
   const [trendyolKg, setTrendyolKg]     = useState<number | null>(null)
   const [boutiqaatKg, setBoutiqaatKg]   = useState<number | null>(null)
+  const [aliexpressKg, setAliexpressKg] = useState<number | null>(null)
   const [thumbUrl, setThumbUrl] = useState<string | null>(prefill?.photo_url ?? null)
   const [thumbLoading, setThumbLoading] = useState(false)
 
@@ -235,10 +242,12 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
   const isBoutiqaatUrl    = form.url.toLowerCase().includes('boutiqaat.com')
   const isNoonUrl         = form.url.toLowerCase().includes('noon.com')
   const isUaeEstimatorUrl = isBoutiqaatUrl || isNoonUrl
+  const isAliExpressUrl   = form.url.toLowerCase().includes('aliexpress.com')
 
   useEffect(() => {
     setTrendyolKg(null)
     setBoutiqaatKg(null)
+    setAliexpressKg(null)
     const supported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
     if (!supported || !form.url) { setScrapeResult(null); setEstimateLoading(false); setEstimateError(''); return }
     setEstimateLoading(true)
@@ -314,7 +323,12 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
   const boutiqaatEstimate = !shippingEstimate && !trendyolEstimate && boutiqaatTotalKg > 0
     ? { min: Math.round(uaeEstimatorRates.min * boutiqaatTotalKg), max: Math.round(uaeEstimatorRates.max * boutiqaatTotalKg), kg: boutiqaatTotalKg }
     : null
-  const activeEstimate = shippingEstimate || trendyolEstimate || boutiqaatEstimate
+  const chinaRates = SHIPPING_RATES['China'] ?? { min: 8000, max: 14000 }
+  const aliexpressTotalKg = aliexpressKg ? aliexpressKg * form.qty : 0
+  const aliexpressEstimate = !shippingEstimate && !trendyolEstimate && !boutiqaatEstimate && aliexpressTotalKg > 0
+    ? { min: Math.round(chinaRates.min * aliexpressTotalKg), max: Math.round(chinaRates.max * aliexpressTotalKg), kg: aliexpressTotalKg }
+    : null
+  const activeEstimate = shippingEstimate || trendyolEstimate || boutiqaatEstimate || aliexpressEstimate
 
   const deliveryOptModal = DELIVERY_OPTIONS_MODAL.find(d => d.id === form.deliveryPreference)
   const estimateDeliveryFeeIqd = deliveryOptModal?.fee ?? 0
@@ -354,8 +368,8 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
             <span className={styles.spinner} style={{ width: 14, height: 14, borderColor: 'rgba(201,168,76,0.25)', borderTopColor: 'var(--gold)' }} /> Calculating shipping estimate...
           </div>
         )}
-        {/* Error only for non-Trendyol URLs */}
-        {estimateError && !estimateLoading && isUrlSupported && !isTrendyolUrl && !isUaeEstimatorUrl && (
+        {/* Error only for non-Trendyol/Boutiqaat/AliExpress URLs */}
+        {estimateError && !estimateLoading && isUrlSupported && !isTrendyolUrl && !isUaeEstimatorUrl && !isAliExpressUrl && (
           <div style={{ padding: '9px 13px', background: 'rgba(224,123,58,0.08)', border: '1px solid rgba(224,123,58,0.25)', borderRadius: 8, fontSize: 12, color: 'var(--orange)', marginTop: -12, marginBottom: 16 }}>
             ⚠️ {estimateError}
           </div>
@@ -370,6 +384,12 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
         {isUaeEstimatorUrl && !estimateLoading && !scrapeResult && form.url && (
           <div style={{ marginTop: -12, marginBottom: 16 }}>
             <BoutiqaatWeightEstimator onWeightSelect={kg => setBoutiqaatKg(kg)} />
+          </div>
+        )}
+        {/* AliExpress weight estimator */}
+        {isAliExpressUrl && !estimateLoading && !scrapeResult && form.url && (
+          <div style={{ marginTop: -12, marginBottom: 16 }}>
+            <BoutiqaatWeightEstimator onWeightSelect={kg => setAliexpressKg(kg)} />
           </div>
         )}
         {activeEstimate && !estimateLoading && (
