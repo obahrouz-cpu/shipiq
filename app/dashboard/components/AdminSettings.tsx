@@ -133,6 +133,8 @@ export default function AdminSettings() {
   const [acctSaved,      setAcctSaved]      = useState(false)
   const [acctTestLoading, setAcctTestLoading] = useState(false)
   const [acctTestResult,  setAcctTestResult]  = useState<{ ok: boolean; msg: string } | null>(null)
+  const [affSaving,      setAffSaving]      = useState(false)
+  const [affSaved,       setAffSaved]       = useState(false)
 
   // Fetch once on mount — runs regardless of whether the WhatsApp section is collapsed.
   useEffect(() => {
@@ -548,6 +550,49 @@ export default function AdminSettings() {
           loading={fxSaving}
           saved={fxSaved}
           onClick={() => save(['iqd_rate_mode', 'iqd_rate_manual'], setFxSaving, setFxSaved)}
+        />
+      </Section>
+
+      {/* ── SECTION: Affiliate Links ── */}
+      <Section title="🔗 Affiliate Links · روابط الإحالة">
+        <Toggle
+          checked={settings.affiliate_enabled !== 'false'}
+          onChange={v => set('affiliate_enabled', v ? 'true' : 'false')}
+          label="Enable affiliate links"
+        />
+        <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 14, padding: '8px 10px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          Affiliate tags are automatically added to order URLs when agents purchase items.
+        </div>
+        {([
+          { key: 'affiliate_amazon',    label: 'Amazon US',   param: 'tag=' },
+          { key: 'affiliate_amazon_ae', label: 'Amazon UAE',  param: 'tag=' },
+          { key: 'affiliate_ebay',      label: 'eBay',        param: 'campid=' },
+          { key: 'affiliate_trendyol',  label: 'Trendyol',    param: 'boutiqueId=' },
+          { key: 'affiliate_noon',      label: 'Noon',        param: 'affiliate=' },
+          { key: 'affiliate_aliexpress',label: 'AliExpress',  param: 'aff_fcid=' },
+          { key: 'affiliate_bhphoto',   label: 'B&H Photo',   param: 'BI=' },
+          { key: 'affiliate_bestbuy',   label: 'Best Buy',    param: 'ref=' },
+          { key: 'affiliate_newegg',    label: 'Newegg',      param: 'cm_mmc=' },
+        ] as { key: string; label: string; param: string }[]).map(({ key, label, param }) => (
+          <Field key={key} label={label} hint={param}>
+            <input
+              style={inputStyle}
+              type="text"
+              value={settings[key] ?? ''}
+              onChange={e => set(key, e.target.value)}
+              placeholder={`e.g. shipiq-20`}
+            />
+          </Field>
+        ))}
+        <SaveBtn
+          loading={affSaving}
+          saved={affSaved}
+          onClick={() => save([
+            'affiliate_enabled',
+            'affiliate_amazon', 'affiliate_amazon_ae', 'affiliate_ebay',
+            'affiliate_trendyol', 'affiliate_noon', 'affiliate_aliexpress',
+            'affiliate_bhphoto', 'affiliate_bestbuy', 'affiliate_newegg',
+          ], setAffSaving, setAffSaved)}
         />
       </Section>
 

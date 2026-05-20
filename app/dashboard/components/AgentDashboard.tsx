@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { getSession, updateOrder, agentMarkOrdered, agentMarkWarehouse } from '@/lib/api'
+import { getSession, updateOrder, agentMarkOrdered, agentMarkWarehouse, getAppSettings } from '@/lib/api'
 import type { Order, Profile } from '@/lib/types'
+import { appendAffiliateTag, hasAffiliateTag } from '@/lib/affiliateLinks'
 import styles from './AgentDashboard.module.css'
 
 const COUNTRY_FLAGS: Record<string, string> = {
@@ -139,6 +140,14 @@ function OrderCard({
 }) {
   const [copied, setCopied] = useState(false)
   const [updating, setUpdating] = useState(false)
+  const [affApplied, setAffApplied] = useState(false)
+
+  async function openUrl() {
+    const { settings } = await getAppSettings()
+    const affiliateUrl = appendAffiliateTag(order.url, settings)
+    setAffApplied(hasAffiliateTag(order.url, settings))
+    window.open(affiliateUrl, '_blank', 'noopener,noreferrer')
+  }
 
   const copyId = () => {
     navigator.clipboard.writeText(order.id).then(() => {
@@ -174,9 +183,12 @@ function OrderCard({
       <div className={styles.cardFields}>
         <div className={styles.fieldRow}>
           <span className={styles.fieldKey}>URL</span>
-          <a href={order.url} target="_blank" rel="noopener noreferrer" className={styles.urlLink}>
+          <button onClick={openUrl} className={styles.urlLink} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}>
             {order.url.length > 55 ? order.url.slice(0, 55) + '…' : order.url}
-          </a>
+            {affApplied && (
+              <span title="Affiliate link applied" style={{ marginLeft: 5, fontSize: 11, color: 'var(--gold)' }}>🔗</span>
+            )}
+          </button>
         </div>
         <div className={styles.fieldRow}>
           <span className={styles.fieldKey}>Item</span>

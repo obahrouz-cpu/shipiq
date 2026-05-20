@@ -9,7 +9,7 @@ import {
   updateOrder, topUpBalance, deductBalance, signOut,
   getTierSettings, getWishlist, addToWishlist, removeFromWishlist,
   getUserDeliveryRequests, getAdminDeliveryRequests,
-  getOrderUnreadCounts,
+  getOrderUnreadCounts, getAppSettings,
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase'
 import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
@@ -40,6 +40,7 @@ import AdminDeliveries from './components/AdminDeliveries'
 import NotificationCenter from './components/NotificationCenter'
 import OrderNotes from './components/OrderNotes'
 import type { TierSettings } from '@/lib/types'
+import { appendAffiliateTag } from '@/lib/affiliateLinks'
 
 // ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
 const FALLBACK_TIERS: TierSettings[] = [
@@ -593,6 +594,12 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
   )
   const [copied, setCopied] = useState(false)
 
+  // Affiliate URL (admin only)
+  const [affSettings, setAffSettings] = useState<Record<string, string>>({})
+  useEffect(() => {
+    if (isAdmin) getAppSettings().then(({ settings }) => setAffSettings(settings))
+  }, [isAdmin])
+
   // Agent photo state (local mirror so remove/replace reflects without refetch)
   const [lightboxUrl, setLightboxUrl]       = useState<string | null>(null)
   const [localReceiptUrl, setLocalReceiptUrl]     = useState<string | null>(order.agent_receipt_url ?? null)
@@ -965,6 +972,16 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
               </div>
             )}
 
+            {isAdmin && order.url && (() => {
+              const affUrl = appendAffiliateTag(order.url, affSettings)
+              if (affUrl !== order.url) return (
+                <div className={styles.detailRow} style={{ background: 'rgba(201,168,76,0.06)', borderRadius: 8, padding: '6px 10px', marginBottom: 6 }}>
+                  <span className={styles.detailKey}>🔗 Affiliate URL</span>
+                  <a href={affUrl} target="_blank" rel="noopener noreferrer" className={styles.detailLink} style={{ fontSize: 11, color: 'var(--gold)', wordBreak: 'break-all' }}>{affUrl}</a>
+                </div>
+              )
+              return null
+            })()}
             {([
               ['Product URL', order.url, true],
               ['Description', order.description],
