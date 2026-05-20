@@ -32,6 +32,7 @@ import AgentDashboard from './components/AgentDashboard'
 import AdminMobileAccount from './components/AdminMobileAccount'
 import ShippingCalculator from './components/ShippingCalculator'
 import AdminSettings from './components/AdminSettings'
+import AdminBroadcast from './components/AdminBroadcast'
 import WishlistPage from './components/WishlistPage'
 import DeliveryRequestModal from './components/DeliveryRequestModal'
 import AdminDeliveries from './components/AdminDeliveries'
@@ -1564,6 +1565,7 @@ export default function Dashboard() {
         { id: 'admin-deliveries', icon: '🚚', label: 'Deliveries', badge: pendingDeliveryCount || undefined },
         { id: 'admin-analytics',  icon: '📊', label: 'Analytics' },
         { id: 'admin-customers',  icon: '👥', label: t('nav', 'customers') },
+        { id: 'admin-broadcast',  icon: '📢', label: 'Broadcast' },
         { id: 'admin-settings',   icon: '⚙️', label: 'Settings' },
       ]
     : [
@@ -1589,6 +1591,7 @@ export default function Dashboard() {
     'admin-deliveries': '🚚 Deliveries',
     'admin-analytics':  '📊 Analytics',
     'admin-customers':  t('nav', 'customers'),
+    'admin-broadcast':  '📢 Broadcast',
     'admin-settings':   '⚙️ Settings',
   }
 
@@ -2305,6 +2308,12 @@ export default function Dashboard() {
             </div>
           )}
 
+          {page === 'admin-broadcast' && isAdmin && (
+            <div className="fade-up">
+              <AdminBroadcast />
+            </div>
+          )}
+
           {page === 'admin-customers' && (
             <div className="fade-up">
               <div className={styles.pageHeader}>
@@ -2383,6 +2392,7 @@ export default function Dashboard() {
             { id: 'admin-deliveries', icon: '🚚', label: 'Deliveries', badge: pendingDeliveryCount || undefined },
             { id: 'admin-customers',  icon: '👥', label: 'Customers' },
             { id: 'admin-analytics',  icon: '📊', label: 'Analytics' },
+            { id: 'admin-broadcast',  icon: '📢', label: 'Broadcast' },
           ].map(n => (
             <button
               key={n.id}

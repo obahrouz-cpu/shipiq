@@ -53,6 +53,7 @@ export default function AdminMobileAccount({ profile, orders, users, pendingCoun
     { icon: '👥', label: 'Customers', sub: 'Manage customer accounts', onClick: () => onNavigate('admin-customers') },
     { icon: '📋', label: 'All Orders', sub: 'View and manage orders', onClick: () => onNavigate('admin-orders') },
     { icon: '📊', label: 'Analytics', sub: 'Revenue and performance', onClick: () => onNavigate('admin-analytics') },
+    { icon: '📢', label: 'Broadcast', sub: 'Send announcements to all customers', onClick: () => onNavigate('admin-broadcast') },
   ]
 
   return (
