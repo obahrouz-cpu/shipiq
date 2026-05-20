@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import type { Store, ScrapeResult } from '@/lib/types'
-import { STORES, COUNTRY_FILTERS, CATEGORY_FILTERS, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
+import { STORES, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
 import styles from './ShopSection.module.css'
 import DealsSection from './DealsSection'
 import TrendyolWeightEstimator from './TrendyolWeightEstimator'
@@ -45,6 +45,79 @@ function StoreLogo({
     />
   )
 }
+
+// ── Card logo: Supabase storage (explicit filename map → name text) ───────────
+
+const LOGO_BASE = 'https://pzlckjasayitxcblvkjg.supabase.co/storage/v1/object/public/store-logos'
+
+const LOGO_FILES: Record<string, string> = {
+  'amazon.com': 'Amazon.svg',
+  'amazon.ae': 'Amazon (1).svg',
+  'ebay.com': 'eBay.svg',
+  'bhphotovideo.com': 'bhphotovideo.svg',
+  'bestbuy.com': 'Bestbuy.svg',
+  'newegg.com': 'Newegg.svg',
+  'walmart.com': 'walmart.svg',
+  'target.com': 'target.svg',
+  'macys.com': 'Macys.svg',
+  'nike.com': 'nike.svg',
+  'adidas.com': 'Adidas.svg',
+  'sephora.com': 'Sephora.svg',
+  'iherb.com': 'iHerb.svg',
+  'colehaan.com': 'Colehaan.svg',
+  'nordstrom.com': 'Nordstorm.svg',
+  'jomashop.com': 'jomashop.svg',
+  'skechers.com': 'Skechers.svg',
+  'lyst.com': 'Lyst.svg',
+  'guess.com': 'Guess.svg',
+  'michaelkors.com': 'Michaelkors.svg',
+  'noon.com': 'Noon.svg',
+  'namshi.com': 'Namshi.svg',
+  'sharafdg.com': 'sharafdg.svg',
+  'brandsforless.ae': 'Brandsforless.svg',
+  'boutiqaat.com': 'boutiqaat.svg',
+  'trendyol.com': 'trendyol.svg',
+  'hepsiburada.com': 'Hepsiburada.svg',
+  'n11.com': 'N11.svg',
+  'lcwaikiki.com': 'lcwaikiki.svg',
+  'mavi.com': 'mavi.svg',
+  'aliexpress.com': 'Aliexpress.svg',
+  'shein.com': 'shein.svg',
+  'banggood.com': 'banggood.svg',
+  'dhgate.com': 'Dhgate.svg',
+  'zaful.com': 'zaful.svg',
+}
+
+function getLogoUrl(domain: string): string | null {
+  const filename = LOGO_FILES[domain.toLowerCase()]
+  if (!filename) return null
+  return `${LOGO_BASE}/${encodeURIComponent(filename)}`
+}
+
+function CardLogo({ domain, name }: { domain: string; name: string }) {
+  const [failed, setFailed] = useState(false)
+  const url = getLogoUrl(domain)
+
+  if (!url || failed) return <div className={styles.storeLogoText}>{name}</div>
+
+  return (
+    <img
+      src={url}
+      alt={name}
+      className={styles.storeLogoImg}
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
+// Flag-only country filter (matches Store.country ids)
+const COUNTRY_FLAGS = [
+  { id: 'All',    label: 'All' },
+  { id: 'US',     label: '🇺🇸' },
+  { id: 'UAE',    label: '🇦🇪' },
+  { id: 'Turkey', label: '🇹🇷' },
+  { id: 'China',  label: '🇨🇳' },
+]
 
 // Returns a dark-safe button background (guards against near-white brand colours)
 function safeBg(hex: string): string {
@@ -283,114 +356,60 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
 
 export default function ShopSection({ userId, onWishlistSave }: { userId?: string; onWishlistSave?: (url: string) => void }) {
   const [countryFilter, setCountryFilter] = useState('All')
-  const [categoryFilter, setCategoryFilter] = useState('All')
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
 
-  const filtered = STORES.filter(s => {
-    const okCountry  = countryFilter  === 'All' || s.country  === countryFilter
-    const okCategory = categoryFilter === 'All' || s.category === categoryFilter
-    return okCountry && okCategory
-  })
-
-  const metaParts: string[] = []
-  if (countryFilter  !== 'All') metaParts.push(countryFilter)
-  if (categoryFilter !== 'All') metaParts.push(categoryFilter)
+  const filtered = countryFilter === 'All'
+    ? STORES
+    : STORES.filter(s => s.country === countryFilter)
 
   return (
     <div style={{ width: '100%', overflowX: 'hidden' }}>
       {/* Deals + Recently Visited */}
       <DealsSection />
 
-      {/* Country pills */}
-      <div className={styles.pills}>
-        {COUNTRY_FILTERS.map(c => (
-          <button
-            key={c.id}
-            className={`${styles.pill} ${countryFilter === c.id ? styles.pillActive : ''}`}
-            onClick={() => setCountryFilter(c.id)}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Category bubbles */}
-      <div className={styles.bubbles}>
-        {CATEGORY_FILTERS.map(cat => (
-          <button
-            key={cat}
-            className={`${styles.bubble} ${categoryFilter === cat ? styles.bubbleActive : ''}`}
-            onClick={() => setCategoryFilter(cat)}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
-
-      {/* Results */}
-      {filtered.length === 0 ? (
-        <div className={styles.noResults}>
-          <div style={{ fontSize: 36, marginBottom: 10, opacity: 0.25 }}>🔍</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-muted)' }}>No stores match this filter</div>
-          <button
-            className={styles.resetBtn}
-            onClick={() => { setCountryFilter('All'); setCategoryFilter('All') }}
-          >
-            Reset filters
-          </button>
+      {/* Filter bar: flag-only country filter + Auto Calculate */}
+      <div className={styles.filterBar}>
+        <div className={styles.flagFilter}>
+          {COUNTRY_FLAGS.map(c => (
+            <button
+              key={c.id}
+              className={`${styles.flagBtn} ${countryFilter === c.id ? styles.flagBtnActive : ''}`}
+              onClick={() => setCountryFilter(c.id)}
+              aria-label={c.id}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
-      ) : (
-        <>
-          <div className={styles.resultsMeta}>
-            {filtered.length} store{filtered.length !== 1 ? 's' : ''}
-            {metaParts.length > 0 && ` · ${metaParts.join(' · ')}`}
-          </div>
-          <div className={styles.grid}>
-            {filtered.map(store => (
-              <button
-                key={`${store.country}-${store.name}`}
-                className={styles.storeCard}
-                onClick={() => {
-                  try {
-                    const raw = localStorage.getItem('shipiq_recent_stores')
-                    const prev: Store[] = raw ? JSON.parse(raw) : []
-                    const next = [store, ...prev.filter(s => !(s.country === store.country && s.name === store.name))].slice(0, 5)
-                    localStorage.setItem('shipiq_recent_stores', JSON.stringify(next))
-                    window.dispatchEvent(new Event('shipiq:recent_update'))
-                  } catch {}
-                  setSelectedStore(store)
-                }}
-                onMouseEnter={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = store.color
-                  el.style.background  = store.bg
-                }}
-                onMouseLeave={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = 'var(--border)'
-                  el.style.background  = 'var(--surface)'
-                }}
-              >
-                <StoreLogo domain={store.domain} emoji={store.emoji} size={32} />
-                <div className={styles.storeName}>{store.name}</div>
-                <div className={styles.storeTags}>
-                  <span
-                    className={styles.storeTag}
-                    style={{ background: store.bg, color: store.color }}
-                  >
-                    {store.category}
-                  </span>
-                  <span className={styles.storeTagFlag}>{store.flag}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+        <button
+          className={styles.autoCalcBtn}
+          onClick={() => setSelectedStore(STORES[0])}
+        >
+          ⚡ Auto Calculate
+        </button>
+      </div>
 
-      {/* Bottom tip */}
-      <div className={styles.tip}>
-        💡 Click a store to browse it and get a shipping estimate before you order
+      {/* Logo grid */}
+      <div className={styles.grid}>
+        {filtered.map(store => (
+          <button
+            key={`${store.country}-${store.name}`}
+            className={styles.storeCard}
+            aria-label={store.name}
+            onClick={() => {
+              try {
+                const raw = localStorage.getItem('shipiq_recent_stores')
+                const prev: Store[] = raw ? JSON.parse(raw) : []
+                const next = [store, ...prev.filter(s => !(s.country === store.country && s.name === store.name))].slice(0, 5)
+                localStorage.setItem('shipiq_recent_stores', JSON.stringify(next))
+                window.dispatchEvent(new Event('shipiq:recent_update'))
+              } catch {}
+              setSelectedStore(store)
+            }}
+          >
+            <CardLogo domain={store.domain} name={store.name} />
+          </button>
+        ))}
       </div>
 
       {/* Slide-in panel */}
