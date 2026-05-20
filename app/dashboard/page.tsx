@@ -9,9 +9,10 @@ import {
   updateOrder, topUpBalance, deductBalance, signOut,
   getTierSettings, getWishlist, addToWishlist, removeFromWishlist,
   getUserDeliveryRequests, getAdminDeliveryRequests,
+  getOrderUnreadCounts,
 } from '@/lib/api'
 import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
-import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem, DeliveryRequest } from '@/lib/types'
+import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem, DeliveryRequest, OrderNote } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
@@ -34,6 +35,7 @@ import WishlistPage from './components/WishlistPage'
 import DeliveryRequestModal from './components/DeliveryRequestModal'
 import AdminDeliveries from './components/AdminDeliveries'
 import NotificationCenter from './components/NotificationCenter'
+import OrderNotes from './components/OrderNotes'
 import type { TierSettings } from '@/lib/types'
 
 // ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
@@ -518,8 +520,9 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
 
 // ── OrderDetailModal ──────────────────────────────────────────────────────────
 
-function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { order: Order; isAdmin: boolean; adminName?: string; onClose: () => void; onRefresh: () => void }) {
-  const [view, setView] = useState<'detail' | 'calculate' | 'reject' | 'billing'>('detail')
+function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, onRefresh, onNotesRead }: { order: Order; isAdmin: boolean; adminName?: string; currentUserId: string; onClose: () => void; onRefresh: () => void; onNotesRead?: () => void }) {
+  const [view, setView] = useState<'detail' | 'calculate' | 'reject' | 'billing' | 'notes'>('detail')
+  const [notesUnread, setNotesUnread] = useState(0)
   const autoDeliveryFee =
     order.delivery_preference === 'home_erbil'   ? '3000' :
     order.delivery_preference === 'home_baghdad' ? '5000' : '0'
@@ -577,6 +580,12 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
       getProfile(order.user_id).then(setOrderCustomerProfile)
     }
   }, [isAdmin, order.user_id])
+
+  useEffect(() => {
+    getOrderUnreadCounts([order.id], isAdmin).then(counts => {
+      setNotesUnread(counts[order.id] || 0)
+    })
+  }, [order.id, isAdmin])
 
   const applyUpdate = async (updates: Record<string, unknown>) => {
     setLoading(true)
@@ -703,6 +712,14 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
             📅 Estimated delivery: {eta} ({orderCountry})
           </div>
         )}
+        {!isAdmin && (
+          <div className={styles.tabs}>
+            <button className={`${styles.tab} ${view !== 'notes' ? styles.activeTab : ''}`} onClick={() => setView('detail')}>Details</button>
+            <button className={`${styles.tab} ${view === 'notes' ? styles.activeTab : ''}`} onClick={() => { setView('notes'); setNotesUnread(0) }}>
+              💬 Notes{notesUnread > 0 ? ` (${notesUnread})` : ''}
+            </button>
+          </div>
+        )}
         {isAdmin && (
           <>
             <div className={styles.tabs}>
@@ -710,6 +727,9 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
               {order.status === 'pending' && <button className={`${styles.tab} ${view === 'calculate' ? styles.activeTab : ''}`} onClick={() => setView('calculate')}>Calculate</button>}
               {order.shipping_price && <button className={`${styles.tab} ${view === 'billing' ? styles.activeTab : ''}`} onClick={() => setView('billing')}>💳 Billing</button>}
               {['pending', 'calculated'].includes(order.status) && <button className={`${styles.tab} ${view === 'reject' ? styles.activeTab : ''}`} onClick={() => setView('reject')}>Reject</button>}
+              <button className={`${styles.tab} ${view === 'notes' ? styles.activeTab : ''}`} onClick={() => { setView('notes'); setNotesUnread(0) }}>
+                💬 Notes{notesUnread > 0 ? ` (${notesUnread})` : ''}
+              </button>
             </div>
             {NEXT_STATUS[order.status] && (
               <div style={{ padding: '0 0 16px' }}>
@@ -1130,6 +1150,20 @@ function OrderDetailModal({ order, isAdmin, adminName, onClose, onRefresh }: { o
             )}
           </div>
         )}
+        {view === 'notes' && (
+          <OrderNotes
+            orderId={order.id}
+            isAdmin={isAdmin}
+            currentUserId={currentUserId}
+            currentUserName={isAdmin ? (adminName || 'ShipIQ') : 'You'}
+            orderUserId={order.user_id}
+            orderUserName={isAdmin ? (orderCustomerProfile?.full_name || 'Customer') : 'ShipIQ'}
+            onMarkRead={() => {
+              setNotesUnread(0)
+              onNotesRead?.()
+            }}
+          />
+        )}
       </div>
     </div>
   )
@@ -1309,6 +1343,8 @@ export default function Dashboard() {
   // Delivery
   const [deliveryRequests, setDeliveryRequests] = useState<DeliveryRequest[]>([])
   const [showDeliveryModal, setShowDeliveryModal] = useState(false)
+  // Order notes unread counts
+  const [noteUnreadCounts, setNoteUnreadCounts] = useState<Record<string, number>>({})
 
   const toast = useCallback((message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
@@ -1326,9 +1362,11 @@ export default function Dashboard() {
     if (prof.role === 'admin') {
       const [allOrders, allUsers, delivReqs] = await Promise.all([getAdminOrders(), getCustomers(), getAdminDeliveryRequests()])
       setOrders(allOrders); setUsers(allUsers); setDeliveryRequests(delivReqs)
+      getOrderUnreadCounts(allOrders.map(o => o.id), true).then(setNoteUnreadCounts)
     } else if (prof.role === 'customer') {
       const [myOrders, txns, wl, delivReqs] = await Promise.all([getUserOrders(session.user.id), getUserTransactions(session.user.id), getWishlist(session.user.id), getUserDeliveryRequests(session.user.id)])
       setOrders(myOrders); setTransactions(txns); setWishlist(wl); setDeliveryRequests(delivReqs)
+      getOrderUnreadCounts(myOrders.map(o => o.id), false).then(setNoteUnreadCounts)
     }
     // agents: AgentDashboard fetches its own data
     if (prof.role !== 'agent') getTierSettings().then(setTierSettings)
@@ -1660,7 +1698,16 @@ export default function Dashboard() {
                           <td className={`${styles.tdMain} ${styles.mobileHide}`}>{o.id}</td>
                           <td>{o.description}</td>
                           <td className={styles.mobileHide}>{o.created_at?.split('T')[0]}</td>
-                          <td><Badge status={o.status} /></td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                              <Badge status={o.status} />
+                              {(noteUnreadCounts[o.id] || 0) > 0 && (
+                                <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, fontWeight: 700, background: 'rgba(91,155,213,0.12)', color: 'var(--blue)', border: '1px solid rgba(91,155,213,0.28)' }}>
+                                  💬 {noteUnreadCounts[o.id]}
+                                </span>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1866,6 +1913,19 @@ export default function Dashboard() {
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                 <Badge status={o.status} />
+                                {(noteUnreadCounts[o.id] || 0) > 0 && (
+                                  <span
+                                    title={`${noteUnreadCounts[o.id]} unread message${noteUnreadCounts[o.id] > 1 ? 's' : ''}`}
+                                    style={{
+                                      fontSize: 10, padding: '2px 6px', borderRadius: 10, fontWeight: 700,
+                                      background: 'rgba(91,155,213,0.12)', color: 'var(--blue)',
+                                      border: '1px solid rgba(91,155,213,0.28)',
+                                      display: 'inline-flex', alignItems: 'center', gap: 2,
+                                    }}
+                                  >
+                                    💬 {noteUnreadCounts[o.id]}
+                                  </span>
+                                )}
                                 {isAdmin && ['confirmed','ordered','warehouse','transit','arrived','delivered'].includes(o.status) && (
                                   <span
                                     style={{
@@ -2337,7 +2397,7 @@ export default function Dashboard() {
         />
       )}
       {showTopUp && profile && <WalletTopUp userId={profile.id} open={true} onClose={() => setShowTopUp(false)} onSuccess={() => { fetchData(); toast('Top-up request sent! · تم إرسال طلب الشحن') }} />}
-      {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} adminName={isAdmin ? (profile?.full_name || 'Admin') : undefined} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} />}
+      {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} adminName={isAdmin ? (profile?.full_name || 'Admin') : undefined} currentUserId={profile?.id || ''} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} onNotesRead={() => setNoteUnreadCounts(prev => ({ ...prev, [selectedOrder.id]: 0 }))} />}
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}
       {showExport && isAdmin && <AdminExport orders={orders} onClose={() => setShowExport(false)} />}
       {showTierSettings && isAdmin && <AdminTierSettings onClose={() => { setShowTierSettings(false); getTierSettings().then(setTierSettings) }} />}

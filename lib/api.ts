@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { createClient } from './supabase'
-import type { Order, OrderForm, Profile, Transaction, TierSettings, WishlistItem, DeliveryRequest, Notification } from './types'
+import type { Order, OrderForm, Profile, Transaction, TierSettings, WishlistItem, DeliveryRequest, Notification, OrderNote } from './types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -399,4 +399,71 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
     .update({ read: true })
     .eq('user_id', userId)
     .eq('read', false)
+}
+
+// ── Order Notes ───────────────────────────────────────────────────────────────
+
+export async function getOrderNotes(orderId: string): Promise<OrderNote[]> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('order_notes')
+    .select('*')
+    .eq('order_id', orderId)
+    .order('created_at', { ascending: true })
+  return data || []
+}
+
+export async function addOrderNote(
+  orderId: string,
+  userId: string,
+  message: string,
+  isAdmin: boolean,
+  notifyUserId?: string
+): Promise<{ error: string | null }> {
+  const supabase = createClient()
+  const { error } = await supabase.from('order_notes').insert({
+    order_id: orderId,
+    user_id: userId,
+    message,
+    is_admin: isAdmin,
+  })
+  if (error) return { error: error.message }
+  if (isAdmin && notifyUserId) {
+    await supabase.from('notifications').insert({
+      user_id: notifyUserId,
+      title: `New message on order ${orderId}`,
+      message: 'ShipIQ replied on your order. Tap to read.',
+      type: 'info',
+    })
+  }
+  return { error: null }
+}
+
+export async function markOrderNotesRead(orderId: string, isAdmin: boolean): Promise<void> {
+  const supabase = createClient()
+  const column = isAdmin ? 'is_read_by_admin' : 'is_read_by_customer'
+  await supabase
+    .from('order_notes')
+    .update({ [column]: true })
+    .eq('order_id', orderId)
+    .eq('is_admin', !isAdmin)
+    .eq(column, false)
+}
+
+export async function getOrderUnreadCounts(orderIds: string[], isAdmin: boolean): Promise<Record<string, number>> {
+  if (orderIds.length === 0) return {}
+  const supabase = createClient()
+  const readCol = isAdmin ? 'is_read_by_admin' : 'is_read_by_customer'
+  const query = supabase
+    .from('order_notes')
+    .select('order_id')
+    .in('order_id', orderIds)
+    .eq('is_admin', !isAdmin)
+    .eq(readCol, false)
+  const { data } = await query
+  const counts: Record<string, number> = {}
+  for (const row of (data || [])) {
+    counts[row.order_id] = (counts[row.order_id] || 0) + 1
+  }
+  return counts
 }

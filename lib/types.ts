@@ -122,6 +122,17 @@ export interface Notification {
   created_at: string
 }
 
+export interface OrderNote {
+  id: string
+  order_id: string
+  user_id: string
+  message: string
+  is_admin: boolean
+  is_read_by_customer: boolean
+  is_read_by_admin: boolean
+  created_at: string
+}
+
 export interface Transaction {
   id: string
   user_id: string
