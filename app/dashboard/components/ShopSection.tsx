@@ -49,14 +49,13 @@ function StoreLogo({
 // ── Card logo: clean logo-only (Clearbit → first-letter fallback) ─────────────
 
 function CardLogo({ domain, name }: { domain: string; name: string }) {
-  const [src] = useState(`https://logo.clearbit.com/${domain}?size=120`)
   const [failed, setFailed] = useState(false)
 
-  if (failed) return <div className={styles.storeLogoLetter}>{name.charAt(0)}</div>
+  if (failed) return <div className={styles.storeLogoText}>{name}</div>
 
   return (
     <img
-      src={src}
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=128`}
       alt={name}
       className={styles.storeLogoImg}
       onError={() => setFailed(true)}
