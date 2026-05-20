@@ -84,7 +84,6 @@ export async function POST(req: NextRequest) {
   else if (twilio) provider = 'twilio'
 
   if (!provider) {
-    console.log('WhatsApp not configured — skipping message', { orderId })
     return NextResponse.json({ success: true, skipped: true })
   }
 

@@ -117,8 +117,9 @@
 .ordered    { background: rgba(224,160,32,0.15);  color: #d4960a;        border: 1px solid rgba(224,160,32,0.3); }
 .warehouse  { background: rgba(155,89,182,0.15);  color: #9b59b6;        border: 1px solid rgba(155,89,182,0.3); }
 .transit    { background: rgba(59,130,246,0.15);  color: #3b82f6;        border: 1px solid rgba(59,130,246,0.3); }
-.arrived    { background: rgba(20,184,166,0.15);  color: #14b8a6;        border: 1px solid rgba(20,184,166,0.3); }
-.delivered  { background: rgba(34,197,94,0.15);   color: #16a34a;        border: 1px solid rgba(34,197,94,0.3); }
+.arrived          { background: rgba(20,184,166,0.15);  color: #14b8a6;  border: 1px solid rgba(20,184,166,0.3); }
+.out_for_delivery { background: rgba(249,115,22,0.15);  color: #ea580c;  border: 1px solid rgba(249,115,22,0.3); }
+.delivered        { background: rgba(34,197,94,0.15);   color: #16a34a;  border: 1px solid rgba(34,197,94,0.3); }
 .rejected   { background: rgba(217,83,79,0.15);   color: var(--red);     border: 1px solid rgba(217,83,79,0.3); }
 
 /* Order progress timeline */

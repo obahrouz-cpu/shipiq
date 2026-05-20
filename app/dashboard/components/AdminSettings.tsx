@@ -17,19 +17,10 @@ async function loadSettings(): Promise<{ settings: Settings; error: string | nul
     return { settings: {}, error: error.message, count: 0 }
   }
 
-  console.log('[AdminSettings] app_settings raw rows:', data)
-
   const settings = (data ?? []).reduce(
     (acc: Settings, row: { key: string; value: string }) => ({ ...acc, [row.key]: row.value }),
     {} as Settings
   )
-
-  console.log('[AdminSettings] mapped settings keys:', Object.keys(settings))
-  console.log('[AdminSettings] template values:', {
-    msg_order_received: settings.msg_order_received,
-    msg_price_calculated: settings.msg_price_calculated,
-    msg_order_confirmed: settings.msg_order_confirmed,
-  })
 
   return { settings, error: null, count: data?.length ?? 0 }
 }

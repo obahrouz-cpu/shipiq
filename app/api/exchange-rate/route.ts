@@ -1,3 +1,7 @@
+// FLUTTER: lib/services/exchange_rate_service.dart → getRate()
+// Method: GET  Auth: none
+// Returns: { rate: number, source: string, updated: string }
+
 import { NextResponse } from 'next/server'
 
 const FALLBACK_RATE = 1540
@@ -53,24 +57,14 @@ export async function GET() {
   try {
     let res = await fetchQamarRates()
     let html = await res.text()
-    console.log('[exchange-rate] qamaralfajr direct status:', res.status)
-    console.log('[exchange-rate] qamaralfajr direct body:', html)
 
     // 2. If blocked, fetch the home page to obtain cookies, then retry.
     if (!res.ok) {
-      console.log('[exchange-rate] qamaralfajr direct failed, fetching home page for cookies')
       const home = await fetch(QAMAR_HOME_URL, { headers: QAMAR_HEADERS, next: { revalidate: 0 } })
-      const homeBody = await home.text()
-      console.log('[exchange-rate] qamaralfajr home status:', home.status)
-      console.log('[exchange-rate] qamaralfajr home body:', homeBody)
-
+      await home.text()
       const cookies = collectCookies(home)
-      console.log('[exchange-rate] qamaralfajr cookies:', cookies)
-
       res = await fetchQamarRates(cookies ? { Cookie: cookies } : {})
       html = await res.text()
-      console.log('[exchange-rate] qamaralfajr retry status:', res.status)
-      console.log('[exchange-rate] qamaralfajr retry body:', html)
     }
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -82,7 +76,7 @@ export async function GET() {
     cached = { rate, source: 'qamaralfajr.com', updated: now, ts: Date.now() }
     return NextResponse.json({ rate, source: 'qamaralfajr.com', updated: now })
   } catch (err) {
-    console.log('[exchange-rate] qamaralfajr failed:', err)
+    console.error('[exchange-rate] qamaralfajr failed:', err instanceof Error ? err.message : err)
   }
 
   // 3. Backup source: iraqborsa.com
@@ -98,9 +92,6 @@ export async function GET() {
     })
 
     const html = await res.text()
-    console.log('[exchange-rate] iraqborsa status:', res.status)
-    console.log('[exchange-rate] iraqborsa body:', html)
-
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
     const rate = extractHighestRate(html)
@@ -110,7 +101,7 @@ export async function GET() {
     cached = { rate, source: 'iraqborsa.com', updated: now, ts: Date.now() }
     return NextResponse.json({ rate, source: 'iraqborsa.com', updated: now })
   } catch (err) {
-    console.log('[exchange-rate] iraqborsa failed:', err)
+    console.error('[exchange-rate] iraqborsa failed:', err instanceof Error ? err.message : err)
   }
 
   // 4. Final fallback: hardcoded rate.

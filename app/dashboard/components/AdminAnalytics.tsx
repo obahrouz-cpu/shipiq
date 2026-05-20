@@ -14,7 +14,7 @@ const GOLD = '#c9a84c'
 const IQD_PER_USD = 1540
 const REVENUE_STATUSES = new Set(['confirmed', 'ordered', 'warehouse', 'transit', 'arrived', 'delivered'])
 
-const STATUS_ORDER = ['pending', 'calculated', 'confirmed', 'ordered', 'warehouse', 'transit', 'arrived', 'delivered'] as const
+const STATUS_ORDER = ['pending', 'calculated', 'confirmed', 'ordered', 'warehouse', 'transit', 'arrived', 'out_for_delivery', 'delivered'] as const
 
 const COUNTRY_DOMAINS: Record<string, string[]> = {
   USA:    ['amazon.com', 'ebay.', 'walmart.', 'bestbuy.', 'newegg.', 'bhphotovideo.', 'nike.', 'adidas.', 'sephora.', 'iherb.', 'target.', 'macys.'],

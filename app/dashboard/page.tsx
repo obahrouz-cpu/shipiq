@@ -183,24 +183,26 @@ function AutoCalculate({ url, onResult }: { url: string; onResult: (weight: stri
 
 // ── Shipping progress constants ───────────────────────────────────────────────
 
-const PROGRESS_STEPS = ['pending', 'calculated', 'confirmed', 'ordered', 'warehouse', 'transit', 'arrived', 'delivered']
+const PROGRESS_STEPS = ['pending', 'calculated', 'confirmed', 'ordered', 'warehouse', 'transit', 'arrived', 'out_for_delivery', 'delivered']
 
 const NEXT_STATUS: Record<string, string> = {
-  confirmed: 'ordered',
-  ordered:   'warehouse',
-  warehouse: 'transit',
-  transit:   'arrived',
-  arrived:   'delivered',
+  confirmed:        'ordered',
+  ordered:          'warehouse',
+  warehouse:        'transit',
+  transit:          'arrived',
+  arrived:          'out_for_delivery',
+  out_for_delivery: 'delivered',
 }
 
 // Maps an order status to its WhatsApp notification event.
 const STATUS_EVENT: Record<string, string> = {
-  ordered:   'item_ordered',
-  warehouse: 'at_warehouse',
-  transit:   'in_transit',
-  arrived:   'arrived_city',
-  delivered: 'delivered',
-  rejected:  'rejected',
+  ordered:          'item_ordered',
+  warehouse:        'at_warehouse',
+  transit:          'in_transit',
+  arrived:          'arrived_city',
+  out_for_delivery: 'out_for_delivery',
+  delivered:        'delivered',
+  rejected:         'rejected',
 }
 
 // Fire-and-forget WhatsApp notification — silent-fail, never blocks the UI.
@@ -213,11 +215,12 @@ function notifyWhatsapp(orderId: string, event: string, extra?: Record<string, u
 }
 
 const NEXT_LABEL: Record<string, string> = {
-  confirmed: 'Mark as Ordered 🛒',
-  ordered:   'Mark as At Warehouse 🏭',
-  warehouse: 'Mark as In Transit ✈️',
-  transit:   'Mark as Arrived in City 🏙️',
-  arrived:   'Mark as Delivered 📬',
+  confirmed:        'Mark as Ordered 🛒',
+  ordered:          'Mark as At Warehouse 🏭',
+  warehouse:        'Mark as In Transit ✈️',
+  transit:          'Mark as Arrived in City 🏙️',
+  arrived:          'Mark as Out for Delivery 🛵',
+  out_for_delivery: 'Mark as Delivered 📬',
 }
 
 const DELIVERY_OPTIONS_MODAL = [

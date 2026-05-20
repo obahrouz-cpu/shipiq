@@ -1,14 +1,18 @@
+// FLUTTER: lib/services/scrape_service.dart → scrapeProduct()
+// Method: POST  Auth: none (rate-limited by IP)
+// Body:   { url: string }
+// Returns: ScrapeResult — see lib/api_schema.ts
+
 import { NextRequest, NextResponse } from 'next/server'
 import { SITE_INFO } from '@/lib/constants'
+import { rateLimit } from '@/lib/rate-limit'
 
 export const maxDuration = 60
 
 // ── Oxylabs Web Scraper API ───────────────────────────────────────────────────
-// One API handles every supported site. Credentials come from env vars (with a
-// fallback to the provisioned account so local dev works without setup).
 
-const OXYLABS_USERNAME = process.env.OXYLABS_USERNAME || 'ShipIQ_RP38J'
-const OXYLABS_PASSWORD = process.env.OXYLABS_PASSWORD || '7878_shippersQ'
+const OXYLABS_USERNAME = process.env.OXYLABS_USERNAME || ''
+const OXYLABS_PASSWORD = process.env.OXYLABS_PASSWORD || ''
 const OXYLABS_AUTH = 'Basic ' + Buffer.from(`${OXYLABS_USERNAME}:${OXYLABS_PASSWORD}`).toString('base64')
 const OXYLABS_ENDPOINT = 'https://realtime.oxylabs.io/v1/queries'
 
@@ -169,23 +173,14 @@ function parseDimensionsToCm(dimStr: string): { l: number; w: number; h: number 
 
 function validateWeight(kg: number | null): number | null {
   if (kg === null) return null
-  if (kg < 0.01 || kg > 50) {
-    console.log(`[scrape] Rejected weight ${kg} kg as invalid, using estimator`)
-    return null
-  }
+  if (kg < 0.01 || kg > 50) return null
   return kg
 }
 
 function validateDims(dims: { l: number; w: number; h: number } | null): { l: number; w: number; h: number } | null {
   if (!dims) return null
-  if (dims.l > 200 || dims.w > 200 || dims.h > 200) {
-    console.log(`[scrape] Rejected dimensions ${dims.l}x${dims.w}x${dims.h} cm as invalid (> 200cm)`)
-    return null
-  }
-  if ((dims.l * dims.w * dims.h) / 5000 > 50) {
-    console.log(`[scrape] Rejected dimensions — dimensional weight > 50 kg`)
-    return null
-  }
+  if (dims.l > 200 || dims.w > 200 || dims.h > 200) return null
+  if ((dims.l * dims.w * dims.h) / 5000 > 50) return null
   return dims
 }
 
@@ -288,9 +283,23 @@ function buildWeightResponse(opts: {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 15 scrape requests per IP per minute (each call costs Oxylabs credit)
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  const { ok } = rateLimit(ip, 'scrape', 15, 60_000)
+  if (!ok) return NextResponse.json({ found: false, reason: 'Too many requests. Please wait a moment.' }, { status: 429 })
+
+  if (!OXYLABS_USERNAME || !OXYLABS_PASSWORD) {
+    return NextResponse.json({ found: false, reason: 'Scraper not configured.' }, { status: 503 })
+  }
+
   try {
-    const { url } = await req.json()
-    if (!url) return NextResponse.json({ error: 'URL required' }, { status: 400 })
+    const body = await req.json().catch(() => ({}))
+    const url: unknown = body?.url
+    if (!url || typeof url !== 'string') return NextResponse.json({ error: 'URL required' }, { status: 400 })
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      return NextResponse.json({ found: false, reason: 'Invalid URL.' }, { status: 400 })
+    }
+    if (url.length > 2000) return NextResponse.json({ found: false, reason: 'URL too long.' }, { status: 400 })
 
     const siteInfo = detectSite(url)
     if (!siteInfo) return NextResponse.json({ found: false, reason: 'Unsupported site' }, { status: 400 })
@@ -427,7 +436,6 @@ export async function POST(req: NextRequest) {
                 weightKg = val.toLowerCase().includes('kg')
                   ? Math.round(num * 100) / 100
                   : Math.round(num / 1000 * 100) / 100
-                console.log('[scrape] Trendyol weight from spec table:', key, '=', val, '->', weightKg, 'kg')
               }
             }
           }
@@ -443,7 +451,6 @@ export async function POST(req: NextRequest) {
               if (!weightKg && node?.weight) {
                 const w = typeof node.weight === 'object' ? (node.weight.value ?? '') : node.weight
                 weightKg = parseWeightToKg(String(w))
-                console.log('[scrape] Trendyol weight from JSON-LD:', node.weight, '->', weightKg)
               }
             } catch { /* skip */ }
           }

@@ -1,3 +1,8 @@
+// FLUTTER: lib/services/agent_service.dart → getAgentOrders()
+// Method: POST  Auth: access_token in body
+// Body:   { access_token: string }
+// Returns: { orders: Order[], country: string, error?: string }
+
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 

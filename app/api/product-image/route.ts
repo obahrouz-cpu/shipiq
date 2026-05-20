@@ -1,7 +1,13 @@
+// FLUTTER: lib/services/product_service.dart → getProductImage()
+// Method: POST  Auth: none (rate-limited by IP)
+// Body:   { url: string }
+// Returns: { image_url: string | null }
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
+import { rateLimit } from '@/lib/rate-limit'
 
-const RAPIDAPI_KEY = 'ak_ih50qdl5j9zcal1fcrt9373dkzzbu7ahvizay953wvnxin7'
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || ''
 const MOBILE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
 const BAD_IMAGE_WORDS = ['prime', 'logo', 'marketing', 'banner', 'icon', 'favicon']
 
@@ -171,9 +177,15 @@ async function fetchGeneric(url: string): Promise<string | null> {
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  const { ok } = rateLimit(ip, 'product-image', 30, 60_000)
+  if (!ok) return NextResponse.json({ image_url: null }, { status: 429 })
+
   try {
-    const { url } = await req.json()
+    const body = await req.json().catch(() => ({}))
+    const url: unknown = body?.url
     if (!url || typeof url !== 'string') return NextResponse.json({ image_url: null })
+    if (url.length > 2000) return NextResponse.json({ image_url: null })
 
     const lowerUrl = url.toLowerCase()
 

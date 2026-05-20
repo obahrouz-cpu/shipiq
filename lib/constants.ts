@@ -50,9 +50,10 @@ export const STATUS_CONFIG: Record<string, StatusConfigEntry> = {
   ordered:    { label: 'Ordered',        labelAr: 'تم الطلب',      cls: 'ordered',    icon: '🛒' },
   warehouse:  { label: 'At Warehouse',   labelAr: 'في المستودع',   cls: 'warehouse',  icon: '🏭' },
   transit:    { label: 'In Transit',     labelAr: 'في الطريق',     cls: 'transit',    icon: '✈️' },
-  arrived:    { label: 'Arrived in City',labelAr: 'وصل للمدينة',   cls: 'arrived',    icon: '🏙️' },
-  delivered:  { label: 'Delivered',      labelAr: 'تم التوصيل',    cls: 'delivered',  icon: '📬' },
-  rejected:   { label: 'Rejected',       labelAr: 'مرفوض',         cls: 'rejected',   icon: '❌' },
+  arrived:          { label: 'Arrived in City',   labelAr: 'وصل للمدينة',   cls: 'arrived',          icon: '🏙️' },
+  out_for_delivery: { label: 'Out for Delivery',  labelAr: 'خرج للتوصيل',   cls: 'out_for_delivery', icon: '🛵' },
+  delivered:        { label: 'Delivered',         labelAr: 'تم التوصيل',    cls: 'delivered',        icon: '📬' },
+  rejected:         { label: 'Rejected',          labelAr: 'مرفوض',         cls: 'rejected',         icon: '❌' },
 }
 
 // ── Order form categories ─────────────────────────────────────────────────────

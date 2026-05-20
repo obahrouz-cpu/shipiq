@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 const WAVE_GQL = 'https://gql.waveapps.com/graphql/public'
 const ZOHO_BASE = 'https://books.zoho.com/api/v3'
@@ -22,11 +23,10 @@ interface LineItem { label: string; unitPrice: number }
 
 // ── Settings helpers ──────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadSettings(supabase: any): Promise<Record<string, string>> {
+async function loadSettings(supabase: SupabaseClient): Promise<Record<string, string>> {
   const { data } = await supabase.from('app_settings').select('key, value')
   if (!data) return {}
-  return Object.fromEntries(data.map((r: { key: string; value: string }) => [r.key, r.value]))
+  return Object.fromEntries((data as { key: string; value: string }[]).map(r => [r.key, r.value]))
 }
 
 async function getIqdRate(settings: Record<string, string>): Promise<number> {

@@ -1,5 +1,10 @@
+// FLUTTER: Internal only — called server-side after order status changes.
+// Flutter should trigger via Supabase Edge Function or server-side webhook, not directly.
+// Method: POST  Auth: none (internal — called from server routes only)
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 const SITE_URL = 'https://shipiq1.vercel.app'
 
@@ -20,11 +25,10 @@ interface NotifyBody {
   city?: string
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadSettings(supabase: any): Promise<Record<string, string>> {
+async function loadSettings(supabase: SupabaseClient): Promise<Record<string, string>> {
   const { data } = await supabase.from('app_settings').select('key, value')
   if (!data) return {}
-  return Object.fromEntries(data.map((r: { key: string; value: string }) => [r.key, r.value]))
+  return Object.fromEntries((data as { key: string; value: string }[]).map(r => [r.key, r.value]))
 }
 
 function fmt(v: number | string | undefined): string {
@@ -67,7 +71,6 @@ export async function POST(req: NextRequest) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   if (!serviceKey || !supabaseUrl) {
-    console.log('WhatsApp notify: Supabase not configured — skipping')
     return NextResponse.json({ success: true, skipped: true })
   }
 
@@ -82,10 +85,8 @@ export async function POST(req: NextRequest) {
     const customerEnabled = settings[`notify_${event}`] !== 'false'
 
     // Resolve the order + customer.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let order: any = null
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let customer: any = null
+    let order: { id: string; profiles?: { full_name: string; phone: string } | null; reject_reason?: string; delivery_city?: string; balance?: number } | null = null
+    let customer: { full_name: string; phone: string } | null = null
 
     if (body.orderId) {
       const { data } = await supabase
