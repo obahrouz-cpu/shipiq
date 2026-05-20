@@ -27,6 +27,7 @@ import BoutiqaatWeightEstimator from './components/BoutiqaatWeightEstimator'
 import TierBadge from './components/TierBadge'
 import AdminTierSettings from './components/AdminTierSettings'
 const AdminAnalytics = dynamic(() => import('./components/AdminAnalytics'), { ssr: false })
+const AdminCustomerProfile = dynamic(() => import('./components/AdminCustomerProfile'), { ssr: false })
 import AgentDashboard from './components/AgentDashboard'
 import AdminMobileAccount from './components/AdminMobileAccount'
 import ShippingCalculator from './components/ShippingCalculator'
@@ -1342,6 +1343,7 @@ export default function Dashboard() {
   const [showNewOrder, setShowNewOrder] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [topUpUser, setTopUpUser]       = useState<Profile | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<Profile | null>(null)
   const [filters, setFilters]           = useState<OrderFiltersState>(DEFAULT_FILTERS)
   const [toasts, setToasts]             = useState<Toast[]>([])
   const [sidebarOpen, setSidebarOpen]     = useState(false)
@@ -2289,11 +2291,14 @@ export default function Dashboard() {
                       </tr></thead>
                       <tbody>
                         {users.map(u => (
-                          <tr key={u.id}>
+                          <tr key={u.id} onClick={() => setSelectedCustomer(u)} style={{ cursor: 'pointer' }}>
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <div className={styles.userAvatar} style={{ width: 30, height: 30, fontSize: 12 }}>{u.full_name?.[0]}</div>
-                                <span className={styles.tdMain}>{u.full_name}</span>
+                                <div className={styles.userAvatar} style={{ width: 30, height: 30, fontSize: 12, border: u.is_suspended ? '2px solid var(--red)' : undefined }}>{u.full_name?.[0]}</div>
+                                <div>
+                                  <span className={styles.tdMain}>{u.full_name}</span>
+                                  {u.is_suspended && <span style={{ fontSize: 10, color: 'var(--red)', marginLeft: 6 }}>Suspended</span>}
+                                </div>
                               </div>
                             </td>
                             <td>
@@ -2313,7 +2318,9 @@ export default function Dashboard() {
                             </td>
                             <td style={{ color: 'var(--gold)', fontWeight: 700 }}>{u.balance?.toLocaleString()} IQD</td>
                             <td>{u.created_at?.split('T')[0]}</td>
-                            <td><button className={styles.btnGhost} style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setTopUpUser(u)}>{t('customers', 'addBalance')}</button></td>
+                            <td onClick={e => e.stopPropagation()}>
+                              <button className={styles.btnGhost} style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setTopUpUser(u)}>{t('customers', 'addBalance')}</button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -2419,6 +2426,16 @@ export default function Dashboard() {
       {showTopUp && profile && <WalletTopUp userId={profile.id} open={true} onClose={() => setShowTopUp(false)} onSuccess={() => { fetchData(); toast('Top-up request sent! · تم إرسال طلب الشحن') }} />}
       {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} adminName={isAdmin ? (profile?.full_name || 'Admin') : undefined} currentUserId={profile?.id || ''} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} onNotesRead={() => setNoteUnreadCounts(prev => ({ ...prev, [selectedOrder.id]: 0 }))} />}
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}
+      {selectedCustomer && isAdmin && profile && (
+        <AdminCustomerProfile
+          customer={selectedCustomer}
+          tierSettings={tierSettings.length > 0 ? tierSettings : FALLBACK_TIERS}
+          onClose={() => setSelectedCustomer(null)}
+          onToast={toast}
+          onRefresh={fetchData}
+          currentAdminId={profile.id}
+        />
+      )}
       {showExport && isAdmin && <AdminExport orders={orders} onClose={() => setShowExport(false)} />}
       {showTierSettings && isAdmin && <AdminTierSettings onClose={() => { setShowTierSettings(false); getTierSettings().then(setTierSettings) }} />}
       {showCreateAgent && isAdmin && <CreateAgentModal onClose={() => setShowCreateAgent(false)} onDone={() => { toast('Agent created!') }} />}

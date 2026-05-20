@@ -32,6 +32,9 @@ export interface Profile {
   delivery_address?: string
   delivery_city?: string
   delivery_notes?: string
+  is_suspended?: boolean
+  suspension_reason?: string
+  last_seen_at?: string
   created_at: string
 }
 
