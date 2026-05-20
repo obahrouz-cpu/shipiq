@@ -62,7 +62,13 @@ const taStyle: React.CSSProperties = {
   ...inputStyle, resize: 'vertical', lineHeight: 1.5, minHeight: 80,
 }
 
-function SaveBtn({ loading, onClick, saved }: { loading: boolean; onClick: () => void; saved: boolean }) {
+const pillBtnStyle: React.CSSProperties = {
+  padding: '5px 14px', fontSize: 12, fontWeight: 700,
+  background: 'var(--surface)', color: 'var(--text)',
+  border: '1px solid var(--border)', borderRadius: 20, cursor: 'pointer',
+}
+
+function SaveBtn({ loading, onClick, saved, label = 'Save' }: { loading: boolean; onClick: () => void; saved: boolean; label?: string }) {
   return (
     <button
       onClick={onClick}
@@ -77,7 +83,7 @@ function SaveBtn({ loading, onClick, saved }: { loading: boolean; onClick: () =>
         transition: 'background 0.2s',
       }}
     >
-      {loading ? 'Saving...' : saved ? '✓ Saved' : 'Save'}
+      {loading ? 'Saving...' : saved ? '✓ Saved' : label}
     </button>
   )
 }
@@ -120,15 +126,17 @@ const MSG_KEYS = [
   { key: 'msg_balance_added',    icon: '💳', label: 'Balance Added',     vars: ['{amount}', '{balance}', '{customerName}'] },
 ]
 
+// Each template's customer-notification toggle lives at notify_{event} (msg_x → notify_x).
+const notifyKeyOf = (msgKey: string) => msgKey.replace('msg_', 'notify_')
+
 export default function AdminSettings() {
   const [settings, setSettings] = useState<Settings>({})
   const [loaded, setLoaded] = useState(false)
 
   // Per-section save state
-  const [contactSaving, setContactSaving] = useState(false)
-  const [contactSaved,  setContactSaved]  = useState(false)
-  const [msgSaving,     setMsgSaving]     = useState(false)
-  const [msgSaved,      setMsgSaved]      = useState(false)
+  const [waOpen,   setWaOpen]   = useState(false)
+  const [waSaving, setWaSaving] = useState(false)
+  const [waSaved,  setWaSaved]  = useState(false)
   const [bizSaving,     setBizSaving]     = useState(false)
   const [bizSaved,      setBizSaved]      = useState(false)
   const [feeSaving,     setFeeSaving]     = useState(false)
@@ -160,6 +168,21 @@ export default function AdminSettings() {
     setTimeout(() => setSaved(false), 2500)
   }
 
+  // WhatsApp section helpers
+  const enabledCount = MSG_KEYS.filter(m => settings[notifyKeyOf(m.key)] !== 'false').length
+  const setAllNotify = (on: boolean) => {
+    setSettings(prev => {
+      const next = { ...prev }
+      for (const m of MSG_KEYS) next[notifyKeyOf(m.key)] = on ? 'true' : 'false'
+      return next
+    })
+  }
+  const WA_KEYS = [
+    'admin_whatsapp', 'business_whatsapp',
+    ...MSG_KEYS.map(m => m.key),
+    ...MSG_KEYS.map(m => notifyKeyOf(m.key)),
+  ]
+
   if (!loaded) {
     return (
       <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-dim)', fontSize: 13 }}>
@@ -171,73 +194,116 @@ export default function AdminSettings() {
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', paddingBottom: 80 }}>
 
-      {/* ── SECTION 1: Contact & Notifications ── */}
-      <Section title="Contact & Notifications">
-        <Field label="Admin WhatsApp (your number for notifications)" hint="You will receive order alerts here · +964 7XX XXX XXXX">
-          <input
-            style={inputStyle}
-            placeholder="+964 770 000 0000"
-            value={settings.admin_whatsapp ?? ''}
-            onChange={e => set('admin_whatsapp', e.target.value)}
-          />
-        </Field>
-        <Field label="Business WhatsApp (customers message this number)" hint="The number shown to customers for support">
-          <input
-            style={inputStyle}
-            placeholder="+964 770 000 0000"
-            value={settings.business_whatsapp ?? ''}
-            onChange={e => set('business_whatsapp', e.target.value)}
-          />
-        </Field>
-        <Field label="Notification Triggers">
-          {[
-            { key: 'notif_new_order',      label: 'Notify me when a new order is submitted' },
-            { key: 'notif_confirmed',      label: 'Notify me when a customer confirms an order' },
-            { key: 'notif_agent_ordered',  label: 'Notify me when agent marks as ordered' },
-            { key: 'notif_agent_warehouse',label: 'Notify me when agent marks as at warehouse' },
-          ].map(n => (
-            <Toggle
-              key={n.key}
-              checked={settings[n.key] !== 'false'}
-              onChange={v => set(n.key, v ? 'true' : 'false')}
-              label={n.label}
-            />
-          ))}
-        </Field>
-        <SaveBtn
-          loading={contactSaving}
-          saved={contactSaved}
-          onClick={() => save(
-            ['admin_whatsapp', 'business_whatsapp', 'notif_new_order', 'notif_confirmed', 'notif_agent_ordered', 'notif_agent_warehouse'],
-            setContactSaving, setContactSaved
-          )}
-        />
-      </Section>
-
-      {/* ── SECTION 2: Message Templates ── */}
-      <Section title="WhatsApp Message Templates">
-        <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 14, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
-          Available variables: <code style={{ color: 'var(--gold)' }}>{'{orderId}'}</code> · <code style={{ color: 'var(--gold)' }}>{'{customerName}'}</code> · <code style={{ color: 'var(--gold)' }}>{'{amount}'}</code> · <code style={{ color: 'var(--gold)' }}>{'{balance}'}</code> · <code style={{ color: 'var(--gold)' }}>{'{reason}'}</code> · <code style={{ color: 'var(--gold)' }}>{'{city}'}</code>
+      {/* ── SECTION 1+2: WhatsApp Notifications (collapsible) ── */}
+      <div style={{
+        background: 'var(--surface2)', border: '1px solid var(--border)',
+        borderRadius: 14, overflow: 'hidden', marginBottom: 16,
+      }}>
+        {/* Header — always visible */}
+        <div
+          onClick={() => setWaOpen(o => !o)}
+          style={{
+            padding: '14px 16px', display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between', cursor: 'pointer',
+            borderBottom: waOpen ? '1px solid var(--border)' : 'none',
+          }}
+        >
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>📱 WhatsApp Notifications</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{
+              fontSize: 11, fontWeight: 700, color: 'var(--gold)',
+              background: 'rgba(201,168,76,0.12)', padding: '3px 10px', borderRadius: 20,
+            }}>
+              {enabledCount}/{MSG_KEYS.length} enabled
+            </span>
+            <span style={{
+              fontSize: 12, color: 'var(--text-muted)',
+              transform: waOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s',
+            }}>▼</span>
+          </div>
         </div>
-        {MSG_KEYS.map(m => (
-          <Field
-            key={m.key}
-            label={`${m.icon} ${m.label}`}
-            hint={`Variables: ${m.vars.join(', ')}`}
-          >
-            <textarea
-              style={taStyle}
-              value={settings[m.key] ?? ''}
-              onChange={e => set(m.key, e.target.value)}
-            />
-          </Field>
-        ))}
-        <SaveBtn
-          loading={msgSaving}
-          saved={msgSaved}
-          onClick={() => save(MSG_KEYS.map(m => m.key), setMsgSaving, setMsgSaved)}
-        />
-      </Section>
+
+        {/* Body — only when expanded */}
+        {waOpen && (
+          <div style={{ padding: '16px' }}>
+            {/* WhatsApp number fields */}
+            <Field label="Admin WhatsApp (your number for notifications)" hint="You will receive order alerts here · +964 7XX XXX XXXX">
+              <input
+                style={inputStyle}
+                placeholder="+964 770 000 0000"
+                value={settings.admin_whatsapp ?? ''}
+                onChange={e => set('admin_whatsapp', e.target.value)}
+              />
+            </Field>
+            <Field label="Business WhatsApp (customers message this number)" hint="The number shown to customers for support">
+              <input
+                style={inputStyle}
+                placeholder="+964 770 000 0000"
+                value={settings.business_whatsapp ?? ''}
+                onChange={e => set('business_whatsapp', e.target.value)}
+              />
+            </Field>
+
+            {/* Templates list header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexWrap: 'wrap', gap: 8, marginTop: 18, paddingTop: 14, marginBottom: 12,
+              borderTop: '1px solid var(--border)',
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+                {enabledCount}/{MSG_KEYS.length} enabled
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setAllNotify(true)} style={pillBtnStyle}>Enable All</button>
+                <button onClick={() => setAllNotify(false)} style={pillBtnStyle}>Disable All</button>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 14, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
+              Available variables: <code style={{ color: 'var(--gold)' }}>{'{orderId}'}</code> · <code style={{ color: 'var(--gold)' }}>{'{customerName}'}</code> · <code style={{ color: 'var(--gold)' }}>{'{amount}'}</code> · <code style={{ color: 'var(--gold)' }}>{'{balance}'}</code> · <code style={{ color: 'var(--gold)' }}>{'{reason}'}</code> · <code style={{ color: 'var(--gold)' }}>{'{city}'}</code>
+            </div>
+
+            {/* Template rows */}
+            {MSG_KEYS.map(m => {
+              const nk = notifyKeyOf(m.key)
+              const on = settings[nk] !== 'false'
+              return (
+                <div key={m.key} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', opacity: on ? 1 : 0.5 }}>
+                    <Toggle
+                      checked={on}
+                      onChange={v => set(nk, v ? 'true' : 'false')}
+                      label={`${m.icon} ${m.label}`}
+                    />
+                  </div>
+                  {on && (
+                    <>
+                      <div style={{ fontSize: 11, color: 'var(--text-dim)', margin: '2px 0 5px' }}>
+                        Variables: {m.vars.join(', ')}
+                      </div>
+                      <textarea
+                        style={taStyle}
+                        value={settings[m.key] ?? ''}
+                        onChange={e => set(m.key, e.target.value)}
+                      />
+                    </>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Single Save All button */}
+            <div style={{ marginTop: 16 }}>
+              <SaveBtn
+                loading={waSaving}
+                saved={waSaved}
+                label="💾 Save All"
+                onClick={() => save(WA_KEYS, setWaSaving, setWaSaved)}
+              />
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ── SECTION 3: Business Settings ── */}
       <Section title="Business Information">

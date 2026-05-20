@@ -57,6 +57,16 @@ export default function AdminDeliveries({ onToast }: Props) {
     if (next === 'scheduled')        updates.scheduled_at = new Date().toISOString()
     if (next === 'completed')        updates.completed_at = new Date().toISOString()
     await updateDeliveryRequest(req.id, updates)
+    const event = next === 'out_for_delivery' ? 'out_for_delivery' : next === 'completed' ? 'delivered' : null
+    if (event) {
+      (req.order_ids ?? []).forEach(orderId => {
+        fetch('/api/whatsapp/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, event }),
+        }).catch(() => {})
+      })
+    }
     setRequests(prev => prev.map(r => r.id === req.id ? { ...r, ...updates } : r))
     onToast(
       next === 'scheduled' ? 'Delivery scheduled!' :
