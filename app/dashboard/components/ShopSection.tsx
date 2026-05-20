@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import type { Store, ScrapeResult } from '@/lib/types'
-import { STORES, COUNTRY_FILTERS, CATEGORY_FILTERS, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
+import { STORES, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
 import styles from './ShopSection.module.css'
 import DealsSection from './DealsSection'
 import TrendyolWeightEstimator from './TrendyolWeightEstimator'
@@ -45,6 +45,33 @@ function StoreLogo({
     />
   )
 }
+
+// ── Card logo: clean logo-only (Clearbit → first-letter fallback) ─────────────
+
+function CardLogo({ domain, name }: { domain: string; name: string }) {
+  const [src] = useState(`https://logo.clearbit.com/${domain}?size=120`)
+  const [failed, setFailed] = useState(false)
+
+  if (failed) return <div className={styles.storeLogoLetter}>{name.charAt(0)}</div>
+
+  return (
+    <img
+      src={src}
+      alt={name}
+      className={styles.storeLogoImg}
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
+// Flag-only country filter (matches Store.country ids)
+const COUNTRY_FLAGS = [
+  { id: 'All',    label: 'All' },
+  { id: 'US',     label: '🇺🇸' },
+  { id: 'UAE',    label: '🇦🇪' },
+  { id: 'Turkey', label: '🇹🇷' },
+  { id: 'China',  label: '🇨🇳' },
+]
 
 // Returns a dark-safe button background (guards against near-white brand colours)
 function safeBg(hex: string): string {
@@ -283,114 +310,62 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
 
 export default function ShopSection({ userId, onWishlistSave }: { userId?: string; onWishlistSave?: (url: string) => void }) {
   const [countryFilter, setCountryFilter] = useState('All')
-  const [categoryFilter, setCategoryFilter] = useState('All')
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
 
-  const filtered = STORES.filter(s => {
-    const okCountry  = countryFilter  === 'All' || s.country  === countryFilter
-    const okCategory = categoryFilter === 'All' || s.category === categoryFilter
-    return okCountry && okCategory
-  })
-
-  const metaParts: string[] = []
-  if (countryFilter  !== 'All') metaParts.push(countryFilter)
-  if (categoryFilter !== 'All') metaParts.push(categoryFilter)
+  const filtered = countryFilter === 'All'
+    ? STORES
+    : STORES.filter(s => s.country === countryFilter)
 
   return (
     <div style={{ width: '100%', overflowX: 'hidden' }}>
       {/* Deals + Recently Visited */}
       <DealsSection />
 
-      {/* Country pills */}
-      <div className={styles.pills}>
-        {COUNTRY_FILTERS.map(c => (
-          <button
-            key={c.id}
-            className={`${styles.pill} ${countryFilter === c.id ? styles.pillActive : ''}`}
-            onClick={() => setCountryFilter(c.id)}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Category bubbles */}
-      <div className={styles.bubbles}>
-        {CATEGORY_FILTERS.map(cat => (
-          <button
-            key={cat}
-            className={`${styles.bubble} ${categoryFilter === cat ? styles.bubbleActive : ''}`}
-            onClick={() => setCategoryFilter(cat)}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
-
-      {/* Results */}
-      {filtered.length === 0 ? (
-        <div className={styles.noResults}>
-          <div style={{ fontSize: 36, marginBottom: 10, opacity: 0.25 }}>🔍</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-muted)' }}>No stores match this filter</div>
-          <button
-            className={styles.resetBtn}
-            onClick={() => { setCountryFilter('All'); setCategoryFilter('All') }}
-          >
-            Reset filters
-          </button>
+      {/* Filter bar: flag-only country filter + Auto Calculate */}
+      <div className={styles.filterBar}>
+        <div className={styles.flagFilter}>
+          {COUNTRY_FLAGS.map(c => (
+            <button
+              key={c.id}
+              className={`${styles.flagBtn} ${countryFilter === c.id ? styles.flagBtnActive : ''}`}
+              onClick={() => setCountryFilter(c.id)}
+              aria-label={c.id}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
-      ) : (
-        <>
-          <div className={styles.resultsMeta}>
-            {filtered.length} store{filtered.length !== 1 ? 's' : ''}
-            {metaParts.length > 0 && ` · ${metaParts.join(' · ')}`}
-          </div>
-          <div className={styles.grid}>
-            {filtered.map(store => (
-              <button
-                key={`${store.country}-${store.name}`}
-                className={styles.storeCard}
-                onClick={() => {
-                  try {
-                    const raw = localStorage.getItem('shipiq_recent_stores')
-                    const prev: Store[] = raw ? JSON.parse(raw) : []
-                    const next = [store, ...prev.filter(s => !(s.country === store.country && s.name === store.name))].slice(0, 5)
-                    localStorage.setItem('shipiq_recent_stores', JSON.stringify(next))
-                    window.dispatchEvent(new Event('shipiq:recent_update'))
-                  } catch {}
-                  setSelectedStore(store)
-                }}
-                onMouseEnter={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = store.color
-                  el.style.background  = store.bg
-                }}
-                onMouseLeave={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = 'var(--border)'
-                  el.style.background  = 'var(--surface)'
-                }}
-              >
-                <StoreLogo domain={store.domain} emoji={store.emoji} size={32} />
-                <div className={styles.storeName}>{store.name}</div>
-                <div className={styles.storeTags}>
-                  <span
-                    className={styles.storeTag}
-                    style={{ background: store.bg, color: store.color }}
-                  >
-                    {store.category}
-                  </span>
-                  <span className={styles.storeTagFlag}>{store.flag}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+        <button
+          className={styles.autoCalcBtn}
+          onClick={() => setSelectedStore(STORES[0])}
+        >
+          ⚡ Auto Calculate
+        </button>
+      </div>
 
-      {/* Bottom tip */}
-      <div className={styles.tip}>
-        💡 Click a store to browse it and get a shipping estimate before you order
+      {/* Logo grid */}
+      <div className={styles.grid}>
+        {filtered.map(store => (
+          <button
+            key={`${store.country}-${store.name}`}
+            className={styles.storeCard}
+            aria-label={store.name}
+            onClick={() => {
+              try {
+                const raw = localStorage.getItem('shipiq_recent_stores')
+                const prev: Store[] = raw ? JSON.parse(raw) : []
+                const next = [store, ...prev.filter(s => !(s.country === store.country && s.name === store.name))].slice(0, 5)
+                localStorage.setItem('shipiq_recent_stores', JSON.stringify(next))
+                window.dispatchEvent(new Event('shipiq:recent_update'))
+              } catch {}
+              setSelectedStore(store)
+            }}
+          >
+            <div className={styles.storeLogoBox}>
+              <CardLogo domain={store.domain} name={store.name} />
+            </div>
+          </button>
+        ))}
       </div>
 
       {/* Slide-in panel */}
