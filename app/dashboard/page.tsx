@@ -48,6 +48,8 @@ const FALLBACK_TIERS: TierSettings[] = [
   { tier: 'vip',      name_en: 'VIP',      name_ar: 'كبار',    min_spend: 5000, color: '#c9a84c', icon: '👑', benefits: 'Coming soon',         is_active: true },
 ]
 
+const IQD_PER_USD = 1540
+
 // ── URL → country-of-origin detection (used by admin filter) ──────────────────
 
 const COUNTRY_DOMAINS: Record<string, string[]> = {
@@ -431,13 +433,13 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Shipping · الشحن</span>
               <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)' }}>
-                {activeEstimate.min.toLocaleString()} – {activeEstimate.max.toLocaleString()} IQD
+                ~${(activeEstimate.min / IQD_PER_USD).toFixed(2)} – ${(activeEstimate.max / IQD_PER_USD).toFixed(2)} USD
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Iraq Delivery · التوصيل</span>
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-                {deliveryOptModal?.fee === null ? 'Contact us' : deliveryOptModal?.fee === 0 ? 'Free' : `${(estimateDeliveryFeeIqd).toLocaleString()} IQD`}
+                {deliveryOptModal?.fee === null ? 'Contact us' : deliveryOptModal?.fee === 0 ? 'Free' : `~$${(estimateDeliveryFeeIqd / IQD_PER_USD).toFixed(2)}`}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 6, marginBottom: 8, borderTop: '1px solid rgba(201,168,76,0.12)' }}>
@@ -514,7 +516,7 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
                 />
                 <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>{opt.label}</span>
                 <span style={{ fontSize: 11, color: opt.fee === 0 ? 'var(--green)' : 'var(--text-dim)', marginLeft: 'auto' }}>
-                  {opt.fee === null ? 'Contact us' : opt.fee === 0 ? 'Free' : `${opt.fee.toLocaleString()} IQD`}
+                  {opt.fee === null ? 'Contact us' : opt.fee === 0 ? 'Free' : `~$${(opt.fee / IQD_PER_USD).toFixed(2)}`}
                 </span>
               </label>
             ))}
@@ -606,8 +608,8 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
       `Product: ${order.description}`,
       order.url ? `URL: ${order.url}` : '',
       order.item_price ? `Item Price: ${order.item_price} ${order.item_price_currency}` : '',
-      order.shipping_price ? `Shipping: ${order.shipping_price.toLocaleString()} IQD` : '',
-      order.total_cost ? `Total: ${order.total_cost.toLocaleString()} IQD` : '',
+      order.shipping_price ? `Shipping: $${(order.shipping_price / IQD_PER_USD).toFixed(2)} USD` : '',
+      order.total_cost ? `Total: $${(order.total_cost / IQD_PER_USD).toFixed(2)} USD` : '',
       `Status: ${STATUS_CONFIG[order.status]?.label ?? order.status}`,
       `Date: ${order.created_at?.split('T')[0]}`,
     ].filter(Boolean).join('\n')
@@ -875,19 +877,19 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginBottom: 5 }}>
                         <span>{k}</span>
                         <span style={{ fontWeight: 600 }}>
-                          {v === 0 ? 'Free' : `${v.toLocaleString()} ${c}`}
+                          {v === 0 ? 'Free' : c === 'IQD' ? `$${(v / IQD_PER_USD).toFixed(2)} USD` : `${v.toLocaleString()} ${c}`}
                         </span>
                       </div>
                     )))}
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4 }}>
-                      <span className={styles.priceBig}>{order.total_cost.toLocaleString()}</span>
-                      <span className={styles.priceCurrency}> IQD</span>
+                      <span className={styles.priceBig}>${(order.total_cost / IQD_PER_USD).toFixed(2)}</span>
+                      <span className={styles.priceCurrency}> USD</span>
                     </div>
                   </div>
                 ) : (
                   <div>
-                    <span className={styles.priceBig}>{order.shipping_price.toLocaleString()}</span>
-                    <span className={styles.priceCurrency}>{order.shipping_currency}</span>
+                    <span className={styles.priceBig}>{order.shipping_currency === 'IQD' ? `$${(order.shipping_price / IQD_PER_USD).toFixed(2)}` : order.shipping_price.toLocaleString()}</span>
+                    <span className={styles.priceCurrency}>{order.shipping_currency === 'IQD' ? ' USD' : order.shipping_currency}</span>
                   </div>
                 )}
               </div>
@@ -1015,14 +1017,15 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
                   ['Iraq Delivery',parseInt(shipping.deliveryFee) || 0],
                 ].map(([k, v], i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                    <span>{k}</span><span>{(v as number).toLocaleString()} IQD</span>
+                    <span>{k}</span><span>${((v as number) / IQD_PER_USD).toFixed(2)} USD</span>
                   </div>
                 ))}
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4, display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: 'var(--gold)' }}>
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontWeight: 800, color: 'var(--gold)' }}>
                   <span>TOTAL</span>
-                  <span>
-                    {((parseInt(shipping.price)||0)+(parseInt(shipping.serviceFee)||0)+(parseInt(shipping.customsFee)||0)+(parseInt(shipping.deliveryFee)||0)).toLocaleString()} IQD
-                  </span>
+                  <div style={{ textAlign: 'right' }}>
+                    <div>${(((parseInt(shipping.price)||0)+(parseInt(shipping.serviceFee)||0)+(parseInt(shipping.customsFee)||0)+(parseInt(shipping.deliveryFee)||0)) / IQD_PER_USD).toFixed(2)} USD</div>
+                    <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-dim)', marginTop: 1 }}>{((parseInt(shipping.price)||0)+(parseInt(shipping.serviceFee)||0)+(parseInt(shipping.customsFee)||0)+(parseInt(shipping.deliveryFee)||0)).toLocaleString()} IQD</div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1059,7 +1062,7 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
               {/* Shipping — read only */}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
                 <span>Shipping Fee</span>
-                <span style={{ fontWeight: 600, color: 'var(--text)' }}>{(order.shipping_price ?? 0).toLocaleString()} IQD</span>
+                <span style={{ fontWeight: 600, color: 'var(--text)' }}>${((order.shipping_price ?? 0) / IQD_PER_USD).toFixed(2)} USD</span>
               </div>
               {/* Editable fees */}
               {[
@@ -1087,9 +1090,12 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
                 </div>
               ))}
               {/* Total */}
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 15, color: 'var(--gold)' }}>
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontWeight: 800, fontSize: 15, color: 'var(--gold)' }}>
                 <span>Total</span>
-                <span>{billTotal.toLocaleString()} IQD</span>
+                <div style={{ textAlign: 'right' }}>
+                  <div>${(billTotal / IQD_PER_USD).toFixed(2)} USD</div>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-dim)', marginTop: 2 }}>= {billTotal.toLocaleString()} IQD (at {IQD_PER_USD.toLocaleString()} IQD/USD)</div>
+                </div>
               </div>
             </div>
 
@@ -1122,7 +1128,10 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
             {charged ? (
               <div style={{ padding: '12px 16px', background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: 10, textAlign: 'center' }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#16a34a' }}>
-                  ✅ Charged {order.total_charged?.toLocaleString() ?? billTotal.toLocaleString()} IQD
+                  ✅ Charged ${((order.total_charged ?? billTotal) / IQD_PER_USD).toFixed(2)} USD
+                </div>
+                <div style={{ fontSize: 11, color: '#16a34a', opacity: 0.8, marginTop: 2 }}>
+                  {(order.total_charged?.toLocaleString() ?? billTotal.toLocaleString())} IQD deducted from balance
                 </div>
                 {chargedAt && (
                   <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
@@ -1141,7 +1150,7 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
                   onClick={handleCharge}
                   disabled={chargeLoading || !orderCustomerProfile || billTotal <= 0}
                 >
-                  {chargeLoading ? <Spinner /> : `💳 Charge Customer ${billTotal.toLocaleString()} IQD`}
+                  {chargeLoading ? <Spinner /> : `💳 Charge $${(billTotal / IQD_PER_USD).toFixed(2)} USD (${billTotal.toLocaleString()} IQD)`}
                 </button>
               </>
             )}
@@ -1961,7 +1970,7 @@ export default function Dashboard() {
                             </td>
                             <td className={styles.mobileHide}>{o.item_price ? `${o.item_price} ${o.item_price_currency}` : '—'}</td>
                             <td className={styles.mobileHide} style={{ color: o.shipping_price ? 'var(--gold)' : 'var(--text-dim)', fontWeight: o.shipping_price ? 700 : 400 }}>
-                              {o.shipping_price ? `${o.shipping_price.toLocaleString()} ${o.shipping_currency}` : '—'}
+                              {o.shipping_price ? (o.shipping_currency === 'IQD' ? `$${(o.shipping_price / IQD_PER_USD).toFixed(2)}` : `${o.shipping_price.toLocaleString()} ${o.shipping_currency}`) : '—'}
                             </td>
                             <td className={styles.mobileHide}>{o.created_at?.split('T')[0]}</td>
                             <td>
@@ -2217,7 +2226,7 @@ export default function Dashboard() {
                           <div>
                             <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3 }}>Fee</div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: req.delivery_fee > 0 ? 'var(--gold)' : 'var(--green)' }}>
-                              {req.delivery_fee > 0 ? `${req.delivery_fee.toLocaleString()} IQD` : 'Free'}
+                              {req.delivery_fee > 0 ? `$${(req.delivery_fee / IQD_PER_USD).toFixed(2)}` : 'Free'}
                             </div>
                           </div>
                           <div>

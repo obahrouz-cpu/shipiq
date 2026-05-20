@@ -6,6 +6,8 @@ import styles from './ShopSection.module.css'
 import DealsSection from './DealsSection'
 import TrendyolWeightEstimator from './TrendyolWeightEstimator'
 
+const IQD_PER_USD = 1540
+
 // ── Brand logo: Clearbit → gstatic → emoji ───────────────────────────────────
 
 function StoreLogo({
@@ -275,8 +277,8 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
                 <span className={styles.estimateBadge}>APPROXIMATE</span>
               </div>
               <div className={styles.estimateRange}>
-                {estimate.min.toLocaleString()} – {estimate.max.toLocaleString()}
-                <span className={styles.estimateCurrency}> IQD</span>
+                ${(estimate.min / IQD_PER_USD).toFixed(2)} – ${(estimate.max / IQD_PER_USD).toFixed(2)}
+                <span className={styles.estimateCurrency}> USD</span>
               </div>
               <div className={styles.estimateSub}>
                 {estimate.kg} kg billable weight · Final price confirmed by ShipIQ
@@ -295,8 +297,8 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
                 <span className={styles.estimateBadge}>APPROXIMATE</span>
               </div>
               <div className={styles.estimateRange}>
-                {trendyolEstimate.min.toLocaleString()} – {trendyolEstimate.max.toLocaleString()}
-                <span className={styles.estimateCurrency}> IQD</span>
+                ${(trendyolEstimate.min / IQD_PER_USD).toFixed(2)} – ${(trendyolEstimate.max / IQD_PER_USD).toFixed(2)}
+                <span className={styles.estimateCurrency}> USD</span>
               </div>
               <div className={styles.estimateSub}>
                 {trendyolEstimate.kg} kg estimated weight · Final price confirmed by ShipIQ

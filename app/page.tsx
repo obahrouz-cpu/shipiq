@@ -100,28 +100,28 @@ const COUNTRY_CARDS = [
     stores: ['Amazon', 'eBay', 'Best Buy', 'Nike'],
     domains: ['amazon.com', 'ebay.com', 'bestbuy.com', 'nike.com'],
     emojis: ['🛒', '🏷️', '🖥️', '👟'],
-    delivery: '10–20 days', rate: '12,000–19,000 IQD/kg',
+    delivery: '10–20 days', rate: '$8–12/kg',
   },
   {
     flag: '🇹🇷', name: 'Turkey', nameAr: 'تركيا', accentColor: '#e07b3a',
     stores: ['Trendyol', 'Hepsiburada', 'LC Waikiki', 'Mavi'],
     domains: ['trendyol.com', 'hepsiburada.com', 'lcwaikiki.com', 'mavi.com'],
     emojis: ['🛍️', '🛒', '👕', '👖'],
-    delivery: '7–14 days', rate: '5,000–8,000 IQD/kg',
+    delivery: '7–14 days', rate: 'from $3.50/kg',
   },
   {
     flag: '🇦🇪', name: 'UAE', nameAr: 'الإمارات', accentColor: '#5b9bd5',
     stores: ['Amazon AE', 'Noon', 'Boutiqaat', 'Namshi'],
     domains: ['amazon.ae', 'noon.com', 'boutiqaat.com', 'namshi.com'],
     emojis: ['🛒', '🌙', '💄', '👗'],
-    delivery: '5–10 days', rate: '6,000–10,000 IQD/kg',
+    delivery: '5–10 days', rate: 'from $3.50/kg',
   },
   {
     flag: '🇨🇳', name: 'China', nameAr: 'الصين', accentColor: '#d9534f',
     stores: ['AliExpress', 'Shein', 'Banggood', 'DHgate'],
     domains: ['aliexpress.com', 'shein.com', 'banggood.com', 'dhgate.com'],
     emojis: ['📦', '👗', '🔧', '🏭'],
-    delivery: '14–30 days', rate: '8,000–14,000 IQD/kg',
+    delivery: '14–30 days', rate: '$5–9/kg',
   },
 ]
 

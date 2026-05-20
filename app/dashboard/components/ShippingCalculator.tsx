@@ -151,7 +151,6 @@ export default function ShippingCalculator() {
     : 0
   const totalLowUsd  = baseUsd + serviceFeeLow
   const totalHighUsd = baseUsd + serviceFeeHigh
-  const totalMidIqd  = result ? Math.round((totalLowUsd + totalHighUsd) / 2 * result.iqdPerUsd / 1000) * 1000 : 0
 
   // We can only show a meaningful total when shipping + delivery are both known.
   const hasMeaningfulTotal = result && !result.shippingContactOnly && !result.deliveryContactOnly && baseUsd > 0
@@ -378,9 +377,6 @@ export default function ShippingCalculator() {
                       ? <>~${Math.round(totalLowUsd)}–{Math.round(totalHighUsd)}</>
                       : <>~${totalLowUsd.toFixed(2)}</>
                     }
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>
-                    ≈ {(isRangeTotal ? totalMidIqd : Math.round(totalLowUsd * result.iqdPerUsd)).toLocaleString()} IQD
                   </div>
                 </div>
               </div>

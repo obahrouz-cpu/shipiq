@@ -384,7 +384,6 @@ export default function AdminAnalytics() {
             <StatCard
               icon="💰" label="Total Revenue"
               value={fmtUsd(stats.totalRevenue)}
-              sub={`≈ ${Math.round(stats.totalRevenue * IQD_PER_USD).toLocaleString()} IQD`}
             />
             <StatCard
               icon="📦" label="Total Orders"
@@ -652,10 +651,6 @@ export default function AdminAnalytics() {
             <div className={styles.chartCard}>
               <div className={styles.chartTitle}>Financial Summary</div>
               <SumRow label="Total Revenue (USD)" value={fmtUsd(financial.totalRevUsd, 2)} />
-              <SumRow
-                label="Total Revenue (IQD)"
-                value={Math.round(financial.totalRevUsd * IQD_PER_USD).toLocaleString() + ' IQD'}
-              />
               <SumRow
                 label="Customer Balances Held"
                 value={financial.totalBalIqd.toLocaleString() + ' IQD'}

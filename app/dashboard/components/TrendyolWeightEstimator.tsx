@@ -11,7 +11,6 @@ const WEIGHT_OPTIONS = [
 ]
 
 const RATE_USD = 3.5
-const IQD_PER_USD = 1450
 
 interface Props {
   onWeightSelect: (kg: number) => void
@@ -27,7 +26,6 @@ export default function TrendyolWeightEstimator({ onWeightSelect }: Props) {
     : (selectedOpt?.kg ?? 0)
 
   const shippingUsd  = activeKg > 0 ? (activeKg * RATE_USD).toFixed(2) : null
-  const shippingIqd  = activeKg > 0 ? Math.round(activeKg * RATE_USD * IQD_PER_USD).toLocaleString() : null
 
   const handleSelect = (id: string) => {
     setSelected(id)
@@ -159,7 +157,6 @@ export default function TrendyolWeightEstimator({ onWeightSelect }: Props) {
           </div>
           <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--gold)', marginBottom: 2, lineHeight: 1.2 }}>
             ~${shippingUsd} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--gold-dim)' }}>USD</span>
-            <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-dim)', marginLeft: 8 }}>({shippingIqd} IQD)</span>
           </div>
           <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>
             {activeKg} kg × ${RATE_USD}/kg Turkey rate · Final price confirmed by ShipIQ after arrival

@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 
-const QUICK_AMOUNTS = [25, 50, 100, 200, 500]
-const MIN_USD = 10
+const QUICK_AMOUNTS = [25000, 50000, 100000, 250000]
+const MIN_IQD = 10000
 const FALLBACK_RATE = 1540
 
 type Method = 'fib' | 'qicard'
@@ -80,9 +80,9 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
     else { setInternalOpen(false) }
   }
 
-  const usd = parseFloat(amountInput) || 0
-  const iqd = Math.round(usd * iqdRate)
-  const valid = usd >= MIN_USD
+  const iqd = parseInt(amountInput) || 0
+  const usd = iqd > 0 ? iqd / iqdRate : 0
+  const valid = iqd >= MIN_IQD
 
   const handleProceed = async () => {
     setProcessing(true)
@@ -226,7 +226,7 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
             {step === 'amount' && method && cfg && (
               <div>
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-                  How much would you like to add? <span style={{ color: 'var(--text-dim)' }}>(minimum $10)</span>
+                  How much would you like to add? <span style={{ color: 'var(--text-dim)' }}>(minimum 10,000 IQD)</span>
                 </div>
 
                 {/* Quick amount chips */}
@@ -245,7 +245,7 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                           border: `2px solid ${active ? 'var(--gold)' : 'var(--border)'}`,
                         }}
                       >
-                        ${amt}
+                        {amt.toLocaleString()} IQD
                       </button>
                     )
                   })}
@@ -258,24 +258,20 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                     color: 'var(--text-muted)', marginBottom: 7,
                     textTransform: 'uppercase', letterSpacing: '0.5px',
                   }}>
-                    Custom Amount (USD)
+                    Custom Amount (IQD)
                   </label>
                   <div style={{ position: 'relative' }}>
-                    <span style={{
-                      position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
-                      color: 'var(--text-dim)', fontWeight: 700, fontSize: 17, pointerEvents: 'none',
-                    }}>$</span>
                     <input
                       type="number"
-                      min={MIN_USD}
-                      step="5"
+                      min={MIN_IQD}
+                      step="1000"
                       placeholder="0"
                       value={amountInput}
                       onChange={e => setAmountInput(e.target.value)}
                       style={{
                         width: '100%', background: 'var(--surface2)',
                         border: '1px solid var(--border)', borderRadius: 8,
-                        padding: '12px 14px 12px 34px',
+                        padding: '12px 14px',
                         fontSize: 20, fontWeight: 700, color: 'var(--text)',
                         fontFamily: 'inherit', outline: 'none',
                       }}
@@ -286,15 +282,15 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                 </div>
 
                 {/* IQD equivalent */}
-                {usd > 0 && (
+                {iqd > 0 && (
                   <div style={{
                     padding: '10px 14px', marginBottom: 12,
                     background: 'rgba(201,168,76,0.07)', border: '1px solid rgba(201,168,76,0.2)',
                     borderRadius: 8, display: 'flex', alignItems: 'baseline', gap: 6,
                   }}>
                     <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>=</span>
-                    <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)' }}>{iqd.toLocaleString()}</span>
-                    <span style={{ fontSize: 12, color: 'var(--gold-dim)' }}>IQD</span>
+                    <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)' }}>${usd.toFixed(2)}</span>
+                    <span style={{ fontSize: 12, color: 'var(--gold-dim)' }}>USD</span>
                     <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 4 }}>
                       @ {iqdRate.toLocaleString()} IQD/USD
                     </span>
@@ -302,13 +298,13 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                 )}
 
                 {/* Minimum warning */}
-                {usd > 0 && usd < MIN_USD && (
+                {iqd > 0 && iqd < MIN_IQD && (
                   <div style={{
                     padding: '9px 13px', marginBottom: 12,
                     background: 'rgba(217,83,79,0.1)', border: '1px solid rgba(217,83,79,0.3)',
                     borderRadius: 8, fontSize: 12, color: 'var(--red)',
                   }}>
-                    Minimum top-up amount is $10
+                    Minimum top-up amount is 10,000 IQD
                   </div>
                 )}
 
@@ -348,8 +344,8 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                 }}>
                   {[
                     ['Payment Method', `${cfg.name} · ${cfg.nameAr}`],
-                    ['Amount (USD)', `$${usd.toFixed(2)}`],
                     ['Amount (IQD)', `${iqd.toLocaleString()} IQD`],
+                    ['Amount (USD)', `≈ $${usd.toFixed(2)}`],
                     ['Rate', `1 USD = ${iqdRate.toLocaleString()} IQD`],
                   ].map(([label, value]) => (
                     <div key={label} style={{
@@ -365,9 +361,12 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                     paddingTop: 12,
                   }}>
                     <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Total to Add</span>
-                    <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)' }}>
-                      {iqd.toLocaleString()} <span style={{ fontSize: 13, color: 'var(--gold-dim)' }}>IQD</span>
-                    </span>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)' }}>
+                        {iqd.toLocaleString()} <span style={{ fontSize: 13, color: 'var(--gold-dim)' }}>IQD</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>≈ ${usd.toFixed(2)} USD</div>
+                    </div>
                   </div>
                 </div>
 
@@ -422,7 +421,7 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                     Your request
                   </div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)' }}>
-                    ${usd.toFixed(2)} USD — {iqd.toLocaleString()} IQD
+                    {iqd.toLocaleString()} IQD <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gold-dim)' }}>≈ ${usd.toFixed(2)} USD</span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                     via {cfg.name} · {cfg.nameAr}
@@ -431,7 +430,7 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
 
                 <a
                   href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(
-                    `Hi ShipIQ! I'd like to top up my wallet with $${usd.toFixed(2)} USD (${iqd.toLocaleString()} IQD) via ${cfg.name}.`
+                    `Hi ShipIQ! I'd like to top up my wallet with ${iqd.toLocaleString()} IQD (~$${usd.toFixed(2)} USD) via ${cfg.name}.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"

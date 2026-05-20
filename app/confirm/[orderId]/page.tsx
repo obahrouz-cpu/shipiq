@@ -136,7 +136,8 @@ export default function ConfirmPage() {
     ? `https://wa.me/${businessWhatsapp.replace(/[^\d]/g, '')}`
     : null
 
-  const money = (v?: number) => `${(v ?? 0).toLocaleString()} IQD`
+  const IQD_PER_USD = 1540
+  const money = (v?: number) => `$${((v ?? 0) / IQD_PER_USD).toFixed(2)} USD`
 
   return (
     <div dir={isAr ? 'rtl' : 'ltr'} style={page}>

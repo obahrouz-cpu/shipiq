@@ -576,7 +576,7 @@ export default function AdminCustomerProfile({
                     { label: 'Current Balance', val: `${cust.balance.toLocaleString()} IQD`, sub: `≈ $${(cust.balance / IQD_PER_USD).toFixed(2)}`, color: 'var(--gold)' },
                     { label: 'Total Spent',      val: `$${(cust.total_spent || 0).toFixed(2)}`, sub: 'USD lifetime', color: 'var(--text)' },
                     { label: 'Total Orders',     val: orders.length.toString(), sub: 'all time', color: 'var(--blue)' },
-                    { label: 'Avg Order',        val: `${Math.round(stats.avgOrderIqd / 1000)}k IQD`, sub: stats.pendingIqd > 0 ? `${Math.round(stats.pendingIqd/1000)}k pending` : 'no pending', color: 'var(--orange)' },
+                    { label: 'Avg Order',        val: `$${Math.round(stats.avgOrderIqd / IQD_PER_USD)}`, sub: stats.pendingIqd > 0 ? `$${Math.round(stats.pendingIqd / IQD_PER_USD)} pending` : 'no pending', color: 'var(--orange)' },
                   ].map(({ label, val, sub, color }) => (
                     <div key={label} style={{ padding: 12, background: 'var(--surface2)', borderRadius: 10, border: '1px solid var(--border)' }}>
                       <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</div>
