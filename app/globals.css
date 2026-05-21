@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -172,10 +173,25 @@ img, video, svg, iframe { max-width: 100%; }
 .fade-in   { animation: fadeIn 0.3s ease forwards; }
 .slide-down{ animation: slideDown 0.2s ease forwards; }
 .scale-in  { animation: scaleIn 0.2s ease forwards; }
-.ar { font-family: 'Tajawal', sans-serif; }
+.ar { font-family: 'Noto Naskh Arabic', 'Tajawal', sans-serif; }
 
 [dir="rtl"] body, body.ar {
-  font-family: 'Tajawal', 'DM Sans', sans-serif;
+  font-family: 'Noto Naskh Arabic', 'Tajawal', 'DM Sans', sans-serif;
+}
+
+/* ── RTL / Arabic-script language font support ── */
+/* Sorani & Badini are Kurdish dialects written in Arabic script; */
+/* the document lang is mapped to ar/ku so these selectors match. */
+:lang(ar), :lang(ku) {
+  font-family: 'Noto Naskh Arabic', 'Tajawal', Arial, sans-serif;
+  direction: rtl;
+}
+
+/* ── Phone numbers always render LTR, regardless of page direction ── */
+.phone-number {
+  direction: ltr !important;
+  unicode-bidi: embed !important;
+  display: inline-block;
 }
 
 /* ── Skeleton loading ── */

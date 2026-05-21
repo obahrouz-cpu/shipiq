@@ -157,8 +157,8 @@ export default function AdminDeliveries({ onToast }: Props) {
                       </div>
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{req.profiles?.full_name || '—'}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>{req.profiles?.email}</div>
-                        {req.profiles?.phone && <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>{req.profiles.phone}</div>}
+                        <div className="phone-number" dir="ltr" style={{ fontSize: 11, color: 'var(--text-dim)' }}>{req.profiles?.email}</div>
+                        {req.profiles?.phone && <div className="phone-number" dir="ltr" style={{ fontSize: 11, color: 'var(--text-dim)' }}>{req.profiles.phone}</div>}
                       </div>
                     </div>
                   </div>

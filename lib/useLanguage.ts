@@ -15,11 +15,19 @@ function readStored(): Lang {
   return (localStorage.getItem(LS_KEY) as Lang) ?? 'en'
 }
 
+// Map app languages to BCP-47 codes so the CSS :lang(ar)/:lang(ku)
+// font rules match. Sorani & Badini are Kurdish dialects (ku).
+function htmlLang(lang: Lang): string {
+  if (lang === 'en') return 'en'
+  if (lang === 'ar') return 'ar'
+  return 'ku'
+}
+
 function applyToDocument(lang: Lang) {
   if (typeof document === 'undefined') return
   const isRtl = RTL_LANGS.includes(lang)
   document.documentElement.dir  = isRtl ? 'rtl' : 'ltr'
-  document.documentElement.lang = lang
+  document.documentElement.setAttribute('lang', htmlLang(lang))
   document.body.classList.toggle('ar', isRtl)
 }
 

@@ -611,7 +611,7 @@ export default function LandingPage() {
               <div className={styles.footerLogo}>ShipIQ</div>
               <div className={styles.footerTagline}>شيب آي كيو — خدمة الشحن الذكي</div>
               <div className={styles.footerLocation}>Erbil &amp; Baghdad, Iraq 🇮🇶</div>
-              <a href="https://wa.me/9647XXXXXXXXX" className={styles.footerWhatsapp} aria-label="Contact us on WhatsApp">
+              <a href="https://wa.me/9647XXXXXXXXX" className={`${styles.footerWhatsapp} phone-number`} dir="ltr" aria-label="Contact us on WhatsApp">
                 💬 WhatsApp: +964 7XX XXX XXXX
               </a>
               <div className={styles.socialLinks}>
