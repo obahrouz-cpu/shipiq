@@ -19,7 +19,6 @@ import { useIqdRate } from '@/lib/hooks/useIqdRate'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
 import OrderFilters, { OrderFiltersState, DEFAULT_FILTERS } from './components/OrderFilters'
-import FAQChatbot from './components/FAQChatbot'
 import AccountSettings from './components/AccountSettings'
 import AdminExport from './components/AdminExport'
 import TrendyolWeightEstimator from './components/TrendyolWeightEstimator'
@@ -2646,7 +2645,6 @@ export default function Dashboard() {
       {showTierSettings && isAdmin && <AdminTierSettings onClose={() => { setShowTierSettings(false); getTierSettings().then(setTierSettings) }} />}
       {showCreateAgent && isAdmin && <CreateAgentModal onClose={() => setShowCreateAgent(false)} onDone={() => { toast('Agent created!') }} />}
       <Toast toasts={toasts} />
-      <FAQChatbot />
       {settingsOpen && profile && (
         <AccountSettings
           profile={profile}
