@@ -260,12 +260,23 @@ function buildWeightResponse(opts: {
   imageUrl?: string | null
 }) {
   const { siteInfo, productName, category, imageUrl } = opts
-  const weightKg = validateWeight(opts.weightKg)
+  const actualWeightKg = validateWeight(opts.weightKg)
   const dims = validateDims(opts.dims)
   const dimensionalWeightKg = dims ? Math.round((dims.l * dims.w * dims.h) / 5000 * 100) / 100 : null
-  const billableWeightKg = weightKg && dimensionalWeightKg
-    ? Math.max(weightKg, dimensionalWeightKg)
-    : (weightKg || dimensionalWeightKg)
+
+  // Billable weight is the greater of actual weight and dimensional weight.
+  let billableWeightKg: number | null
+  if (actualWeightKg != null && dimensionalWeightKg != null) {
+    billableWeightKg = Math.max(actualWeightKg, dimensionalWeightKg)
+  } else {
+    billableWeightKg = actualWeightKg ?? dimensionalWeightKg
+  }
+
+  console.error('Actual weight:', actualWeightKg, 'kg')
+  console.error('Dimensional weight:', dimensionalWeightKg, 'kg')
+  console.error('Billable weight:', billableWeightKg, 'kg')
+
+  const weightKg = actualWeightKg
 
   return NextResponse.json({
     found: true,
