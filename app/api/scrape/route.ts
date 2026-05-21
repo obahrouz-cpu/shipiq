@@ -351,6 +351,8 @@ export async function POST(req: NextRequest) {
       // Amazon frequently lists weight only inside the dimensions value
       // (e.g. "11.5 x 13.4 x 4 inches; 16 Pounds"), with no standalone weight field.
       if (!rawWeight) rawWeight = extractWeightToken(rawDimensions)
+      console.error('[scrape] Amazon fields:', Object.keys(kv).join(' | '))
+      console.error('[scrape] rawWeight:', rawWeight, '| rawDimensions:', rawDimensions)
       const productName = String(content.title || content.product_name || content.product_title || kv.title || 'Unknown Product')
 
       const images = content.images
