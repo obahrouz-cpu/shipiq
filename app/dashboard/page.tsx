@@ -12,7 +12,7 @@ import {
   getOrderUnreadCounts, getAppSettings,
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase'
-import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES, TIER_CONFIG } from '@/lib/constants'
+import { STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES, TIER_CONFIG } from '@/lib/constants'
 import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem, DeliveryRequest, OrderNote } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import { useIqdRate } from '@/lib/hooks/useIqdRate'
@@ -240,8 +240,8 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
   onWishlistSave?: (data: { url: string; description?: string; notes?: string; photo_url?: string }) => Promise<void>
 }) {
   const [form, setForm] = useState<OrderForm>({
-    url: prefill?.url || '', description: prefill?.description || '', category: 'Electronics', qty: 1,
-    itemPrice: '', itemPriceCurrency: 'USD', note: prefill?.note || '', urgency: false,
+    url: prefill?.url || '', description: prefill?.description || '', qty: 1,
+    note: prefill?.note || '', urgency: false,
     deliveryPreference: 'pickup', deliveryCity: '',
   })
   const [photo, setPhoto] = useState<File | null>(null)
@@ -422,12 +422,6 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>≈ Cost Estimate · تقدير التكلفة</span>
               <span style={{ fontSize: 10, color: 'var(--gold-dim)', background: 'rgba(201,168,76,0.12)', padding: '2px 8px', borderRadius: 20, border: '1px solid rgba(201,168,76,0.2)', fontWeight: 600, letterSpacing: '0.5px' }}>APPROXIMATE</span>
             </div>
-            {form.itemPrice && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid rgba(201,168,76,0.12)' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Item Price · سعر المنتج</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{form.itemPrice} {form.itemPriceCurrency}</span>
-              </div>
-            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Shipping · الشحن</span>
               <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)' }}>
@@ -454,32 +448,9 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
           <input className={styles.input} placeholder="e.g. Nike Air Max 270 - Size 42 - Black" value={form.description} onChange={e => handle('description', e.target.value)} />
           <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 5 }}>Include size, color, model number, and any variant details</div>
         </div>
-        <div className={styles.grid2}>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Category · الفئة</label>
-            <select className={styles.input} value={form.category} onChange={e => handle('category', e.target.value)}>
-              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Quantity · الكمية</label>
-            <input className={styles.input} type="number" min="1" value={form.qty} onChange={e => handle('qty', parseInt(e.target.value) || 1)} />
-          </div>
-        </div>
-        <div className={styles.grid2}>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Item Price · سعر المنتج</label>
-            <input className={styles.input} type="number" placeholder="0.00" value={form.itemPrice} onChange={e => handle('itemPrice', e.target.value)} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Currency · العملة</label>
-            <select className={styles.input} value={form.itemPriceCurrency} onChange={e => handle('itemPriceCurrency', e.target.value)}>
-              <option value="USD">USD — دولار</option>
-              <option value="IQD">IQD — دينار</option>
-              <option value="EUR">EUR — يورو</option>
-              <option value="GBP">GBP — جنيه</option>
-            </select>
-          </div>
+        <div className={styles.formGroup}>
+          <label className={styles.label}>Quantity · الكمية</label>
+          <input className={styles.input} type="number" min="1" value={form.qty} onChange={e => handle('qty', parseInt(e.target.value) || 1)} />
         </div>
         <div className={styles.formGroup}>
           <label className={styles.label}>Notes · ملاحظات</label>

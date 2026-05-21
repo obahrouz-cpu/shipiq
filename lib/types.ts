@@ -166,10 +166,7 @@ export interface NavItem {
 export interface OrderForm {
   url: string
   description: string
-  category: string
   qty: number
-  itemPrice: string
-  itemPriceCurrency: string
   note: string
   urgency: boolean
   deliveryPreference: string
