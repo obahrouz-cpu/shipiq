@@ -11,6 +11,13 @@
   margin-bottom: 6px;
 }
 
+/* Right-aligned action (e.g. New Order button) kept level with the filter button */
+.headerAction {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
 /* ── Filter button ────────────────────────────────────────────── */
 .filterBtn {
   display: inline-flex;

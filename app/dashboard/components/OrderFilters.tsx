@@ -136,9 +136,10 @@ interface OrderFiltersProps {
   isAdmin: boolean
   value: OrderFiltersState
   onChange: (v: OrderFiltersState) => void
+  headerAction?: React.ReactNode
 }
 
-export default function OrderFilters({ isAdmin, value, onChange }: OrderFiltersProps) {
+export default function OrderFilters({ isAdmin, value, onChange, headerAction }: OrderFiltersProps) {
   const [open, setOpen] = useState(false)
   const [searchInput, setSearchInput] = useState(value.customerSearch)
 
@@ -192,6 +193,8 @@ export default function OrderFilters({ isAdmin, value, onChange }: OrderFiltersP
             Clear all
           </button>
         )}
+
+        {headerAction && <div className={styles.headerAction}>{headerAction}</div>}
       </div>
 
       {/* ── Collapsible panel ── */}

@@ -1970,11 +1970,6 @@ export default function Dashboard() {
 
           {(page === 'orders' || page === 'admin-orders') && (
             <div className="fade-up">
-              {page === 'orders' && (
-                <div className={styles.pageHeader} style={{ justifyContent: 'flex-end' }}>
-                  <button className={styles.btnPrimary} onClick={() => { setShowNewOrder(true); haptic() }} aria-label="Submit new order (N)">{t('orders', 'newOrder')}</button>
-                </div>
-              )}
               {page === 'admin-orders' && (
                 <div className={styles.pageHeader}>
                   <div>
@@ -2042,7 +2037,14 @@ export default function Dashboard() {
                   )}
                 </div>
               )}
-              <OrderFilters isAdmin={isAdmin} value={filters} onChange={setFilters} />
+              <OrderFilters
+                isAdmin={isAdmin}
+                value={filters}
+                onChange={setFilters}
+                headerAction={page === 'orders' ? (
+                  <button className={styles.btnPrimary} onClick={() => { setShowNewOrder(true); haptic() }} aria-label="Submit new order (N)">{t('orders', 'newOrder')}</button>
+                ) : undefined}
+              />
               <div className={styles.card} style={{ padding: 0, overflow: 'hidden' }}>
                 {filteredOrders.length === 0 ? (
                   <div className={styles.empty}>
