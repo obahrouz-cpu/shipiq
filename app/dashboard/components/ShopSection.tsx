@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { Store, ScrapeResult } from '@/lib/types'
 import { STORES, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
 import styles from './ShopSection.module.css'
@@ -177,7 +178,9 @@ function AutoCalcModal({ onClose }: { onClose: () => void }) {
     ? { min: Math.round(turkeyRates.min * trendyolKg), max: Math.round(turkeyRates.max * trendyolKg), kg: trendyolKg }
     : null
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <>
       <div className={styles.panelOverlay} onClick={onClose} />
       <div className={styles.panel}>
@@ -287,7 +290,8 @@ function AutoCalcModal({ onClose }: { onClose: () => void }) {
         </div>
 
       </div>
-    </>
+    </>,
+    document.body
   )
 }
 
@@ -350,7 +354,9 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
     ? { min: Math.round(turkeyRates.min * trendyolKg), max: Math.round(turkeyRates.max * trendyolKg), kg: trendyolKg }
     : null
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <>
       <div className={styles.panelOverlay} onClick={onClose} />
       <div className={styles.panel}>
@@ -509,7 +515,8 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
         </div>
 
       </div>
-    </>
+    </>,
+    document.body
   )
 }
 
@@ -525,7 +532,7 @@ export default function ShopSection({ userId, onWishlistSave }: { userId?: strin
     : STORES.filter(s => s.country === countryFilter)
 
   return (
-    <div style={{ width: '100%', overflowX: 'hidden' }}>
+    <div style={{ width: '100%' }}>
       {/* Deals + Recently Visited */}
       <DealsSection />
 
