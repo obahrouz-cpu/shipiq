@@ -532,7 +532,7 @@ export default function ShopSection({ userId, onWishlistSave }: { userId?: strin
     : STORES.filter(s => s.country === countryFilter)
 
   return (
-    <div style={{ width: '100%', overflowX: 'hidden' }}>
+    <div style={{ width: '100%' }}>
       {/* Deals + Recently Visited */}
       <DealsSection />
 
