@@ -279,6 +279,9 @@ function buildWeightResponse(opts: {
     dimensional_weight_kg: dimensionalWeightKg,
     billable_weight_kg: billableWeightKg,
     image_url: imageUrl ?? null,
+  }, {
+    // A product's weight/dimensions don't change — cache successful scrapes 30 min.
+    headers: { 'Cache-Control': 'public, s-maxage=1800, max-age=1800, stale-while-revalidate=3600' },
   })
 }
 
