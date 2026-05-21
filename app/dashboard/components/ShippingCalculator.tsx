@@ -161,7 +161,10 @@ export default function ShippingCalculator() {
       {/* Header */}
       <div className={styles.header}>
         <h2 className={styles.title}>
-          Calculate Your Shipping · <span className="ar">احسب تكلفة شحنك</span>
+          <div style={{ textAlign: 'center' }}>
+            <div>Calculate Your Shipping</div>
+            <div style={{ color: 'var(--gold)' }}>احسب تكلفة شحنك</div>
+          </div>
         </h2>
         <p className={styles.subtitle}>
           Get a full cost estimate — item price, shipping, and Iraq delivery
