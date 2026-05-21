@@ -65,16 +65,26 @@ export async function getCustomers(): Promise<Profile[]> {
   return data || []
 }
 
+// Balance is stored in USD (profiles.balance_usd). The legacy `amount` column
+// (IQD) is kept populated with the IQD-equivalent for backwards compatibility.
 export async function topUpBalance(
   userId: string,
-  currentBalance: number,
-  amount: number,
-  currency: string,
+  currentBalanceUsd: number,
+  amountUsd: number,
+  iqdRate: number,
   note = 'Balance top-up by admin'
 ): Promise<void> {
   const supabase = createClient()
-  await supabase.from('profiles').update({ balance: currentBalance + amount }).eq('id', userId)
-  await supabase.from('transactions').insert({ user_id: userId, amount, currency, note })
+  const usd = Math.round(amountUsd * 100) / 100
+  const newBalance = Math.round((currentBalanceUsd + usd) * 100) / 100
+  await supabase.from('profiles').update({ balance_usd: newBalance }).eq('id', userId)
+  await supabase.from('transactions').insert({
+    user_id: userId,
+    amount: Math.round(usd * iqdRate),
+    amount_usd: usd,
+    currency: 'USD',
+    note,
+  })
 }
 
 // ── Orders ────────────────────────────────────────────────────────────────────
@@ -178,28 +188,33 @@ export async function confirmOrder(order: Order): Promise<{ error: string | null
   return { error: null }
 }
 
+// Deducts a USD amount from profiles.balance_usd. The legacy `amount` column
+// (IQD) is kept populated with the IQD-equivalent for backwards compatibility.
 export async function deductBalance(
   userId: string,
-  currentBalance: number,
-  amount: number,
-  currency: string,
+  currentBalanceUsd: number,
+  amountUsd: number,
+  iqdRate: number,
   note: string,
   orderId?: string
 ): Promise<{ error: string | null }> {
-  if (amount > currentBalance) {
+  const usd = Math.round(amountUsd * 100) / 100
+  if (usd > currentBalanceUsd + 0.001) {
     return { error: 'Amount exceeds current balance' }
   }
   const supabase = createClient()
+  const newBalance = Math.round((currentBalanceUsd - usd) * 100) / 100
   const { error: profileError } = await supabase
     .from('profiles')
-    .update({ balance: currentBalance - amount })
+    .update({ balance_usd: newBalance })
     .eq('id', userId)
   if (profileError) return { error: profileError.message }
 
   const { error: txnError } = await supabase.from('transactions').insert({
     user_id: userId,
-    amount: -amount,
-    currency,
+    amount: -Math.round(usd * iqdRate),
+    amount_usd: -usd,
+    currency: 'USD',
     note,
     order_id: orderId,
   })

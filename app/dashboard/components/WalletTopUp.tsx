@@ -1,37 +1,77 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useIqdRate } from '@/lib/hooks/useIqdRate'
 
-const QUICK_AMOUNTS = [25000, 50000, 100000, 250000]
-const MIN_IQD = 10000
-const FALLBACK_RATE = 1540
+const QUICK_AMOUNTS = [25, 50, 100, 200, 500]
+const MIN_USD = 10
+const FALLBACK_WHATSAPP = '964XXXXXXXXXX'
 
-type Method = 'fib' | 'qicard'
-type Step = 'method' | 'amount' | 'confirm' | 'done'
+type Method = 'fib' | 'qicard' | 'zaincash' | 'asiapay'
+type Step = 'amount' | 'method' | 'pay' | 'done'
 
-const METHODS = {
+interface MethodConfig {
+  id: Method
+  name: string
+  nameAr: string
+  openLabel: string
+  url: string
+  short: string
+  color: string
+  bg: string
+  border: string
+  borderActive: string
+}
+
+const METHODS: Record<Method, MethodConfig> = {
   fib: {
-    id: 'fib' as Method,
+    id: 'fib',
     name: 'FIB',
-    nameAr: 'بنك الفيبي',
-    desc: 'First Iraqi Bank',
+    nameAr: 'البنك العراقي الأول',
+    openLabel: 'Open FIB App · فتح تطبيق FIB',
+    url: 'https://fib.iq',
+    short: 'FIB',
     color: '#22c55e',
     bg: 'rgba(34,197,94,0.08)',
     border: 'rgba(34,197,94,0.25)',
     borderActive: 'rgba(34,197,94,0.7)',
   },
   qicard: {
-    id: 'qicard' as Method,
+    id: 'qicard',
     name: 'Qi Card',
     nameAr: 'كي كارد',
-    desc: 'Iraqi Payment Network',
+    openLabel: 'Open Qi Card · فتح كي كارد',
+    url: 'https://qicard.iq',
+    short: 'QI',
     color: '#f97316',
     bg: 'rgba(249,115,22,0.08)',
     border: 'rgba(249,115,22,0.25)',
     borderActive: 'rgba(249,115,22,0.7)',
   },
+  zaincash: {
+    id: 'zaincash',
+    name: 'ZainCash',
+    nameAr: 'زين كاش',
+    openLabel: 'Open ZainCash · فتح زين كاش',
+    url: 'https://zaincash.iq',
+    short: 'ZC',
+    color: '#3b82f6',
+    bg: 'rgba(59,130,246,0.08)',
+    border: 'rgba(59,130,246,0.25)',
+    borderActive: 'rgba(59,130,246,0.7)',
+  },
+  asiapay: {
+    id: 'asiapay',
+    name: 'Asia Pay',
+    nameAr: 'آسيا باي',
+    openLabel: 'Open Asia Pay · فتح آسيا باي',
+    url: 'https://asiahawala.com',
+    short: 'AP',
+    color: '#ef4444',
+    bg: 'rgba(239,68,68,0.08)',
+    border: 'rgba(239,68,68,0.25)',
+    borderActive: 'rgba(239,68,68,0.7)',
+  },
 }
-
-const ADMIN_WHATSAPP = '964XXXXXXXXXX'
 
 interface Props {
   userId: string
@@ -41,63 +81,45 @@ interface Props {
   onClose?: () => void
 }
 
-function Dot() {
-  return (
-    <span style={{
-      display: 'inline-block', width: 16, height: 16,
-      border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'currentColor',
-      borderRadius: '50%', animation: 'spin 0.6s linear infinite', verticalAlign: 'middle',
-    }} />
-  )
-}
-
-export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, onClose: controlledOnClose }: Props) {
+export default function WalletTopUp({ onSuccess, open: controlledOpen, onClose: controlledOnClose }: Props) {
   const isControlled = controlledOpen !== undefined
   const [internalOpen, setInternalOpen] = useState(false)
   const open = isControlled ? controlledOpen! : internalOpen
 
-  const [step, setStep] = useState<Step>('method')
+  const [step, setStep] = useState<Step>('amount')
   const [method, setMethod] = useState<Method | null>(null)
   const [amountInput, setAmountInput] = useState('')
-  const [processing, setProcessing] = useState(false)
-  const [iqdRate, setIqdRate] = useState(FALLBACK_RATE)
+  const [opened, setOpened] = useState(false)
 
-  useEffect(() => {
-    if (!open) return
-    fetch('/api/exchange-rate')
-      .then(r => r.json())
-      .then(d => { if (d.rate && d.rate > 1000) setIqdRate(d.rate) })
-      .catch(() => {})
-  }, [open])
+  const { rate: iqdRate, whatsapp } = useIqdRate()
 
   // Reset wizard state when modal closes
   useEffect(() => {
-    if (!open) setTimeout(() => { setStep('method'); setMethod(null); setAmountInput(''); setProcessing(false) }, 300)
+    if (!open) {
+      const t = setTimeout(() => {
+        setStep('amount'); setMethod(null); setAmountInput(''); setOpened(false)
+      }, 300)
+      return () => clearTimeout(t)
+    }
   }, [open])
 
   const close = () => {
-    if (isControlled) { controlledOnClose?.() }
-    else { setInternalOpen(false) }
+    if (isControlled) controlledOnClose?.()
+    else setInternalOpen(false)
   }
 
-  const iqd = parseInt(amountInput) || 0
-  const usd = iqd > 0 ? iqd / iqdRate : 0
-  const valid = iqd >= MIN_IQD
-
-  const handleProceed = async () => {
-    setProcessing(true)
-    await new Promise(r => setTimeout(r, 1200))
-    setProcessing(false)
-    setStep('done')
-    onSuccess?.()
-  }
-
+  const usd = parseFloat(amountInput) || 0
+  const iqd = Math.round(usd * iqdRate)
+  const valid = usd >= MIN_USD
   const cfg = method ? METHODS[method] : null
+  const waNumber = whatsapp || FALLBACK_WHATSAPP
+
+  const fmtIqd = (n: number) => n.toLocaleString()
 
   const stepLabels: Record<Step, string> = {
-    method: 'Step 1 of 3 — Choose payment method',
-    amount: 'Step 2 of 3 — Enter amount',
-    confirm: 'Step 3 of 3 — Confirm & pay',
+    amount: 'Step 1 of 3 — Choose amount',
+    method: 'Step 2 of 3 — Choose payment method',
+    pay: 'Step 3 of 3 — Complete payment',
     done: '',
   }
 
@@ -114,10 +136,8 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
             border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700,
             cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
           }}
-          onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--gold-light)'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)' }}
-          onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--gold)'; (e.currentTarget as HTMLButtonElement).style.transform = 'none' }}
         >
-          💳 Top Up · شحن الرصيد
+          💳 Add Balance · شحن الرصيد
         </button>
       )}
 
@@ -143,7 +163,7 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>
-                  Top Up Wallet · شحن المحفظة
+                  Add Balance · شحن الرصيد
                 </div>
                 {step !== 'done' && (
                   <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 3 }}>
@@ -162,8 +182,8 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
             {/* Progress bar */}
             {step !== 'done' && (
               <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-                {(['method', 'amount', 'confirm'] as Step[]).map((s, i) => {
-                  const order: Step[] = ['method', 'amount', 'confirm']
+                {(['amount', 'method', 'pay'] as Step[]).map((s, i) => {
+                  const order: Step[] = ['amount', 'method', 'pay']
                   const filled = order.indexOf(s) <= order.indexOf(step)
                   return (
                     <div key={i} style={{
@@ -176,57 +196,11 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
               </div>
             )}
 
-            {/* ── Step 1: Choose method ── */}
-            {step === 'method' && (
-              <div>
+            {/* ── Step 1: Choose amount (USD) ── */}
+            {step === 'amount' && (
+              <div style={{ animation: 'fadeUp 0.25s ease' }}>
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-                  Select your preferred payment method:
-                </div>
-                {(Object.values(METHODS) as typeof METHODS[Method][]).map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => { setMethod(m.id); setStep('amount') }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 16,
-                      width: '100%', padding: '16px 20px', marginBottom: 12,
-                      borderRadius: 14, background: m.bg,
-                      border: `2px solid ${m.border}`,
-                      cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-                      transition: 'all 0.18s',
-                    }}
-                    onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = m.borderActive; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)' }}
-                    onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = m.border; (e.currentTarget as HTMLButtonElement).style.transform = 'none' }}
-                  >
-                    {/* Logo */}
-                    <div style={{
-                      width: 52, height: 52, borderRadius: 12,
-                      background: m.color, display: 'flex', alignItems: 'center',
-                      justifyContent: 'center', flexShrink: 0,
-                      fontSize: m.id === 'fib' ? 12 : 11, fontWeight: 900,
-                      color: '#fff', letterSpacing: -0.5,
-                    }}>
-                      {m.id === 'fib' ? 'FIB' : 'QI'}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: m.color }}>
-                        {m.name}{' '}
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)' }}>
-                          · {m.nameAr}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 3 }}>{m.desc}</div>
-                    </div>
-                    <span style={{ color: 'var(--text-dim)', fontSize: 20, flexShrink: 0 }}>›</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* ── Step 2: Enter amount ── */}
-            {step === 'amount' && method && cfg && (
-              <div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-                  How much would you like to add? <span style={{ color: 'var(--text-dim)' }}>(minimum 10,000 IQD)</span>
+                  How much would you like to add? <span style={{ color: 'var(--text-dim)' }}>(minimum ${MIN_USD})</span>
                 </div>
 
                 {/* Quick amount chips */}
@@ -238,14 +212,14 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                         key={amt}
                         onClick={() => setAmountInput(String(amt))}
                         style={{
-                          padding: '8px 16px', borderRadius: 8, fontSize: 14, fontWeight: 600,
+                          padding: '8px 18px', borderRadius: 8, fontSize: 14, fontWeight: 700,
                           cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
                           background: active ? 'var(--gold)' : 'var(--surface2)',
                           color: active ? 'var(--bg)' : 'var(--text)',
                           border: `2px solid ${active ? 'var(--gold)' : 'var(--border)'}`,
                         }}
                       >
-                        {amt.toLocaleString()} IQD
+                        ${amt}
                       </button>
                     )
                   })}
@@ -258,20 +232,24 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                     color: 'var(--text-muted)', marginBottom: 7,
                     textTransform: 'uppercase', letterSpacing: '0.5px',
                   }}>
-                    Custom Amount (IQD)
+                    Enter amount in USD
                   </label>
                   <div style={{ position: 'relative' }}>
+                    <span style={{
+                      position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
+                      fontSize: 20, fontWeight: 700, color: 'var(--text-dim)',
+                    }}>$</span>
                     <input
                       type="number"
-                      min={MIN_IQD}
-                      step="1000"
+                      min={MIN_USD}
+                      step="5"
                       placeholder="0"
                       value={amountInput}
                       onChange={e => setAmountInput(e.target.value)}
                       style={{
                         width: '100%', background: 'var(--surface2)',
                         border: '1px solid var(--border)', borderRadius: 8,
-                        padding: '12px 14px',
+                        padding: '12px 14px 12px 30px',
                         fontSize: 20, fontWeight: 700, color: 'var(--text)',
                         fontFamily: 'inherit', outline: 'none',
                       }}
@@ -281,135 +259,189 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                   </div>
                 </div>
 
-                {/* IQD equivalent */}
-                {iqd > 0 && (
+                {/* Live IQD conversion */}
+                {usd > 0 && (
                   <div style={{
                     padding: '10px 14px', marginBottom: 12,
                     background: 'rgba(201,168,76,0.07)', border: '1px solid rgba(201,168,76,0.2)',
-                    borderRadius: 8, display: 'flex', alignItems: 'baseline', gap: 6,
+                    borderRadius: 8, display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap',
                   }}>
                     <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>=</span>
-                    <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)' }}>${usd.toFixed(2)}</span>
-                    <span style={{ fontSize: 12, color: 'var(--gold-dim)' }}>USD</span>
+                    <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)' }}>{fmtIqd(iqd)}</span>
+                    <span style={{ fontSize: 12, color: 'var(--gold-dim)' }}>IQD</span>
                     <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 4 }}>
-                      @ {iqdRate.toLocaleString()} IQD/USD
+                      (at {fmtIqd(iqdRate)} IQD/USD)
                     </span>
                   </div>
                 )}
 
                 {/* Minimum warning */}
-                {iqd > 0 && iqd < MIN_IQD && (
+                {usd > 0 && usd < MIN_USD && (
                   <div style={{
                     padding: '9px 13px', marginBottom: 12,
                     background: 'rgba(217,83,79,0.1)', border: '1px solid rgba(217,83,79,0.3)',
                     borderRadius: 8, fontSize: 12, color: 'var(--red)',
                   }}>
-                    Minimum top-up amount is 10,000 IQD
+                    Minimum top-up amount is ${MIN_USD}
                   </div>
                 )}
 
-                <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                  <button
-                    onClick={() => setStep('method')}
-                    style={{
-                      flex: 1, padding: '10px 16px', borderRadius: 8,
-                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      background: 'transparent', color: 'var(--text-muted)',
-                      border: '1px solid var(--border)', fontFamily: 'inherit',
-                    }}
-                  >← Back</button>
-                  <button
-                    onClick={() => setStep('confirm')}
-                    disabled={!valid}
-                    style={{
-                      flex: 2, padding: '11px 20px', borderRadius: 8,
-                      fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
-                      border: 'none', cursor: valid ? 'pointer' : 'not-allowed',
-                      background: valid ? 'var(--gold)' : 'var(--surface3)',
-                      color: valid ? 'var(--bg)' : 'var(--text-dim)',
-                      transition: 'all 0.15s',
-                    }}
-                  >Continue →</button>
-                </div>
+                <button
+                  onClick={() => setStep('method')}
+                  disabled={!valid}
+                  style={{
+                    width: '100%', padding: '12px 20px', borderRadius: 8,
+                    fontSize: 14, fontWeight: 700, fontFamily: 'inherit', marginTop: 4,
+                    border: 'none', cursor: valid ? 'pointer' : 'not-allowed',
+                    background: valid ? 'var(--gold)' : 'var(--surface3)',
+                    color: valid ? 'var(--bg)' : 'var(--text-dim)',
+                    transition: 'all 0.15s',
+                  }}
+                >Continue →</button>
               </div>
             )}
 
-            {/* ── Step 3: Confirm ── */}
-            {step === 'confirm' && method && cfg && (
-              <div>
-                {/* Summary card */}
-                <div style={{
-                  background: 'var(--surface2)', border: '1px solid var(--border)',
-                  borderRadius: 12, padding: '16px 20px', marginBottom: 20,
-                }}>
-                  {[
-                    ['Payment Method', `${cfg.name} · ${cfg.nameAr}`],
-                    ['Amount (IQD)', `${iqd.toLocaleString()} IQD`],
-                    ['Amount (USD)', `≈ $${usd.toFixed(2)}`],
-                    ['Rate', `1 USD = ${iqdRate.toLocaleString()} IQD`],
-                  ].map(([label, value]) => (
-                    <div key={label} style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '8px 0', borderBottom: '1px solid rgba(58,56,53,0.5)',
+            {/* ── Step 2: Choose payment method ── */}
+            {step === 'method' && (
+              <div style={{ animation: 'fadeUp 0.25s ease' }}>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+                  Choose how you&apos;d like to pay <span style={{ fontWeight: 700, color: 'var(--gold)' }}>{fmtIqd(iqd)} IQD</span> <span style={{ color: 'var(--text-dim)' }}>(${usd.toFixed(2)})</span>
+                </div>
+                {(Object.values(METHODS)).map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => { setMethod(m.id); setOpened(false); setStep('pay') }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 16,
+                      width: '100%', padding: '14px 18px', marginBottom: 10,
+                      borderRadius: 14, background: m.bg,
+                      border: `2px solid ${m.border}`,
+                      cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                      transition: 'all 0.18s',
+                    }}
+                    onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = m.borderActive; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)' }}
+                    onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = m.border; (e.currentTarget as HTMLButtonElement).style.transform = 'none' }}
+                  >
+                    {/* Logo */}
+                    <div style={{
+                      width: 48, height: 48, borderRadius: 12,
+                      background: m.color, display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', flexShrink: 0,
+                      fontSize: 14, fontWeight: 900, color: '#fff', letterSpacing: -0.5,
                     }}>
-                      <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{label}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{value}</span>
+                      {m.short}
                     </div>
-                  ))}
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    paddingTop: 12,
-                  }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Total to Add</span>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)' }}>
-                        {iqd.toLocaleString()} <span style={{ fontSize: 13, color: 'var(--gold-dim)' }}>IQD</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: m.color }}>
+                        {m.name}{' '}
+                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)' }}>
+                          · {m.nameAr}
+                        </span>
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>≈ ${usd.toFixed(2)} USD</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 3 }}>
+                        Tap to pay {fmtIqd(iqd)} IQD
+                      </div>
                     </div>
+                    <span style={{ color: 'var(--text-dim)', fontSize: 20, flexShrink: 0 }}>›</span>
+                  </button>
+                ))}
+
+                <button
+                  onClick={() => setStep('amount')}
+                  style={{
+                    width: '100%', padding: '10px 16px', borderRadius: 8, marginTop: 4,
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    background: 'transparent', color: 'var(--text-muted)',
+                    border: '1px solid var(--border)', fontFamily: 'inherit',
+                  }}
+                >← Back</button>
+              </div>
+            )}
+
+            {/* ── Step 3: Pay ── */}
+            {step === 'pay' && cfg && (
+              <div style={{ animation: 'fadeUp 0.25s ease' }}>
+                {/* Amount to pay — prominent */}
+                <div style={{
+                  textAlign: 'center', padding: '20px 16px', marginBottom: 18,
+                  background: cfg.bg, border: `2px solid ${cfg.border}`, borderRadius: 16,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 9, background: cfg.color,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12, fontWeight: 900, color: '#fff', letterSpacing: -0.5,
+                    }}>{cfg.short}</div>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: cfg.color }}>
+                      {cfg.name} · {cfg.nameAr}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Amount to pay
+                  </div>
+                  <div style={{ fontSize: 34, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2, marginTop: 4 }}>
+                    {fmtIqd(iqd)} <span style={{ fontSize: 16, color: 'var(--text-muted)' }}>IQD</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
+                    = ${usd.toFixed(2)} USD (at {fmtIqd(iqdRate)} IQD/USD)
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button
-                    onClick={() => setStep('amount')}
-                    style={{
-                      flex: 1, padding: '10px 16px', borderRadius: 8,
-                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      background: 'transparent', color: 'var(--text-muted)',
-                      border: '1px solid var(--border)', fontFamily: 'inherit',
-                    }}
-                  >← Back</button>
-                  <button
-                    onClick={handleProceed}
-                    disabled={processing}
-                    style={{
-                      flex: 2, padding: '11px 20px', borderRadius: 8,
-                      fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
-                      border: 'none', cursor: processing ? 'default' : 'pointer',
-                      background: 'var(--gold)', color: 'var(--bg)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      opacity: processing ? 0.7 : 1, transition: 'opacity 0.15s',
-                    }}
-                  >
-                    {processing ? <><Dot /> Processing...</> : 'Proceed to Payment →'}
-                  </button>
-                </div>
+                {/* Open payment app */}
+                <button
+                  onClick={() => { window.open(cfg.url, '_blank', 'noopener,noreferrer'); setOpened(true) }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    width: '100%', padding: '13px 20px', borderRadius: 10, marginBottom: 10,
+                    background: cfg.color, color: '#fff',
+                    fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+                    border: 'none', cursor: 'pointer', transition: 'opacity 0.15s',
+                  }}
+                  onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.9' }}
+                  onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
+                >
+                  ↗ {cfg.openLabel}
+                </button>
+
+                {/* Completed payment */}
+                <button
+                  onClick={() => { setStep('done'); onSuccess?.() }}
+                  style={{
+                    width: '100%', padding: '12px 20px', borderRadius: 10, marginBottom: 10,
+                    fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+                    background: opened ? 'var(--gold)' : 'var(--surface2)',
+                    color: opened ? 'var(--bg)' : 'var(--text)',
+                    border: `1px solid ${opened ? 'var(--gold)' : 'var(--border)'}`,
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                >
+                  ✓ I&apos;ve completed the payment
+                </button>
+
+                <button
+                  onClick={() => setStep('method')}
+                  style={{
+                    width: '100%', padding: '10px 16px', borderRadius: 8,
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    background: 'transparent', color: 'var(--text-muted)',
+                    border: '1px solid var(--border)', fontFamily: 'inherit',
+                  }}
+                >← Back</button>
               </div>
             )}
 
-            {/* ── Done: Gateway coming soon ── */}
+            {/* ── Done: pending verification ── */}
             {step === 'done' && cfg && (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 44, marginBottom: 16, lineHeight: 1 }}>🚧</div>
+              <div style={{ textAlign: 'center', animation: 'fadeUp 0.25s ease' }}>
+                <div style={{ fontSize: 44, marginBottom: 16, lineHeight: 1 }}>⏳</div>
                 <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
-                  Payment Gateway Coming Soon
+                  Payment pending verification
                 </div>
                 <div style={{
                   fontSize: 13, color: 'var(--text-muted)', marginBottom: 20,
-                  lineHeight: 1.7, maxWidth: 360, margin: '0 auto 20px',
+                  lineHeight: 1.7, maxWidth: 380, margin: '0 auto 20px',
                 }}>
-                  Online {cfg.name} payment is being set up. To top up right now, contact us on WhatsApp and we&apos;ll process it manually within minutes.
+                  Our team will confirm and add your balance within a few hours. Contact us on WhatsApp if you need help.
                 </div>
 
                 {/* Request summary */}
@@ -421,7 +453,7 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                     Your request
                   </div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)' }}>
-                    {iqd.toLocaleString()} IQD <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gold-dim)' }}>≈ ${usd.toFixed(2)} USD</span>
+                    ${usd.toFixed(2)} <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gold-dim)' }}>= {fmtIqd(iqd)} IQD</span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                     via {cfg.name} · {cfg.nameAr}
@@ -429,8 +461,8 @@ export default function WalletTopUp({ userId, onSuccess, open: controlledOpen, o
                 </div>
 
                 <a
-                  href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(
-                    `Hi ShipIQ! I'd like to top up my wallet with ${iqd.toLocaleString()} IQD (~$${usd.toFixed(2)} USD) via ${cfg.name}.`
+                  href={`https://wa.me/${waNumber}?text=${encodeURIComponent(
+                    `Hi ShipIQ! I've paid $${usd.toFixed(2)} (${fmtIqd(iqd)} IQD) via ${cfg.name} to top up my wallet. Please verify and add my balance.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"

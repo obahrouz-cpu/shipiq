@@ -22,6 +22,7 @@ export interface Profile {
   email: string
   phone?: string
   balance: number
+  balance_usd: number
   role: 'admin' | 'customer' | 'agent'
   language?: 'en' | 'ar' | 'sorani' | 'badini'
   tier?: string
@@ -140,6 +141,7 @@ export interface Transaction {
   id: string
   user_id: string
   amount: number
+  amount_usd?: number
   currency: string
   note: string
   order_id?: string

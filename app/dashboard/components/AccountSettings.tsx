@@ -536,7 +536,7 @@ export default function AccountSettings({ profile, orders, mode, onClose, onProf
               <div className={styles.infoRow}>
                 <span className={styles.infoKey}>{t('settings', 'currentBalance')}</span>
                 <span className={`${styles.infoVal} ${styles.infoValGold}`}>
-                  {profile.balance?.toLocaleString()} IQD
+                  ${(profile.balance_usd ?? 0).toFixed(2)} USD
                 </span>
               </div>
               <div className={styles.infoRow}>
