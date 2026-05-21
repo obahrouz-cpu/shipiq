@@ -1797,9 +1797,6 @@ export default function Dashboard() {
                 <span style={{ fontSize: 10, color: 'var(--gold-dim)', marginLeft: 2 }}>＋</span>
               </div>
             )}
-            {!isAdmin && page === 'orders' && (
-              <button className={styles.btnPrimary} style={{ padding: '7px 16px', fontSize: 13 }} onClick={() => { setShowNewOrder(true); haptic() }} aria-label="Submit new order (N)">+ New Order</button>
-            )}
           </div>
         </div>
 
