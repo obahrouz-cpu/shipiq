@@ -16,6 +16,7 @@ import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/li
 import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem, DeliveryRequest, OrderNote } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import { useIqdRate } from '@/lib/hooks/useIqdRate'
+import { displayPhone } from '@/lib/phone'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
 import OrderFilters, { OrderFiltersState, DEFAULT_FILTERS } from './components/OrderFilters'
@@ -2516,7 +2517,7 @@ export default function Dashboard() {
                               )}
                             </td>
                             <td><span className="phone-number">{u.email}</span></td>
-                            <td><span className="phone-number">{u.phone || '—'}</span></td>
+                            <td><span className="phone-number">{displayPhone(u.phone, '—')}</span></td>
                             <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
                               ${(u.total_spent || 0).toFixed(2)}
                             </td>

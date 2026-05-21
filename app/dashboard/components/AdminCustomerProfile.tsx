@@ -7,6 +7,7 @@ import {
   topUpBalance, deductBalance, removeFromWishlist,
 } from '@/lib/api'
 import type { Profile, Order, Transaction, WishlistItem, DeliveryRequest, TierSettings } from '@/lib/types'
+import { displayPhone } from '@/lib/phone'
 import TierBadge from './TierBadge'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -513,7 +514,7 @@ export default function AdminCustomerProfile({
                     </div>
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span className="phone-number" dir="ltr" style={{ fontSize: 13, color: 'var(--text-muted)' }}>📞 {cust.phone || 'No phone'}</span>
+                      <span className="phone-number" dir="ltr" style={{ fontSize: 13, color: 'var(--text-muted)' }}>📞 {displayPhone(cust.phone, 'No phone')}</span>
                       <button onClick={() => { setEditPhone(true); setPhoneVal(cust.phone || '') }} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: 2 }} title="Edit phone">✎</button>
                     </div>
                   )}

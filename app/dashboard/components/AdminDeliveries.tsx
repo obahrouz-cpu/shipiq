@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { DeliveryRequest } from '@/lib/types'
 import { getAdminDeliveryRequests, updateDeliveryRequest } from '@/lib/api'
+import { displayPhone } from '@/lib/phone'
 import styles from '../dashboard.module.css'
 
 const STATUS_CFG: Record<string, { label: string; color: string; icon: string }> = {
@@ -158,7 +159,7 @@ export default function AdminDeliveries({ onToast }: Props) {
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{req.profiles?.full_name || '—'}</div>
                         <div className="phone-number" dir="ltr" style={{ fontSize: 11, color: 'var(--text-dim)' }}>{req.profiles?.email}</div>
-                        {req.profiles?.phone && <div className="phone-number" dir="ltr" style={{ fontSize: 11, color: 'var(--text-dim)' }}>{req.profiles.phone}</div>}
+                        {req.profiles?.phone && <div className="phone-number" dir="ltr" style={{ fontSize: 11, color: 'var(--text-dim)' }}>{displayPhone(req.profiles.phone)}</div>}
                       </div>
                     </div>
                   </div>

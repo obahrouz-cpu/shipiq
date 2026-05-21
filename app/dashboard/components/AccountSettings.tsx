@@ -4,6 +4,7 @@ import { updateLanguage, getTierSettings, updateProfile, changePassword } from '
 import type { Profile, Order, TierSettings } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import type { Lang } from '@/lib/useLanguage'
+import { displayPhone } from '@/lib/phone'
 import DeliveryAddress from './DeliveryAddress'
 import styles from './AccountSettings.module.css'
 
@@ -17,16 +18,6 @@ function formatIraqiPhone(raw: string): string {
   if (digits.length <= 3) return digits
   if (digits.length <= 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`
   return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`
-}
-
-function displayPhone(phone?: string | null): string {
-  if (!phone) return 'Not set'
-  const digits = phone.replace(/\D/g, '')
-  if (digits.startsWith('964') && digits.length === 13) {
-    const local = digits.slice(3)
-    return `+964 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`
-  }
-  return phone
 }
 
 // ── Notification prefs (persisted to localStorage) ────────────────────────────
@@ -392,7 +383,7 @@ export default function AccountSettings({ profile, orders, mode, onClose, onProf
               ) : (
                 <div className={styles.fieldRow}>
                   <span className={styles.fieldKey} dir={language !== 'en' ? 'rtl' : 'ltr'}>{t('settings', 'phone')}</span>
-                  <span className={`${styles.fieldVal} phone-number`} dir="ltr">{displayPhone(profile.phone)}</span>
+                  <span className={`${styles.fieldVal} phone-number`} dir="ltr">{displayPhone(profile.phone, 'Not set')}</span>
                   <button className={styles.editBtn} onClick={() => setEditingPhone(true)}>{t('settings', 'edit')}</button>
                 </div>
               )}
