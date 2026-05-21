@@ -190,7 +190,7 @@ export default function AdminCustomerProfile({
   const [notifLoading, setNotifLoading] = useState(false)
 
   // Settings
-  const [tierOverride, setTierOverride] = useState(customer.tier || tierSettings[0]?.tier || 'bronze')
+  const [tierOverride, setTierOverride] = useState(customer.tier || tierSettings[0]?.tier || 'silver')
   const [suspendReason, setSuspendReason] = useState(customer.suspension_reason || '')
   const [suspending, setSuspending] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState('')
@@ -540,7 +540,7 @@ export default function AdminCustomerProfile({
             {/* Tier badge */}
             {tierSettings.length > 0 && (
               <div style={{ marginBottom: 14 }}>
-                <TierBadge tier={cust.tier || 'bronze'} totalSpent={cust.total_spent || 0} tiers={tierSettings} />
+                <TierBadge tier={cust.tier || 'silver'} totalSpent={cust.total_spent || 0} tiers={tierSettings} />
               </div>
             )}
 

@@ -15,7 +15,7 @@ create table public.profiles (
   language            text default 'en',                   -- 'en' | 'ar'
   balance             bigint not null default 0,           -- IQD (legacy)
   balance_usd         numeric not null default 0,           -- USD (canonical wallet balance)
-  tier                text not null default 'bronze',
+  tier                text not null default 'silver',
   total_spent         numeric not null default 0,          -- lifetime USD (shipping / 1450)
   assigned_country    text,                                -- agent only: 'USA' | 'Turkey' | 'UAE' | 'China'
   delivery_lat        double precision,
@@ -83,7 +83,7 @@ create table public.transactions (
 
 -- ── Tier settings ─────────────────────────────────────────────────────────────
 create table public.tier_settings (
-  tier       text primary key,             -- 'bronze' | 'silver' | 'gold' | 'platinum' | 'vip'
+  tier       text primary key,             -- 'silver' | 'gold' | 'diamond' | 'platinum' | 'titanium'
   name_en    text,
   name_ar    text,
   min_spend  numeric not null default 0,   -- minimum lifetime USD spend to reach this tier
@@ -95,11 +95,11 @@ create table public.tier_settings (
 
 -- Default tiers
 insert into public.tier_settings (tier, name_en, name_ar, min_spend, color, icon, benefits) values
-  ('bronze',   'Bronze',   'برونزي',  0,    '#CD7F32', '🥉', 'Welcome to ShipIQ!'),
-  ('silver',   'Silver',   'فضي',     100,  '#C0C0C0', '🥈', 'Coming soon'),
-  ('gold',     'Gold',     'ذهبي',    500,  '#FFD700', '🥇', 'Coming soon'),
-  ('platinum', 'Platinum', 'بلاتيني', 1500, '#E5E4E2', '💎', 'Coming soon'),
-  ('vip',      'VIP',      'كبار',    5000, '#c9a84c', '👑', 'Coming soon');
+  ('silver',   'Silver',   'فضي',      0,    '#C0C0C0', '⭐', ''),
+  ('gold',     'Gold',     'ذهبي',     500,  '#FFD700', '🥇', ''),
+  ('diamond',  'Diamond',  'ماسي',     1000, '#B9F2FF', '💎', ''),
+  ('platinum', 'Platinum', 'بلاتيني',  2000, '#E5E4E2', '👑', ''),
+  ('titanium', 'Titanium', 'تيتانيوم', 3000, '#878681', '🔱', '');
 
 -- ── App settings (key/value store) ───────────────────────────────────────────
 create table public.app_settings (
@@ -227,7 +227,7 @@ begin
   end;
 
   update public.profiles
-  set total_spent = v_total_spent, tier = coalesce(v_tier, 'bronze')
+  set total_spent = v_total_spent, tier = coalesce(v_tier, 'silver')
   where id = p_user_id;
 end;
 $$;

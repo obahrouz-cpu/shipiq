@@ -1,4 +1,16 @@
-import type { StatusConfigEntry, ShippingRate, Store } from './types'
+import type { StatusConfigEntry, ShippingRate, Store, TierSettings } from './types'
+
+// ── Membership tiers (single source of truth) ─────────────────────────────────
+// Order: Silver → Gold → Diamond → Platinum → Titanium. Silver is the default
+// starting tier. Mirrors the public.tier_settings table.
+
+export const TIER_CONFIG: TierSettings[] = [
+  { tier: 'silver',   name_en: 'Silver',   name_ar: 'فضي',      min_spend: 0,    color: '#C0C0C0', icon: '⭐', benefits: '', is_active: true },
+  { tier: 'gold',     name_en: 'Gold',     name_ar: 'ذهبي',     min_spend: 500,  color: '#FFD700', icon: '🥇', benefits: '', is_active: true },
+  { tier: 'diamond',  name_en: 'Diamond',  name_ar: 'ماسي',     min_spend: 1000, color: '#B9F2FF', icon: '💎', benefits: '', is_active: true },
+  { tier: 'platinum', name_en: 'Platinum', name_ar: 'بلاتيني',  min_spend: 2000, color: '#E5E4E2', icon: '👑', benefits: '', is_active: true },
+  { tier: 'titanium', name_en: 'Titanium', name_ar: 'تيتانيوم', min_spend: 3000, color: '#878681', icon: '🔱', benefits: '', is_active: true },
+]
 
 // ── Supported sites + country metadata (single source of truth) ───────────────
 

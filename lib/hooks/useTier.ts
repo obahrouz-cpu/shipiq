@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { TierSettings } from '../types'
 
-const TIER_ORDER = ['bronze', 'silver', 'gold', 'platinum', 'vip'] as const
+const TIER_ORDER = ['silver', 'gold', 'diamond', 'platinum', 'titanium'] as const
 type TierName = typeof TIER_ORDER[number]
 
 export function calculateTier(totalSpent: number, tierSettings: TierSettings[]): string {
@@ -9,7 +9,7 @@ export function calculateTier(totalSpent: number, tierSettings: TierSettings[]):
   for (const t of sorted) {
     if (totalSpent >= t.min_spend) return t.tier
   }
-  return 'bronze'
+  return 'silver'
 }
 
 export function useTier(totalSpent: number, tierSettings: TierSettings[]) {

@@ -219,7 +219,7 @@ export default function AccountSettings({ profile, orders, mode, onClose, onProf
           {/* ── 0. MEMBERSHIP TIER (customers only) ── */}
           {profile.role === 'customer' && tierSettings.length > 0 && (() => {
             const sorted = [...tierSettings].sort((a, b) => a.min_spend - b.min_spend)
-            const currentTierKey = profile.tier || 'bronze'
+            const currentTierKey = profile.tier || 'silver'
             const current = sorted.find(t => t.tier === currentTierKey) || sorted[0]
             const currentIdx = sorted.indexOf(current)
             const next = sorted[currentIdx + 1] ?? null

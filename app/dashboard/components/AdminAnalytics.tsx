@@ -27,7 +27,7 @@ const COUNTRY_FLAGS: Record<string, string> = { USA: '🇺🇸', Turkey: '🇹�
 const COUNTRY_COLORS: Record<string, string> = { USA: '#c9a84c', Turkey: '#e07b3a', UAE: '#5b9bd5', China: '#d9534f', Other: '#9e9a93' }
 
 const TIER_COLORS: Record<string, string> = {
-  bronze: '#CD7F32', silver: '#C0C0C0', gold: '#FFD700', platinum: '#E5E4E2', vip: '#c9a84c',
+  silver: '#C0C0C0', gold: '#FFD700', diamond: '#B9F2FF', platinum: '#E5E4E2', titanium: '#878681',
 }
 
 const CHART_GRID   = '#2d2b28'
@@ -281,7 +281,7 @@ export default function AdminAnalytics() {
           name: o.profiles?.full_name || prof?.full_name || '—',
           email: o.profiles?.email || prof?.email || '—',
           orders: 0, revenue: 0,
-          tier: prof?.tier || 'bronze',
+          tier: prof?.tier || 'silver',
           lastOrder: o.created_at,
         }
       }
