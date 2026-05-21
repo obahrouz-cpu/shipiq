@@ -34,6 +34,7 @@ export default function AuthPage() {
   const [form, setForm]       = useState<AuthForm>({ name: '', email: '', phone: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [agreed, setAgreed]   = useState(false)
 
   // Phone field local state
   const [phoneDisplay, setPhoneDisplay] = useState('')
@@ -86,6 +87,10 @@ export default function AuthPage() {
   const register = async () => {
     setPhoneTouched(true)
     if (!validatePhone(phoneDisplay)) return
+    if (!agreed) {
+      setError('Please agree to the Terms of Service and Privacy Policy · يرجى الموافقة على الشروط وسياسة الخصوصية')
+      return
+    }
     setLoading(true); setError('')
     const { error: err } = await emailSignUp(form.email, form.password, form.name, form.phone)
     if (err) { setError(err); setLoading(false); return }
@@ -176,7 +181,22 @@ export default function AuthPage() {
               <label className={styles.label}>Password · كلمة المرور</label>
               <input className={styles.input} type="password" placeholder="At least 6 characters" value={form.password} onChange={e => handle('password', e.target.value)} />
             </div>
-            <button className={styles.btnPrimary} onClick={register} disabled={loading}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, margin: '4px 0 16px', fontSize: 13, lineHeight: 1.5, color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={e => setAgreed(e.target.checked)}
+                style={{ width: 18, height: 18, marginTop: 1, accentColor: 'var(--gold)', cursor: 'pointer', flexShrink: 0 }}
+              />
+              <span>
+                I agree to the{' '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)', fontWeight: 600 }}>Terms of Service</a>
+                {' '}and{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)', fontWeight: 600 }}>Privacy Policy</a>
+                {' · '}<span className="ar">أوافق على شروط الخدمة وسياسة الخصوصية</span>
+              </span>
+            </label>
+            <button className={styles.btnPrimary} onClick={register} disabled={loading || !agreed}>
               {loading ? <span className={styles.spinner} /> : 'Create Account · إنشاء حساب'}
             </button>
           </div>

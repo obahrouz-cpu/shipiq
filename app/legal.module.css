@@ -1,0 +1,214 @@
+/* ── Legal pages (Privacy Policy, Terms of Service) ── */
+
+.page {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ── Top bar ── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--nav-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--gold);
+  text-decoration: none;
+}
+
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: all 0.15s;
+}
+.backBtn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ── Content wrapper ── */
+.container {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+/* ── Header ── */
+.header {
+  text-align: center;
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.title {
+  font-size: clamp(24px, 5vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+.titleAr {
+  font-family: 'Noto Naskh Arabic', 'Tajawal', sans-serif;
+  font-weight: 700;
+  color: var(--gold);
+}
+.titleDot {
+  color: var(--text-dim);
+  margin: 0 10px;
+}
+.updated {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ── Table of contents ── */
+.toc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 36px;
+}
+.tocTitle {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+.tocList {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 20px;
+}
+.tocLink {
+  display: block;
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+  padding: 4px 0;
+  transition: color 0.15s;
+}
+.tocLink:hover {
+  color: var(--gold);
+}
+.tocNum {
+  color: var(--gold);
+  font-weight: 700;
+  margin-inline-end: 6px;
+}
+
+/* ── Sections ── */
+.section {
+  scroll-margin-top: 80px;
+  margin-bottom: 32px;
+}
+.sectionTitle {
+  font-size: 19px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.sectionNum {
+  color: var(--gold);
+  font-weight: 800;
+}
+.paragraph {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.listItem {
+  position: relative;
+  padding-inline-start: 22px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.listItem::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 4px;
+  top: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+/* ── Footer cross-links ── */
+.footer {
+  margin-top: 48px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+.footerLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px 28px;
+  margin-bottom: 16px;
+}
+.footerLink {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.footerLink:hover {
+  color: var(--gold);
+}
+.footerCopy {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+@media (max-width: 520px) {
+  .topbar { padding: 12px 14px; }
+  .container { padding: 24px 16px 48px; }
+  .toc { padding: 16px 18px; }
+  .tocList { grid-template-columns: 1fr; }
+}

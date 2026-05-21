@@ -630,6 +630,8 @@ export default function LandingPage() {
               <Link href="/calculator">Calculator</Link>
               <a href="#stores">Stores</a>
               <a href="#faq">FAQ</a>
+              <Link href="/privacy">Privacy Policy · سياسة الخصوصية</Link>
+              <Link href="/terms">Terms of Service · شروط الخدمة</Link>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
