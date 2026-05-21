@@ -8,7 +8,7 @@ const nextConfig = {
     formats: ['image/webp', 'image/avif'],
   },
   compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error'] } : false,
   },
   poweredByHeader: false,
   compress: true,
