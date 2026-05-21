@@ -340,8 +340,14 @@ export default function LandingPage() {
       </section>
 
       {/* ── STICKY CTA ── */}
-      {pastHero && !loggedIn && (
-        <Link href="/auth" className={styles.stickyCta} aria-label="Get started with ShipIQ">
+      {!loggedIn && (
+        <Link
+          href="/auth"
+          className={`${styles.stickyCta} ${pastHero ? styles.stickyCtaVisible : ''}`}
+          aria-label="Get started with ShipIQ"
+          aria-hidden={!pastHero}
+          tabIndex={pastHero ? 0 : -1}
+        >
           🚀 Get Started Free
         </Link>
       )}
