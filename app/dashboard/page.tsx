@@ -1560,6 +1560,18 @@ export default function Dashboard() {
   // Live IQD/USD rate for balance ⇄ IQD conversion display
   const { rate: iqdRate } = useIqdRate()
 
+  // Loading-screen fade-out: keep the loader mounted briefly after data is
+  // ready so it can fade to opacity 0 before the dashboard takes over.
+  const [loaderMounted, setLoaderMounted] = useState(true)
+  const [loaderHidden, setLoaderHidden]   = useState(false)
+  useEffect(() => {
+    if (loading) return
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => setLoaderHidden(true)) })
+    const timer = setTimeout(() => setLoaderMounted(false), 320)
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); clearTimeout(timer) }
+  }, [loading])
+
   const toast = useCallback((message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
     setToasts(p => [...p, { id, message, type }])
@@ -1675,37 +1687,16 @@ export default function Dashboard() {
   }, [orders, filters, isAdmin, adminSearch])
 
   // ── Early returns (all hooks are above this line) ────────────────────────────
-  if (loading) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '0 0 0 260px', display: 'flex', flexDirection: 'column' }}>
-      {/* Skeleton sidebar strip */}
-      <div style={{ position: 'fixed', left: 0, top: 0, width: 260, height: '100vh', background: 'var(--surface)', borderRight: '1px solid var(--border)', padding: '28px 16px' }}>
-        <div className="skeleton skeleton-title" style={{ width: 80, marginBottom: 32 }} />
-        {[1,2,3,4].map(i => <div key={i} className="skeleton skeleton-text" style={{ marginBottom: 12, width: `${60 + i * 8}%` }} />)}
-      </div>
-      {/* Skeleton main content */}
-      <div style={{ padding: '32px', flex: 1 }}>
-        <div style={{ marginBottom: 24 }}>
-          <div className="skeleton skeleton-title" style={{ width: 140, marginBottom: 8 }} />
-          <div className="skeleton skeleton-text" style={{ width: 200 }} />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 24 }}>
-          {[1,2,3,4].map(i => (
-            <div key={i} className="skeleton-card" style={{ height: 90 }}>
-              <div className="skeleton" style={{ width: 36, height: 36, borderRadius: 10, marginBottom: 12 }} />
-              <div className="skeleton skeleton-text" style={{ width: '60%', marginBottom: 8 }} />
-              <div className="skeleton skeleton-title" style={{ width: '40%' }} />
-            </div>
-          ))}
-        </div>
-        <div className="skeleton-card" style={{ height: 200 }}>
-          {[1,2,3].map(i => <div key={i} className="skeleton skeleton-text" style={{ marginBottom: 14, width: `${70 + i * 5}%` }} />)}
-        </div>
-      </div>
-      <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', fontSize: 13, color: 'var(--text-dim)' }}>
-        Loading ShipIQ...
-      </div>
+  const renderLoadingScreen = (entering: boolean) => (
+    <div className={`${styles.loadingScreen} ${entering ? styles.loadingScreenEnter : ''} ${loaderHidden ? styles.loadingScreenHidden : ''}`}>
+      <div className={styles.loadingLogo}>📦</div>
+      <div className={styles.loadingBrand}>ShipIQ</div>
+      <div className={styles.loadingSpinner} />
+      <div className={styles.loadingTagline}>Loading your dashboard...</div>
     </div>
   )
+
+  if (loading) return renderLoadingScreen(true)
 
   if (isAgent && profile) return <AgentDashboard profile={profile} onSignOut={logout} />
 
@@ -1750,6 +1741,7 @@ export default function Dashboard() {
 
   return (
     <div className={styles.layout}>
+      {loaderMounted && renderLoadingScreen(false)}
       {sidebarOpen && <div className={styles.sidebarOverlay} onClick={() => setSidebarOpen(false)} />}
       <div className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
         <div className={styles.sidebarLogo}>
