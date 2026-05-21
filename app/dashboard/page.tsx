@@ -1977,7 +1977,6 @@ export default function Dashboard() {
                   <div>
                     <div className={styles.pageHeading}>{t('orders', 'title')}</div>
                   </div>
-                  <button className={styles.btnPrimary} onClick={() => setShowNewOrder(true)}>{t('orders', 'newOrder')}</button>
                 </div>
               )}
               {page === 'admin-orders' && (
