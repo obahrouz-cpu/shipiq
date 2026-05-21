@@ -165,18 +165,28 @@ function extractWeightToken(s: string | null): string | null {
 
 function parseDimensionsToCm(dimStr: string): { l: number; w: number; h: number } | null {
   if (!dimStr) return null
-  const match = dimStr.match(/([\d.]+)\s*x\s*([\d.]+)\s*x\s*([\d.]+)\s*(inch|in|"|cm)?/i)
+  // Handles "30 x 20 x 10 cm", "11.5 x 13.4 x 4 inches", and Amazon's labelled
+  // form 11.81"L x 0.51"W x 8.03"Th — number, optional unit, optional L/W/H/Th label.
+  const match = dimStr.match(
+    /([\d.]+)\s*(?:"|inches?|in|cm|mm)?\s*[a-z]{0,3}\s*[x×*]\s*([\d.]+)\s*(?:"|inches?|in|cm|mm)?\s*[a-z]{0,3}\s*[x×*]\s*([\d.]+)/i
+  )
   if (!match) return null
   let l = parseFloat(match[1])
   let w = parseFloat(match[2])
   let h = parseFloat(match[3])
-  const unit = (match[4] || '').toLowerCase()
-  if (!unit || unit.includes('in') || unit === '"') {
-    l = Math.round(l * 2.54 * 10) / 10
-    w = Math.round(w * 2.54 * 10) / 10
-    h = Math.round(h * 2.54 * 10) / 10
+  if (isNaN(l) || isNaN(w) || isNaN(h)) return null
+  const lower = dimStr.toLowerCase()
+  if (lower.includes('mm')) {
+    l /= 10; w /= 10; h /= 10
+  } else if (!lower.includes('cm')) {
+    // Inches (explicit " / inch, or no metric unit — Amazon's default)
+    l *= 2.54; w *= 2.54; h *= 2.54
   }
-  return { l, w, h }
+  return {
+    l: Math.round(l * 10) / 10,
+    w: Math.round(w * 10) / 10,
+    h: Math.round(h * 10) / 10,
+  }
 }
 
 function validateWeight(kg: number | null): number | null {
@@ -351,8 +361,6 @@ export async function POST(req: NextRequest) {
       // Amazon frequently lists weight only inside the dimensions value
       // (e.g. "11.5 x 13.4 x 4 inches; 16 Pounds"), with no standalone weight field.
       if (!rawWeight) rawWeight = extractWeightToken(rawDimensions)
-      console.error('[scrape] Amazon fields:', Object.keys(kv).join(' | '))
-      console.error('[scrape] rawWeight:', rawWeight, '| rawDimensions:', rawDimensions)
       const productName = String(content.title || content.product_name || content.product_title || kv.title || 'Unknown Product')
 
       const images = content.images
