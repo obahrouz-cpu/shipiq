@@ -157,10 +157,11 @@ export default function AuthPage() {
             </div>
             <div className={styles.formGroup}>
               <label className={styles.label}>Phone · الهاتف</label>
-              <div className={`${styles.phoneGroup} ${phoneError ? styles.phoneGroupError : ''}`}>
+              <div className={`${styles.phoneGroup} phone-number ${phoneError ? styles.phoneGroupError : ''}`} dir="ltr">
                 <span className={styles.phonePrefix}>+964</span>
                 <input
-                  className={styles.phoneInput}
+                  className={`${styles.phoneInput} phone-number`}
+                  dir="ltr"
                   type="tel"
                   placeholder="770 123 4567"
                   value={phoneDisplay}

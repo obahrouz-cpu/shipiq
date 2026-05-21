@@ -16,6 +16,7 @@ import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/li
 import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem, DeliveryRequest, OrderNote } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import { useIqdRate } from '@/lib/hooks/useIqdRate'
+import { displayPhone } from '@/lib/phone'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
 import OrderFilters, { OrderFiltersState, DEFAULT_FILTERS } from './components/OrderFilters'
@@ -1489,7 +1490,7 @@ function CreateAgentModal({ onClose, onDone }: { onClose: () => void; onDone: ()
           </div>
           <div className={styles.formGroup}>
             <label className={styles.label}>Phone · الهاتف</label>
-            <input className={styles.input} value={form.phone} onChange={e => handle('phone', e.target.value)} placeholder="+1..." />
+            <input className={`${styles.input} phone-number`} dir="ltr" value={form.phone} onChange={e => handle('phone', e.target.value)} placeholder="+1..." />
           </div>
         </div>
         <div className={styles.grid2}>
@@ -2217,7 +2218,7 @@ export default function Dashboard() {
                     {t('balance', 'whatsapp')}
                   </a>
                   <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center' }}>
-                    +964 XXX XXX XXXX · {t('balance', 'hours')}
+                    <span className="phone-number" dir="ltr">+964 XXX XXX XXXX</span> · {t('balance', 'hours')}
                   </div>
                 </div>
               </div>
@@ -2515,8 +2516,8 @@ export default function Dashboard() {
                                 />
                               )}
                             </td>
-                            <td>{u.email}</td>
-                            <td>{u.phone || '—'}</td>
+                            <td><span className="phone-number">{u.email}</span></td>
+                            <td><span className="phone-number">{displayPhone(u.phone, '—')}</span></td>
                             <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
                               ${(u.total_spent || 0).toFixed(2)}
                             </td>

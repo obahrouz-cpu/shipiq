@@ -233,6 +233,8 @@ export default function AdminSettings() {
             {/* WhatsApp number fields */}
             <Field label="Admin WhatsApp (your number for notifications)" hint="You will receive order alerts here · +964 7XX XXX XXXX">
               <input
+                className="phone-number"
+                dir="ltr"
                 style={inputStyle}
                 placeholder="+964 770 000 0000"
                 value={settings.admin_whatsapp ?? ''}
@@ -241,6 +243,8 @@ export default function AdminSettings() {
             </Field>
             <Field label="Business WhatsApp (customers message this number)" hint="The number shown to customers for support">
               <input
+                className="phone-number"
+                dir="ltr"
                 style={inputStyle}
                 placeholder="+964 770 000 0000"
                 value={settings.business_whatsapp ?? ''}

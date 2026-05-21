@@ -7,6 +7,7 @@ import {
   topUpBalance, deductBalance, removeFromWishlist,
 } from '@/lib/api'
 import type { Profile, Order, Transaction, WishlistItem, DeliveryRequest, TierSettings } from '@/lib/types'
+import { displayPhone } from '@/lib/phone'
 import TierBadge from './TierBadge'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -507,13 +508,13 @@ export default function AdminCustomerProfile({
                 <div style={{ marginBottom: 8 }}>
                   {editPhone ? (
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <input ref={phoneRef} type="tel" value={phoneVal} onChange={e => setPhoneVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') savePhone(); if (e.key === 'Escape') setEditPhone(false) }} placeholder="Phone number" style={{ ...INPUT, fontSize: 13, padding: '5px 10px', flex: 1 }} />
+                      <input ref={phoneRef} className="phone-number" dir="ltr" type="tel" value={phoneVal} onChange={e => setPhoneVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') savePhone(); if (e.key === 'Escape') setEditPhone(false) }} placeholder="Phone number" style={{ ...INPUT, fontSize: 13, padding: '5px 10px', flex: 1 }} />
                       <button onClick={savePhone} style={{ padding: '5px 12px', background: 'var(--gold)', color: 'var(--bg)', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: 12, fontFamily: 'inherit' }}>✓</button>
                       <button onClick={() => setEditPhone(false)} style={GHOST_BTN}>✕</button>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>📞 {cust.phone || 'No phone'}</span>
+                      <span className="phone-number" dir="ltr" style={{ fontSize: 13, color: 'var(--text-muted)' }}>📞 {displayPhone(cust.phone, 'No phone')}</span>
                       <button onClick={() => { setEditPhone(true); setPhoneVal(cust.phone || '') }} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: 2 }} title="Edit phone">✎</button>
                     </div>
                   )}
