@@ -1797,9 +1797,6 @@ export default function Dashboard() {
                 <span style={{ fontSize: 10, color: 'var(--gold-dim)', marginLeft: 2 }}>＋</span>
               </div>
             )}
-            {!isAdmin && page === 'orders' && (
-              <button className={styles.btnPrimary} style={{ padding: '7px 16px', fontSize: 13 }} onClick={() => { setShowNewOrder(true); haptic() }} aria-label="Submit new order (N)">+ New Order</button>
-            )}
           </div>
         </div>
 
@@ -1973,10 +1970,8 @@ export default function Dashboard() {
           {(page === 'orders' || page === 'admin-orders') && (
             <div className="fade-up">
               {page === 'orders' && (
-                <div className={styles.pageHeader}>
-                  <div>
-                    <div className={styles.pageHeading}>{t('orders', 'title')}</div>
-                  </div>
+                <div className={styles.pageHeader} style={{ justifyContent: 'flex-end' }}>
+                  <button className={styles.btnPrimary} onClick={() => { setShowNewOrder(true); haptic() }} aria-label="Submit new order (N)">{t('orders', 'newOrder')}</button>
                 </div>
               )}
               {page === 'admin-orders' && (
