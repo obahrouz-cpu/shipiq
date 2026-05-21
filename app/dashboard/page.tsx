@@ -2515,8 +2515,8 @@ export default function Dashboard() {
                                 />
                               )}
                             </td>
-                            <td className="phone-number" dir="ltr">{u.email}</td>
-                            <td className="phone-number" dir="ltr">{u.phone || '—'}</td>
+                            <td><span className="phone-number">{u.email}</span></td>
+                            <td><span className="phone-number">{u.phone || '—'}</span></td>
                             <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
                               ${(u.total_spent || 0).toFixed(2)}
                             </td>
