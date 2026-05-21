@@ -4,6 +4,8 @@ import type { Order, Profile } from '@/lib/types'
 import { createDeliveryRequest, deductBalance } from '@/lib/api'
 import styles from '../dashboard.module.css'
 
+const IQD_PER_USD = 1540
+
 const DELIVERY_OPTS = [
   { id: 'pickup',        label: 'Pickup from office',        labelAr: 'استلام من المكتب',      icon: '🏢', fee: 0    },
   { id: 'home_erbil',    label: 'Home delivery — Erbil',     labelAr: 'توصيل منزلي — أربيل',   icon: '🚗', fee: 3000 },
@@ -42,9 +44,12 @@ export default function DeliveryRequestModal({ profile, arrivedOrders, onClose, 
     }
   }
 
+  const feeUsd = opt.fee / IQD_PER_USD
+  const balanceUsd = profile.balance_usd ?? 0
+
   const confirm = async () => {
-    if (opt.fee > 0 && profile.balance < opt.fee) {
-      setError(`Insufficient balance. You need ${opt.fee.toLocaleString()} IQD.`)
+    if (opt.fee > 0 && balanceUsd + 0.001 < feeUsd) {
+      setError(`Insufficient balance. You need $${feeUsd.toFixed(2)}.`)
       return
     }
     setLoading(true); setError('')
@@ -57,7 +62,7 @@ export default function DeliveryRequestModal({ profile, arrivedOrders, onClose, 
     })
     if (createErr) { setError(createErr); setLoading(false); return }
     if (opt.fee > 0) {
-      await deductBalance(profile.id, profile.balance, opt.fee, 'IQD', `Delivery fee — ${opt.label}`)
+      await deductBalance(profile.id, balanceUsd, feeUsd, IQD_PER_USD, `Delivery fee — ${opt.label}`)
     }
     setLoading(false)
     onDone()
@@ -229,14 +234,14 @@ export default function DeliveryRequestModal({ profile, arrivedOrders, onClose, 
             {opt.fee > 0 && (
               <div style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(201,168,76,0.05)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                 <span style={{ color: 'var(--text-muted)' }}>Balance after payment</span>
-                <span style={{ fontWeight: 700, color: profile.balance >= opt.fee ? 'var(--text)' : '#ef4444' }}>
-                  {(profile.balance - opt.fee).toLocaleString()} IQD
+                <span style={{ fontWeight: 700, color: balanceUsd >= feeUsd ? 'var(--text)' : '#ef4444' }}>
+                  ${(balanceUsd - feeUsd).toFixed(2)}
                 </span>
               </div>
             )}
-            {opt.fee > 0 && profile.balance < opt.fee && (
+            {opt.fee > 0 && balanceUsd < feeUsd && (
               <div className={styles.errorBox} style={{ marginBottom: 12 }}>
-                ⚠️ Insufficient balance. You need {(opt.fee - profile.balance).toLocaleString()} more IQD.
+                ⚠️ Insufficient balance. You need ${(feeUsd - balanceUsd).toFixed(2)} more.
               </div>
             )}
             <div style={{ display: 'flex', gap: 10 }}>
@@ -245,7 +250,7 @@ export default function DeliveryRequestModal({ profile, arrivedOrders, onClose, 
                 className={styles.btnPrimary}
                 style={{ flex: 1 }}
                 onClick={confirm}
-                disabled={loading || (opt.fee > 0 && profile.balance < opt.fee)}
+                disabled={loading || (opt.fee > 0 && balanceUsd < feeUsd)}
               >
                 {loading ? <span className={styles.spinner} /> : opt.fee === 0 ? '✅ Confirm Pickup' : `✅ Pay & Confirm`}
               </button>

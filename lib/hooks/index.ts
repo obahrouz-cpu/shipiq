@@ -1,6 +1,7 @@
 export { useProfile } from './useProfile'
 export { useOrders } from './useOrders'
 export { useExchangeRate } from './useExchangeRate'
+export { useIqdRate } from './useIqdRate'
 export { useTier, calculateTier } from './useTier'
 export { useBalance } from './useBalance'
 export { useNotifications } from './useNotifications'

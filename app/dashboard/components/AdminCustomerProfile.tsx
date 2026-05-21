@@ -31,7 +31,7 @@ const STATUS_STYLE: Record<string, { color: string; bg: string }> = {
   rejected:   { color: 'var(--red)',    bg: 'rgba(217,83,79,0.12)' },
 }
 
-const QUICK_TOPUPS = [10000, 25000, 50000, 100000]
+const QUICK_TOPUPS = [25, 50, 100, 200]
 const TOPUP_REASONS = ['Manual top-up', 'Refund', 'Compensation', 'Promotional credit', 'Payment received', 'Error correction']
 const CHART_COLORS = ['#c9a84c', '#e07b3a', '#5b9bd5', '#4caf7a', '#d9534f', '#9c6fe4', '#f5c518']
 const AGENT_COUNTRIES = ['USA', 'Turkey', 'UAE', 'China'] as const
@@ -171,7 +171,7 @@ export default function AdminCustomerProfile({
   // Balance
   const [balAction, setBalAction] = useState<'add' | 'deduct' | null>(null)
   const [balAmt, setBalAmt] = useState('')
-  const [balCur, setBalCur] = useState('IQD')
+  const [balCur, setBalCur] = useState('USD')
   const [balNote, setBalNote] = useState(TOPUP_REASONS[0])
   const [balLoading, setBalLoading] = useState(false)
 
@@ -285,17 +285,17 @@ export default function AdminCustomerProfile({
   const handleBalance = async () => {
     if (!balAmt || !balAction) return
     setBalLoading(true)
-    const raw = parseInt(balAmt)
-    const iqd = balCur === 'USD' ? Math.round(raw * IQD_PER_USD) : raw
+    const raw = parseFloat(balAmt) || 0
+    const usd = balCur === 'IQD' ? Math.round((raw / IQD_PER_USD) * 100) / 100 : raw
     if (balAction === 'add') {
-      await topUpBalance(cust.id, cust.balance, iqd, 'IQD', balNote)
-      setCust(p => ({ ...p, balance: p.balance + iqd }))
-      onToast(`+${iqd.toLocaleString()} IQD added`, 'success')
+      await topUpBalance(cust.id, cust.balance_usd ?? 0, usd, IQD_PER_USD, balNote)
+      setCust(p => ({ ...p, balance_usd: (p.balance_usd ?? 0) + usd }))
+      onToast(`+$${usd.toFixed(2)} added`, 'success')
     } else {
-      const { error } = await deductBalance(cust.id, cust.balance, iqd, 'IQD', balNote)
+      const { error } = await deductBalance(cust.id, cust.balance_usd ?? 0, usd, IQD_PER_USD, balNote)
       if (error) { onToast(error, 'error'); setBalLoading(false); return }
-      setCust(p => ({ ...p, balance: p.balance - iqd }))
-      onToast(`−${iqd.toLocaleString()} IQD deducted`, 'success')
+      setCust(p => ({ ...p, balance_usd: (p.balance_usd ?? 0) - usd }))
+      onToast(`−$${usd.toFixed(2)} deducted`, 'success')
     }
     setBalLoading(false)
     setBalAmt('')
@@ -304,10 +304,10 @@ export default function AdminCustomerProfile({
     setTxns(updated)
   }
 
-  const quickTopUp = async (amount: number) => {
-    await topUpBalance(cust.id, cust.balance, amount, 'IQD', 'Quick top-up')
-    setCust(p => ({ ...p, balance: p.balance + amount }))
-    onToast(`+${amount.toLocaleString()} IQD`, 'success')
+  const quickTopUp = async (amountUsd: number) => {
+    await topUpBalance(cust.id, cust.balance_usd ?? 0, amountUsd, IQD_PER_USD, 'Quick top-up')
+    setCust(p => ({ ...p, balance_usd: (p.balance_usd ?? 0) + amountUsd }))
+    onToast(`+$${amountUsd.toFixed(2)}`, 'success')
     const updated = await getUserTransactions(customer.id)
     setTxns(updated)
   }
@@ -573,7 +573,7 @@ export default function AdminCustomerProfile({
                 {/* Stats grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8, marginBottom: 16 }}>
                   {[
-                    { label: 'Current Balance', val: `${cust.balance.toLocaleString()} IQD`, sub: `≈ $${(cust.balance / IQD_PER_USD).toFixed(2)}`, color: 'var(--gold)' },
+                    { label: 'Current Balance', val: `$${(cust.balance_usd ?? 0).toFixed(2)}`, sub: `≈ ${Math.round((cust.balance_usd ?? 0) * IQD_PER_USD).toLocaleString()} IQD`, color: 'var(--gold)' },
                     { label: 'Total Spent',      val: `$${(cust.total_spent || 0).toFixed(2)}`, sub: 'USD lifetime', color: 'var(--text)' },
                     { label: 'Total Orders',     val: orders.length.toString(), sub: 'all time', color: 'var(--blue)' },
                     { label: 'Avg Order',        val: `$${Math.round(stats.avgOrderIqd / IQD_PER_USD)}`, sub: stats.pendingIqd > 0 ? `$${Math.round(stats.pendingIqd / IQD_PER_USD)} pending` : 'no pending', color: 'var(--orange)' },
@@ -588,11 +588,11 @@ export default function AdminCustomerProfile({
 
                 {/* Quick top-up */}
                 <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Quick Top-up (IQD)</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Quick Top-up (USD)</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {QUICK_TOPUPS.map(amt => (
                       <button key={amt} onClick={() => quickTopUp(amt)} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--gold)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
-                        +{amt.toLocaleString()}
+                        +${amt}
                       </button>
                     ))}
                   </div>
@@ -611,16 +611,23 @@ export default function AdminCustomerProfile({
                     <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                       <input type="number" placeholder="Amount" value={balAmt} onChange={e => setBalAmt(e.target.value)} style={{ ...INPUT, flex: 2 }} />
                       <select value={balCur} onChange={e => setBalCur(e.target.value)} style={{ ...INPUT, flex: 1, padding: '9px 8px' }}>
-                        <option value="IQD">IQD</option>
                         <option value="USD">USD</option>
+                        <option value="IQD">IQD</option>
                       </select>
                     </div>
+                    {balAmt && (parseFloat(balAmt) || 0) > 0 && (
+                      <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 8 }}>
+                        {balCur === 'USD'
+                          ? `≈ ${Math.round((parseFloat(balAmt) || 0) * IQD_PER_USD).toLocaleString()} IQD`
+                          : `≈ $${((parseFloat(balAmt) || 0) / IQD_PER_USD).toFixed(2)} USD (stored as USD)`}
+                      </div>
+                    )}
                     <select value={balNote} onChange={e => setBalNote(e.target.value)} style={{ ...INPUT, marginBottom: 8 }}>
                       {TOPUP_REASONS.map(r => <option key={r}>{r}</option>)}
                     </select>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={handleBalance} disabled={balLoading || !balAmt} style={{ flex: 2, padding: '9px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: 'inherit', background: balAction === 'add' ? 'var(--green)' : 'var(--red)', color: '#fff', opacity: !balAmt ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                        {balLoading ? <Spin /> : `${balAction === 'add' ? 'Add' : 'Deduct'} ${balAmt ? parseInt(balAmt).toLocaleString() : '—'} ${balCur}`}
+                        {balLoading ? <Spin /> : `${balAction === 'add' ? 'Add' : 'Deduct'} ${balAmt ? `${balCur === 'USD' ? '$' : ''}${parseFloat(balAmt).toLocaleString()}${balCur === 'IQD' ? ' IQD' : ''}` : '—'}`}
                       </button>
                       <button onClick={() => { setBalAction(null); setBalAmt('') }} style={GHOST_BTN}>Cancel</button>
                     </div>

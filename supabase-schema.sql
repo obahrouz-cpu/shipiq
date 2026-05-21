@@ -13,7 +13,8 @@ create table public.profiles (
   phone               text,
   role                text not null default 'customer',   -- 'customer' | 'admin' | 'agent'
   language            text default 'en',                   -- 'en' | 'ar'
-  balance             bigint not null default 0,           -- IQD
+  balance             bigint not null default 0,           -- IQD (legacy)
+  balance_usd         numeric not null default 0,           -- USD (canonical wallet balance)
   tier                text not null default 'bronze',
   total_spent         numeric not null default 0,          -- lifetime USD (shipping / 1450)
   assigned_country    text,                                -- agent only: 'USA' | 'Turkey' | 'UAE' | 'China'
@@ -72,7 +73,8 @@ create table public.orders (
 create table public.transactions (
   id         text primary key default ('TXN-' || upper(substring(gen_random_uuid()::text, 1, 8))),
   user_id    uuid references public.profiles(id) on delete cascade not null,
-  amount     bigint not null,              -- positive = top-up, negative = deduction (IQD)
+  amount     bigint not null,              -- positive = top-up, negative = deduction (IQD, legacy)
+  amount_usd numeric,                       -- positive = top-up, negative = deduction (USD)
   currency   text default 'IQD',
   note       text,
   order_id   text references public.orders(id),

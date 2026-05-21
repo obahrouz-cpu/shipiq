@@ -313,7 +313,7 @@ export default function AdminAnalytics() {
 
   const financial = useMemo(() => {
     const totalRevUsd  = revenueOrders.reduce((s, o) => s + toUsd(o.shipping_price, o.shipping_currency), 0)
-    const totalBalIqd  = allProfiles.reduce((s, p) => s + (p.balance || 0), 0)
+    const totalBalUsd  = allProfiles.reduce((s, p) => s + (p.balance_usd || 0), 0)
 
     const cRev: Record<string, number> = {}
     for (const o of revenueOrders) {
@@ -329,7 +329,7 @@ export default function AdminAnalytics() {
     const deliveredCount = allOrders.filter(o => o.status === 'delivered').length
     const convRate = allOrders.length ? Math.round((deliveredCount / allOrders.length) * 100) : 0
 
-    return { totalRevUsd, totalBalIqd, topCountry, topCat, convRate }
+    return { totalRevUsd, totalBalUsd, topCountry, topCat, convRate }
   }, [revenueOrders, allProfiles, orders, allOrders])
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -653,7 +653,7 @@ export default function AdminAnalytics() {
               <SumRow label="Total Revenue (USD)" value={fmtUsd(financial.totalRevUsd, 2)} />
               <SumRow
                 label="Customer Balances Held"
-                value={financial.totalBalIqd.toLocaleString() + ' IQD'}
+                value={fmtUsd(financial.totalBalUsd, 2)}
               />
               <SumRow
                 label="Most Profitable Country"

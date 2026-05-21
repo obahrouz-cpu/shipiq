@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase'
 import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
 import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem, DeliveryRequest, OrderNote } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
+import { useIqdRate } from '@/lib/hooks/useIqdRate'
 import styles from './dashboard.module.css'
 import ShopSection from './components/ShopSection'
 import OrderFilters, { OrderFiltersState, DEFAULT_FILTERS } from './components/OrderFilters'
@@ -735,13 +736,15 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
     if (charged) return
     const total = billTotal
     if (total <= 0) { setChargeError('Total must be greater than 0'); return }
-    if (orderCustomerProfile.balance < total) {
-      setChargeError(`Insufficient balance — customer needs ${(total - orderCustomerProfile.balance).toLocaleString()} more IQD`)
+    const totalUsd = Math.round((total / IQD_PER_USD) * 100) / 100
+    const balanceUsd = orderCustomerProfile.balance_usd ?? 0
+    if (balanceUsd + 0.001 < totalUsd) {
+      setChargeError(`Insufficient balance — customer needs $${(totalUsd - balanceUsd).toFixed(2)} more`)
       return
     }
     setChargeLoading(true); setChargeError('')
     const note = `Order ${order.id}: Shipping ${billShipping.toLocaleString()} IQD + Service ${(parseInt(billServiceFee)||0).toLocaleString()} IQD + Customs ${(parseInt(billCustomsFee)||0).toLocaleString()} IQD + Delivery ${(parseInt(billDeliveryFee)||0).toLocaleString()} IQD — by ${adminName || 'Admin'}`
-    const { error: deductErr } = await deductBalance(orderCustomerProfile.id, orderCustomerProfile.balance, total, 'IQD', note, order.id)
+    const { error: deductErr } = await deductBalance(orderCustomerProfile.id, balanceUsd, totalUsd, IQD_PER_USD, note, order.id)
     if (deductErr) { setChargeError(deductErr); setChargeLoading(false); return }
     const now = new Date().toISOString()
     await updateOrder(order.id, {
@@ -1257,20 +1260,20 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{orderCustomerProfile.full_name}</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: orderCustomerProfile.balance >= billTotal ? 'var(--gold)' : '#ef4444', marginTop: 2 }}>
-                      {orderCustomerProfile.balance.toLocaleString()} IQD
+                    <div style={{ fontSize: 18, fontWeight: 800, color: (orderCustomerProfile.balance_usd ?? 0) >= billTotal / IQD_PER_USD ? 'var(--gold)' : '#ef4444', marginTop: 2 }}>
+                      ${(orderCustomerProfile.balance_usd ?? 0).toFixed(2)}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>After charge</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: orderCustomerProfile.balance >= billTotal ? 'var(--text)' : '#ef4444', marginTop: 2 }}>
-                      {(orderCustomerProfile.balance - billTotal).toLocaleString()} IQD
+                    <div style={{ fontSize: 15, fontWeight: 700, color: (orderCustomerProfile.balance_usd ?? 0) >= billTotal / IQD_PER_USD ? 'var(--text)' : '#ef4444', marginTop: 2 }}>
+                      ${((orderCustomerProfile.balance_usd ?? 0) - billTotal / IQD_PER_USD).toFixed(2)}
                     </div>
                   </div>
                 </div>
-                {orderCustomerProfile.balance < billTotal && (
+                {(orderCustomerProfile.balance_usd ?? 0) < billTotal / IQD_PER_USD && (
                   <div style={{ marginTop: 8, padding: '7px 10px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 7, fontSize: 12, color: '#ef4444' }}>
-                    ⚠️ Customer needs {(billTotal - orderCustomerProfile.balance).toLocaleString()} more IQD to proceed
+                    ⚠️ Customer needs ${(billTotal / IQD_PER_USD - (orderCustomerProfile.balance_usd ?? 0)).toFixed(2)} more to proceed
                   </div>
                 )}
               </div>
@@ -1388,15 +1391,16 @@ const TOP_UP_REASONS = [
 
 function TopUpModal({ user, onClose, onDone }: { user: Profile; onClose: () => void; onDone: () => void }) {
   const [amount, setAmount] = useState('')
-  const [currency, setCurrency] = useState('IQD')
   const [reason, setReason] = useState(TOP_UP_REASONS[0])
   const [loading, setLoading] = useState(false)
+  const { rate: iqdRate } = useIqdRate()
+
+  const addUsd = parseFloat(amount) || 0
 
   const submit = async () => {
     setLoading(true)
-    const addAmount = parseInt(amount) || 0
-    await topUpBalance(user.id, user.balance, addAmount, currency, reason)
-    notifyWhatsapp('', 'balance_added', { userId: user.id, amount: addAmount, balance: user.balance + addAmount })
+    await topUpBalance(user.id, user.balance_usd ?? 0, addUsd, iqdRate, reason)
+    notifyWhatsapp('', 'balance_added', { userId: user.id, amount: Math.round(addUsd * iqdRate), balance: Math.round(((user.balance_usd ?? 0) + addUsd) * iqdRate) })
     setLoading(false); onDone(); onClose()
   }
 
@@ -1410,21 +1414,17 @@ function TopUpModal({ user, onClose, onDone }: { user: Profile; onClose: () => v
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>{user.full_name}</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
-            Current Balance: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{user.balance?.toLocaleString()} IQD</span>
+            Current Balance: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>${(user.balance_usd ?? 0).toFixed(2)}</span>
           </div>
         </div>
-        <div className={styles.grid2}>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Amount</label>
-            <input className={styles.input} type="number" placeholder="e.g. 50000" value={amount} onChange={e => setAmount(e.target.value)} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Currency</label>
-            <select className={styles.input} value={currency} onChange={e => setCurrency(e.target.value)}>
-              <option value="IQD">IQD</option>
-              <option value="USD">USD</option>
-            </select>
-          </div>
+        <div className={styles.formGroup}>
+          <label className={styles.label}>Amount (USD)</label>
+          <input className={styles.input} type="number" step="1" placeholder="e.g. 50" value={amount} onChange={e => setAmount(e.target.value)} />
+          {addUsd > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6 }}>
+              ≈ {Math.round(addUsd * iqdRate).toLocaleString()} IQD (at {iqdRate.toLocaleString()} IQD/USD)
+            </div>
+          )}
         </div>
         <div className={styles.formGroup}>
           <label className={styles.label}>Reason · السبب</label>
@@ -1557,6 +1557,8 @@ export default function Dashboard() {
   const [showDeliveryModal, setShowDeliveryModal] = useState(false)
   // Order notes unread counts
   const [noteUnreadCounts, setNoteUnreadCounts] = useState<Record<string, number>>({})
+  // Live IQD/USD rate for balance ⇄ IQD conversion display
+  const { rate: iqdRate } = useIqdRate()
 
   const toast = useCallback((message: string, type: Toast['type'] = 'success') => {
     const id = Date.now()
@@ -1792,7 +1794,7 @@ export default function Dashboard() {
                 aria-label="Open wallet top-up"
               >
                 <span>💳</span>
-                <span>{profile?.balance?.toLocaleString()} IQD</span>
+                <span>${(profile?.balance_usd ?? 0).toFixed(2)}</span>
                 <span style={{ fontSize: 10, color: 'var(--gold-dim)', marginLeft: 2 }}>＋</span>
               </div>
             )}
@@ -1809,7 +1811,7 @@ export default function Dashboard() {
             <div className="fade-up">
               <div className={styles.statsGrid}>
                 {[
-                  { label: t('dashboard', 'balance'),   value: `${profile?.balance?.toLocaleString()} IQD`, icon: '💳', color: '#c9a84c', bg: 'rgba(201,168,76,0.1)', sub: 'Managed by admin' },
+                  { label: t('dashboard', 'balance'),   value: `$${(profile?.balance_usd ?? 0).toFixed(2)}`, icon: '💳', color: '#c9a84c', bg: 'rgba(201,168,76,0.1)', sub: `≈ ${Math.round((profile?.balance_usd ?? 0) * iqdRate).toLocaleString()} IQD` },
                   { label: t('dashboard', 'pending'),   value: orders.filter(o => o.status === 'pending').length, icon: '⏳', color: '#e07b3a', bg: 'rgba(224,123,58,0.1)' },
                   { label: t('dashboard', 'calculated'),value: orders.filter(o => o.status === 'calculated').length, icon: '💰', color: '#5b9bd5', bg: 'rgba(91,155,213,0.1)' },
                   { label: t('dashboard', 'delivered'), value: orders.filter(o => o.status === 'delivered').length, icon: '📬', color: '#16a34a', bg: 'rgba(34,197,94,0.1)' },
@@ -2189,9 +2191,9 @@ export default function Dashboard() {
               <div className={styles.grid2} style={{ marginBottom: 24 }}>
                 <div className={styles.card} style={{ textAlign: 'center', padding: '36px 24px' }}>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('balance', 'available')}</div>
-                  <span className={styles.priceBig}>{profile?.balance?.toLocaleString()}</span>
-                  <span className={styles.priceCurrency}>IQD</span>
-                  <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-dim)' }}>≈ ${Math.round((profile?.balance || 0) / 1450)} USD</div>
+                  <span className={styles.priceBig}>${(profile?.balance_usd ?? 0).toFixed(2)}</span>
+                  <span className={styles.priceCurrency}>USD</span>
+                  <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-dim)' }}>≈ {Math.round((profile?.balance_usd ?? 0) * iqdRate).toLocaleString()} IQD (at current rate)</div>
                   <button
                     className={styles.btnPrimary}
                     style={{ width: '100%', marginTop: 20, fontSize: 14 }}
@@ -2248,16 +2250,18 @@ export default function Dashboard() {
                     <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, maxWidth: 280 }}>{t('balance', 'noTxnsSub')}</div>
                   </div>
                 ) : (() => {
+                  // USD amount per txn (fallback for legacy IQD-only rows)
+                  const txnUsd = (txn: Transaction) => txn.amount_usd ?? (txn.amount / iqdRate)
                   // Compute running balance (transactions newest-first, so walk forward = subtract going back)
-                  let runBal = profile?.balance ?? 0
+                  let runBal = profile?.balance_usd ?? 0
                   const withBal = transactions.map(txn => {
                     const after = runBal
-                    runBal -= txn.amount
-                    return { ...txn, afterBalance: after }
+                    runBal = Math.round((runBal - txnUsd(txn)) * 100) / 100
+                    return { ...txn, afterBalance: after, usd: txnUsd(txn) }
                   })
                   const filtered = withBal.filter(txn => {
-                    if (txnFilter === 'topup') return txn.amount > 0
-                    if (txnFilter === 'deduction') return txn.amount < 0
+                    if (txnFilter === 'topup') return txn.usd > 0
+                    if (txnFilter === 'deduction') return txn.usd < 0
                     return true
                   })
                   const getIcon = (note: string) => {
@@ -2305,11 +2309,11 @@ export default function Dashboard() {
                                   </div>
                                 )}
                               </td>
-                              <td style={{ whiteSpace: 'nowrap', fontWeight: 700, color: txn.amount > 0 ? 'var(--green)' : 'var(--red)' }}>
-                                {txn.amount > 0 ? '+' : ''}{txn.amount?.toLocaleString()} {txn.currency}
+                              <td style={{ whiteSpace: 'nowrap', fontWeight: 700, color: txn.usd > 0 ? 'var(--green)' : 'var(--red)' }}>
+                                {txn.usd > 0 ? '+' : '−'}${Math.abs(txn.usd).toFixed(2)}
                               </td>
                               <td className={styles.mobileHide} style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: 13 }}>
-                                {txn.afterBalance.toLocaleString()} IQD
+                                ${txn.afterBalance.toFixed(2)}
                               </td>
                             </tr>
                           ))}
@@ -2517,7 +2521,7 @@ export default function Dashboard() {
                             <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
                               ${(u.total_spent || 0).toFixed(2)}
                             </td>
-                            <td style={{ color: 'var(--gold)', fontWeight: 700 }}>{u.balance?.toLocaleString()} IQD</td>
+                            <td style={{ color: 'var(--gold)', fontWeight: 700 }}>${(u.balance_usd ?? 0).toFixed(2)}</td>
                             <td>{u.created_at?.split('T')[0]}</td>
                             <td onClick={e => e.stopPropagation()}>
                               <button className={styles.btnGhost} style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setTopUpUser(u)}>{t('customers', 'addBalance')}</button>

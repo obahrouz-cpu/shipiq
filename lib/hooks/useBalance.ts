@@ -11,7 +11,7 @@ export function useBalance(userId: string | null) {
     setLoading(true)
     try {
       const profile = await getProfile(userId)
-      if (profile) setBalance(profile.balance)
+      if (profile) setBalance(profile.balance_usd ?? 0)
     } catch (err) {
       console.error('useBalance: failed to fetch balance', err)
     } finally {
