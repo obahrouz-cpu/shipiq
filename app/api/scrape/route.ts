@@ -150,9 +150,17 @@ function parseWeightToKg(weightStr: string): number | null {
   if (isNaN(num)) return null
   if (lower.includes('lb') || lower.includes('pound')) return Math.round(num * 0.453592 * 100) / 100
   if (lower.includes('oz') || lower.includes('ounce')) return Math.round(num * 0.0283495 * 100) / 100
-  if (lower.includes('kg')) return Math.round(num * 100) / 100
-  if (lower.includes('g') && !lower.includes('kg')) return Math.round(num / 1000 * 100) / 100
+  if (lower.includes('kg') || lower.includes('kilogram')) return Math.round(num * 100) / 100
+  if (lower.includes('g')) return Math.round(num / 1000 * 100) / 100
   return Math.round(num * 100) / 100
+}
+
+// Pulls a weight token (number + unit) out of an arbitrary string. Amazon often
+// embeds weight inside the dimensions value, e.g. "11.5 x 13.4 x 4 inches; 16 Pounds".
+function extractWeightToken(s: string | null): string | null {
+  if (!s) return null
+  const m = s.match(/([\d.]+)\s*(kilograms?|pounds?|ounces?|grams?|kgs?|lbs?|oz)\b/i)
+  return m ? m[0] : null
 }
 
 function parseDimensionsToCm(dimStr: string): { l: number; w: number; h: number } | null {
@@ -260,12 +268,23 @@ function buildWeightResponse(opts: {
   imageUrl?: string | null
 }) {
   const { siteInfo, productName, category, imageUrl } = opts
-  const weightKg = validateWeight(opts.weightKg)
+  const actualWeightKg = validateWeight(opts.weightKg)
   const dims = validateDims(opts.dims)
   const dimensionalWeightKg = dims ? Math.round((dims.l * dims.w * dims.h) / 5000 * 100) / 100 : null
-  const billableWeightKg = weightKg && dimensionalWeightKg
-    ? Math.max(weightKg, dimensionalWeightKg)
-    : (weightKg || dimensionalWeightKg)
+
+  // Billable weight is the greater of actual weight and dimensional weight.
+  let billableWeightKg: number | null
+  if (actualWeightKg != null && dimensionalWeightKg != null) {
+    billableWeightKg = Math.max(actualWeightKg, dimensionalWeightKg)
+  } else {
+    billableWeightKg = actualWeightKg ?? dimensionalWeightKg
+  }
+
+  console.error('Actual weight:', actualWeightKg, 'kg')
+  console.error('Dimensional weight:', dimensionalWeightKg, 'kg')
+  console.error('Billable weight:', billableWeightKg, 'kg')
+
+  const weightKg = actualWeightKg
 
   return NextResponse.json({
     found: true,
@@ -327,8 +346,11 @@ export async function POST(req: NextRequest) {
       const kv: Record<string, string> = {}
       collectKeyValues(content, kv)
 
-      const rawWeight = findFuzzy(kv, /weight/i) || findField([kv], WEIGHT_KEYS)
+      let rawWeight = findFuzzy(kv, /weight/i) || findField([kv], WEIGHT_KEYS)
       const rawDimensions = findFuzzy(kv, /dimension/i) || findField([kv], DIM_KEYS)
+      // Amazon frequently lists weight only inside the dimensions value
+      // (e.g. "11.5 x 13.4 x 4 inches; 16 Pounds"), with no standalone weight field.
+      if (!rawWeight) rawWeight = extractWeightToken(rawDimensions)
       const productName = String(content.title || content.product_name || content.product_title || kv.title || 'Unknown Product')
 
       const images = content.images
