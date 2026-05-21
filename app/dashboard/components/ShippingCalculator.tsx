@@ -138,7 +138,7 @@ export default function ShippingCalculator() {
     setResult({ billableKg, itemPriceUsd, shippingUsd, deliveryFeeUsd, deliveryContactOnly, shippingContactOnly: false, country, iqdPerUsd: fx.iqd })
   }
 
-  const wLabel  = unit === 'metric' ? 'Weight (kg) · الوزن' : 'Weight (lbs) · الوزن'
+  const wLabel  = unit === 'metric' ? 'Weight (kg)' : 'Weight (lbs)'
   const dimUnit = unit === 'metric' ? 'cm' : 'in'
 
   const hasItemPrice = !!result && result.itemPriceUsd > 0
@@ -184,8 +184,9 @@ export default function ShippingCalculator() {
       <div className={styles.row}>
         <div className={styles.field}>
           <label className={styles.label}>
-            Item Price · سعر المنتج
-            <span className={styles.optional}>— Optional · اختياري</span>
+            Item Price
+            <span className={styles.optional}>— Optional</span>
+            <span className={styles.labelAr}>سعر المنتج · اختياري</span>
           </label>
           <input
             className={styles.input}
@@ -198,7 +199,10 @@ export default function ShippingCalculator() {
           />
         </div>
         <div className={styles.field} style={{ maxWidth: 130 }}>
-          <label className={styles.label}>Currency · العملة</label>
+          <label className={styles.label}>
+            Currency
+            <span className={styles.labelAr}>العملة</span>
+          </label>
           <select className={styles.select} value={itemCurrency} onChange={e => { setItemCurrency(e.target.value as Currency); setResult(null) }}>
             <option value="USD">USD — دولار</option>
             <option value="EUR">EUR — يورو</option>
@@ -212,7 +216,10 @@ export default function ShippingCalculator() {
       {/* Country + Category */}
       <div className={styles.row}>
         <div className={styles.field}>
-          <label className={styles.label}>Origin Country · الدولة</label>
+          <label className={styles.label}>
+            Origin Country
+            <span className={styles.labelAr}>الدولة</span>
+          </label>
           <select className={styles.select} value={country} onChange={e => { setCountry(e.target.value); setResult(null) }}>
             <option value="USA">🇺🇸 USA — أمريكا</option>
             <option value="Turkey">🇹🇷 Turkey — تركيا</option>
@@ -222,7 +229,10 @@ export default function ShippingCalculator() {
         </div>
         {country === 'UAE' && (
           <div className={styles.field}>
-            <label className={styles.label}>Product Category · الفئة</label>
+            <label className={styles.label}>
+              Product Category
+              <span className={styles.labelAr}>الفئة</span>
+            </label>
             <select className={styles.select} value={category} onChange={e => { setCategory(e.target.value); setResult(null) }}>
               <option value="Clothing">👗 Clothing &amp; Fashion</option>
               <option value="Cosmetics">💄 Cosmetics &amp; Beauty</option>
@@ -237,7 +247,10 @@ export default function ShippingCalculator() {
       {/* Weight */}
       <div className={styles.row}>
         <div className={styles.field} style={{ maxWidth: 260 }}>
-          <label className={styles.label}>{wLabel}</label>
+          <label className={styles.label}>
+            {wLabel}
+            <span className={styles.labelAr}>الوزن</span>
+          </label>
           <input
             className={styles.input}
             type="number"
@@ -255,9 +268,10 @@ export default function ShippingCalculator() {
       {/* Dimensions */}
       <div className={styles.dimSection}>
         <div className={styles.dimLabel}>
-          Dimensions ({dimUnit}) · الأبعاد
+          Dimensions ({dimUnit})
           <span className={styles.tooltip} title="Dimensional weight = (L × W × H) ÷ 5000">ℹ️</span>
-          <span className={styles.optional}>— Optional · اختياري</span>
+          <span className={styles.optional}>— Optional</span>
+          <span className={styles.labelAr}>الأبعاد · اختياري</span>
         </div>
         <div className={styles.dimInputs}>
           <div className={styles.dimField}>
@@ -283,7 +297,10 @@ export default function ShippingCalculator() {
 
       {/* Delivery in Iraq */}
       <div style={{ marginBottom: 28 }}>
-        <div className={styles.dimLabel}>Delivery in Iraq · التوصيل في العراق</div>
+        <div className={styles.dimLabel}>
+          Delivery in Iraq
+          <span className={styles.labelAr}>التوصيل في العراق</span>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
           {DELIVERY_OPTIONS.map((opt, i) => (
             <label

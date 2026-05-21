@@ -96,6 +96,18 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Arabic part of a label — always sits on its own row */
+.labelAr {
+  flex-basis: 100%;
+  font-family: 'Noto Naskh Arabic', 'Tajawal', sans-serif;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-top: 1px;
 }
 
 .select,
