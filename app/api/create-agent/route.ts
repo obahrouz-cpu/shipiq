@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     role: 'agent',
     assigned_country: country,
     balance: 0,
-    tier: 'bronze',
+    tier: 'silver',
   })
 
   if (profileError) {

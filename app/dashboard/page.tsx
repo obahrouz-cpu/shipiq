@@ -12,7 +12,7 @@ import {
   getOrderUnreadCounts, getAppSettings,
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase'
-import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
+import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES, TIER_CONFIG } from '@/lib/constants'
 import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem, DeliveryRequest, OrderNote } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import { useIqdRate } from '@/lib/hooks/useIqdRate'
@@ -44,13 +44,7 @@ import type { TierSettings } from '@/lib/types'
 import { appendAffiliateTag } from '@/lib/affiliateLinks'
 
 // ── Fallback tier data — used when tier_settings table hasn't been seeded yet ──
-const FALLBACK_TIERS: TierSettings[] = [
-  { tier: 'bronze',   name_en: 'Bronze',   name_ar: 'برونزي',  min_spend: 0,    color: '#CD7F32', icon: '🥉', benefits: 'Welcome to ShipIQ!', is_active: true },
-  { tier: 'silver',   name_en: 'Silver',   name_ar: 'فضي',     min_spend: 100,  color: '#C0C0C0', icon: '🥈', benefits: 'Coming soon',         is_active: true },
-  { tier: 'gold',     name_en: 'Gold',     name_ar: 'ذهبي',    min_spend: 500,  color: '#FFD700', icon: '🥇', benefits: 'Coming soon',         is_active: true },
-  { tier: 'platinum', name_en: 'Platinum', name_ar: 'بلاتيني', min_spend: 1500, color: '#E5E4E2', icon: '💎', benefits: 'Coming soon',         is_active: true },
-  { tier: 'vip',      name_en: 'VIP',      name_ar: 'كبار',    min_spend: 5000, color: '#c9a84c', icon: '👑', benefits: 'Coming soon',         is_active: true },
-]
+const FALLBACK_TIERS: TierSettings[] = TIER_CONFIG
 
 const IQD_PER_USD = 1540
 
@@ -1815,7 +1809,7 @@ export default function Dashboard() {
               </div>
               {!isAdmin && (
                 <TierBadge
-                  tier={profile?.tier || 'bronze'}
+                  tier={profile?.tier || 'silver'}
                   totalSpent={profile?.total_spent || 0}
                   tiers={tierSettings.length > 0 ? tierSettings : FALLBACK_TIERS}
                   language={language as 'en' | 'ar'}
@@ -2497,7 +2491,7 @@ export default function Dashboard() {
                             <td>
                               {tierSettings.length > 0 && (
                                 <TierBadge
-                                  tier={u.tier || 'bronze'}
+                                  tier={u.tier || 'silver'}
                                   totalSpent={u.total_spent || 0}
                                   tiers={tierSettings}
                                   compact

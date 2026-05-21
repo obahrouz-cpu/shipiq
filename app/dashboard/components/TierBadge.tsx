@@ -75,7 +75,7 @@ export default function TierBadge({ tier, totalSpent, tiers, compact = false, la
           </div>
         )}
         {!next && (
-          <div style={{ fontSize: 11, fontWeight: 700, color, opacity: 0.8 }}>Max tier 👑</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color, opacity: 0.8 }}>Max tier 🔱</div>
         )}
       </div>
 

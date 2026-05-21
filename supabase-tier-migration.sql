@@ -5,11 +5,11 @@
 
 -- Step 1: Add columns if they don't already exist
 ALTER TABLE public.profiles
-  ADD COLUMN IF NOT EXISTS tier text NOT NULL DEFAULT 'bronze',
+  ADD COLUMN IF NOT EXISTS tier text NOT NULL DEFAULT 'silver',
   ADD COLUMN IF NOT EXISTS total_spent numeric NOT NULL DEFAULT 0;
 
 -- Step 2: Reset all profiles (clears any bad test data)
-UPDATE public.profiles SET total_spent = 0, tier = 'bronze';
+UPDATE public.profiles SET total_spent = 0, tier = 'silver';
 
 -- Step 3: Function that recalculates total_spent and tier for one user
 CREATE OR REPLACE FUNCTION recalculate_total_spent(p_user_id uuid)
@@ -34,7 +34,7 @@ BEGIN
     AND shipping_price IS NOT NULL
     AND shipping_price > 0;
 
-  -- Determine tier from tier_settings table (falls back to bronze if table is empty)
+  -- Determine tier from tier_settings table (falls back to silver if table is empty)
   BEGIN
     SELECT tier
     INTO v_tier
@@ -47,7 +47,7 @@ BEGIN
     v_tier := NULL;
   END;
 
-  v_tier := COALESCE(v_tier, 'bronze');
+  v_tier := COALESCE(v_tier, 'silver');
 
   UPDATE public.profiles
   SET total_spent = v_total_spent,
