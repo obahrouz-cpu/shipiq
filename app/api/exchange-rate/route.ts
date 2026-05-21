@@ -23,6 +23,9 @@ const QAMAR_HEADERS: Record<string, string> = {
 
 let cached: { rate: number; source: string; updated: string; ts: number } | null = null
 
+// Cache at the CDN/browser for 1 hour, serve stale while revalidating.
+const CACHE_HEADERS = { 'Cache-Control': 'public, s-maxage=3600, max-age=3600, stale-while-revalidate=86400' }
+
 // Extract the highest IQD/USD rate (1400–1700) from an HTML page.
 function extractHighestRate(html: string): number | null {
   const matches = html.match(/\b1[4-7]\d{2}\b/g)
@@ -50,7 +53,7 @@ async function fetchQamarRates(extraHeaders: Record<string, string> = {}): Promi
 
 export async function GET() {
   if (cached && Date.now() - cached.ts < CACHE_DURATION_MS) {
-    return NextResponse.json({ rate: cached.rate, source: cached.source, updated: cached.updated })
+    return NextResponse.json({ rate: cached.rate, source: cached.source, updated: cached.updated }, { headers: CACHE_HEADERS })
   }
 
   // 1. Primary source: qamaralfajr.com exchange_rates.php
@@ -74,7 +77,7 @@ export async function GET() {
 
     const now = new Date().toISOString()
     cached = { rate, source: 'qamaralfajr.com', updated: now, ts: Date.now() }
-    return NextResponse.json({ rate, source: 'qamaralfajr.com', updated: now })
+    return NextResponse.json({ rate, source: 'qamaralfajr.com', updated: now }, { headers: CACHE_HEADERS })
   } catch (err) {
     console.error('[exchange-rate] qamaralfajr failed:', err instanceof Error ? err.message : err)
   }
@@ -99,12 +102,16 @@ export async function GET() {
 
     const now = new Date().toISOString()
     cached = { rate, source: 'iraqborsa.com', updated: now, ts: Date.now() }
-    return NextResponse.json({ rate, source: 'iraqborsa.com', updated: now })
+    return NextResponse.json({ rate, source: 'iraqborsa.com', updated: now }, { headers: CACHE_HEADERS })
   } catch (err) {
     console.error('[exchange-rate] iraqborsa failed:', err instanceof Error ? err.message : err)
   }
 
-  // 4. Final fallback: hardcoded rate.
+  // 4. Final fallback: hardcoded rate. Cache only briefly so a real rate is
+  // picked up on the next request rather than being pinned for an hour.
   const now = new Date().toISOString()
-  return NextResponse.json({ rate: FALLBACK_RATE, source: 'fallback', updated: now })
+  return NextResponse.json(
+    { rate: FALLBACK_RATE, source: 'fallback', updated: now },
+    { headers: { 'Cache-Control': 'public, s-maxage=60, max-age=60' } }
+  )
 }

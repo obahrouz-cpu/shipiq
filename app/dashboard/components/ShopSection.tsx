@@ -29,6 +29,8 @@ function StoreLogo({
       alt=""
       width={56}
       height={56}
+      loading="lazy"
+      decoding="async"
       className={styles.storeLogo}
       style={{
         width: size,
@@ -107,6 +109,10 @@ function CardLogo({ domain, name }: { domain: string; name: string }) {
     <img
       src={url}
       alt={name}
+      width={130}
+      height={44}
+      loading="lazy"
+      decoding="async"
       className={styles.storeLogoImg}
       onError={() => setFailed(true)}
     />

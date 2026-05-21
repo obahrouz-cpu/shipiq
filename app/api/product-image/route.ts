@@ -7,6 +7,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
 import { rateLimit } from '@/lib/rate-limit'
 
+// Resolved product images are effectively immutable per URL — cache 24h.
+const IMAGE_CACHE_HEADERS = { 'Cache-Control': 'public, s-maxage=86400, max-age=86400, stale-while-revalidate=604800' }
+
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || ''
 const MOBILE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
 const BAD_IMAGE_WORDS = ['prime', 'logo', 'marketing', 'banner', 'icon', 'favicon']
@@ -191,7 +194,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Database cache check — never fetch the same URL twice
     const cached = await checkDbCache(url)
-    if (cached) return NextResponse.json({ image_url: cached })
+    if (cached) return NextResponse.json({ image_url: cached }, { headers: IMAGE_CACHE_HEADERS })
 
     // 2. Fetch by site type
     let imageUrl: string | null = null
@@ -206,7 +209,10 @@ export async function POST(req: NextRequest) {
     // 3. Persist result so the same URL is never fetched again
     if (imageUrl) await saveToDbCache(url, imageUrl)
 
-    return NextResponse.json({ image_url: imageUrl })
+    return NextResponse.json(
+      { image_url: imageUrl },
+      imageUrl ? { headers: IMAGE_CACHE_HEADERS } : undefined
+    )
   } catch (err) {
     console.error('[product-image] Unhandled error:', err)
     return NextResponse.json({ image_url: null })

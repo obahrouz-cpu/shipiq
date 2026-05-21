@@ -98,6 +98,7 @@
   font-family: inherit;
   box-sizing: border-box;
   overflow: hidden;
+  contain: content;
 }
 .storeCard:hover,
 .storeCard:active,
