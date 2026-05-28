@@ -2064,6 +2064,11 @@ export default function Dashboard() {
                   setWishlist(wl)
                   toast('Saved to wishlist! · تم الحفظ', 'success')
                 } : undefined}
+                onOrderPlaced={profile ? (orderId: string) => {
+                  notifyWhatsapp(orderId, 'order_received')
+                  fetchData()
+                  toast('Order submitted! · تم إرسال الطلب', 'success')
+                } : undefined}
               />
             </div>
           )}

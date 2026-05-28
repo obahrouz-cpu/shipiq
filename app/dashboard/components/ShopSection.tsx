@@ -1,9 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import type { Store, ScrapeResult } from '@/lib/types'
+import type { Store, ScrapeResult, OrderForm } from '@/lib/types'
 import { STORES, SUPPORTED_SITES } from '@/lib/constants'
-import { getPricingConfig } from '@/lib/api'
+import { getPricingConfig, createOrder } from '@/lib/api'
 import {
   calculatePricing, defaultConfig, ORIGIN_COUNTRIES,
   type CountryPricingConfig, type OriginCountry, type PricingCategory,
@@ -25,6 +25,28 @@ function toUsd(price: number, currency: string, fx: FxRates): number {
     case 'AED': return price / fx.AED
     default:    return price
   }
+}
+
+// Store-catalogue category (Electronics/Beauty/Shoes/…) → pricing-engine bucket.
+function mapStoreCategory(cat?: string | null): PricingCategory {
+  switch ((cat || '').toLowerCase()) {
+    case 'electronics':
+    case 'gaming':    return 'electronics'
+    case 'clothing':
+    case 'shoes':     return 'clothing'
+    case 'beauty':
+    case 'cosmetics': return 'cosmetics'
+    case 'watches':   return 'accessories'
+    default:          return 'uncategorized'   // Home, Sports, etc.
+  }
+}
+
+// Prefer the scrape's product-derived category; fall back to the displayed store
+// category when the scrape couldn't classify the item — otherwise per-category
+// customs/shipping silently fall to the $0 "uncategorized" default.
+function resolvePricingCategory(scrapeMapped?: string | null, storeCategory?: string | null): PricingCategory {
+  if (scrapeMapped && scrapeMapped !== 'uncategorized') return scrapeMapped as PricingCategory
+  return mapStoreCategory(storeCategory)
 }
 
 // ── Brand logo: Clearbit → gstatic → emoji ───────────────────────────────────
@@ -417,7 +439,7 @@ function AutoCalcModal({ onClose }: { onClose: () => void }) {
             <EngineEstimate
               country={result.site?.country}
               billableWeightKg={result.billable_weight_kg ?? 0}
-              category={result.mappedCategory ?? undefined}
+              category={resolvePricingCategory(result.mappedCategory, STORES.find(s => url.toLowerCase().includes(s.domain))?.category)}
               price={result.price ?? null}
               priceCurrency={result.currency ?? null}
               productName={result.product_name ?? null}
@@ -448,18 +470,44 @@ function AutoCalcModal({ onClose }: { onClose: () => void }) {
 
 // ── StorePanel ────────────────────────────────────────────────────────────────
 
-function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; onClose: () => void; userId?: string; onWishlistSave?: (url: string) => void }) {
+function StorePanel({ store, onClose, userId, onWishlistSave, onOrderPlaced }: { store: Store; onClose: () => void; userId?: string; onWishlistSave?: (url: string) => void; onOrderPlaced?: (orderId: string) => void }) {
   const [url, setUrl] = useState('')
   const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null)
   const [scrapeLoading, setScrapeLoading] = useState(false)
   const [scrapeError, setScrapeError] = useState('')
   const [trendyolKg, setTrendyolKg] = useState<number | null>(null)
   const [wishSaved, setWishSaved] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitErr, setSubmitErr] = useState('')
 
   const detectedStore = url ? STORES.find(s => url.toLowerCase().includes(s.domain)) ?? null : null
   const displayStore = detectedStore ?? store
   const isSupported = SUPPORTED_SITES.some((s: string) => url.toLowerCase().includes(s))
   const isTrendyolUrl = url.toLowerCase().includes('trendyol.com')
+
+  // Place an order from the popup — same fields/behavior as the My Orders New Order flow.
+  const submitOrder = async () => {
+    if (!userId || !url.startsWith('http') || submitting) return
+    setSubmitting(true); setSubmitErr('')
+    const cur = scrapeResult?.currency ?? ''
+    const orderForm: OrderForm = {
+      url,
+      description: scrapeResult?.product_name || `Product from ${displayStore.name}`,
+      category: displayStore.category,
+      qty: 1,
+      itemPrice: scrapeResult?.price != null && scrapeResult.price > 0 ? String(scrapeResult.price) : '',
+      itemPriceCurrency: ['USD', 'IQD', 'EUR', 'GBP', 'TRY', 'AED'].includes(cur) ? cur : 'USD',
+      note: '',
+      urgency: false,
+      deliveryPreference: 'pickup',
+      deliveryCity: '',
+    }
+    const { error, orderId } = await createOrder(userId, orderForm, null, scrapeResult?.image_url ?? null)
+    setSubmitting(false)
+    if (error) { setSubmitErr(error); return }
+    if (orderId) onOrderPlaced?.(orderId)
+    onClose()
+  }
 
   useEffect(() => {
     setTrendyolKg(null)
@@ -579,7 +627,7 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
             <EngineEstimate
               country={scrapeResult.site?.country}
               billableWeightKg={scrapeResult.billable_weight_kg ?? 0}
-              category={scrapeResult.mappedCategory ?? undefined}
+              category={resolvePricingCategory(scrapeResult.mappedCategory, displayStore.category)}
               price={scrapeResult.price ?? null}
               priceCurrency={scrapeResult.currency ?? null}
               productName={scrapeResult.product_name ?? null}
@@ -588,7 +636,7 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
 
           {/* Full engine estimate — Trendyol manual weight selection */}
           {!scrapeResult && trendyolKg && trendyolKg > 0 && !scrapeLoading && (
-            <EngineEstimate country="Turkey" billableWeightKg={trendyolKg} weightNote="estimated weight" />
+            <EngineEstimate country="Turkey" billableWeightKg={trendyolKg} category={mapStoreCategory(displayStore.category)} weightNote="estimated weight" />
           )}
 
           {url && !isSupported && !scrapeLoading && (
@@ -596,6 +644,22 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
               ℹ️ Paste this URL when submitting your order — our team will confirm the exact shipping cost.
             </div>
           )}
+
+          {/* Submit Order — below the breakdown; same behavior as the New Order flow */}
+          {userId && url.startsWith('http') && (
+            <button
+              onClick={submitOrder}
+              disabled={submitting}
+              style={{
+                marginTop: 12, width: '100%', padding: '11px', fontSize: 14, fontWeight: 700,
+                background: 'var(--gold)', color: '#0f0e0c', border: 'none', borderRadius: 8,
+                cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1,
+              }}
+            >
+              {submitting ? 'Submitting…' : '✓ Submit Order · إرسال الطلب'}
+            </button>
+          )}
+          {submitErr && <div className={styles.estimateError} style={{ marginTop: 8 }}>⚠️ {submitErr}</div>}
 
           {url && url.startsWith('http') && onWishlistSave && (
             <button
@@ -642,7 +706,7 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
 
 // ── ShopSection ───────────────────────────────────────────────────────────────
 
-export default function ShopSection({ userId, onWishlistSave }: { userId?: string; onWishlistSave?: (url: string) => void }) {
+export default function ShopSection({ userId, onWishlistSave, onOrderPlaced }: { userId?: string; onWishlistSave?: (url: string) => void; onOrderPlaced?: (orderId: string) => void }) {
   const [countryFilter, setCountryFilter] = useState('All')
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
   const [autoCalcOpen, setAutoCalcOpen] = useState(false)
@@ -708,7 +772,7 @@ export default function ShopSection({ userId, onWishlistSave }: { userId?: strin
 
       {/* Store panel */}
       {selectedStore && (
-        <StorePanel store={selectedStore} onClose={() => setSelectedStore(null)} userId={userId} onWishlistSave={onWishlistSave} />
+        <StorePanel store={selectedStore} onClose={() => setSelectedStore(null)} userId={userId} onWishlistSave={onWishlistSave} onOrderPlaced={onOrderPlaced} />
       )}
     </div>
   )

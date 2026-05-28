@@ -205,6 +205,7 @@ export interface ScrapeResult {
   height_cm?: number | null
   dimensional_weight_kg?: number | null
   billable_weight_kg?: number | null
+  image_url?: string | null
   raw_weight?: string | null
   raw_dimensions?: string | null
   // ── scrape contract (price + normalized category + weight unit) ──
