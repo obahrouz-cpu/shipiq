@@ -17,6 +17,10 @@ create table if not exists public.pricing_config (
   shipping_per_category    boolean     not null default false,
   shipping_flat_rate       numeric     not null default 0,      -- per weight-unit (used when per_category = false)
   shipping_category_rates  jsonb       not null default '{}'::jsonb,  -- { cosmetics, supplements, clothing, electronics, accessories, uncategorized }
+  min_billable_weight      numeric     not null default 0,      -- floor in weight_unit (one per country); 0 = no minimum
+
+  -- Existing DBs: run this once to add the column without recreating the table —
+  --   alter table public.pricing_config add column if not exists min_billable_weight numeric not null default 0;
 
   -- ── Service fee ── admin picks ONE mode
   service_fee_mode         text        not null default 'percentage',  -- 'percentage' | 'per_piece'

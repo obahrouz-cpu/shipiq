@@ -308,7 +308,7 @@ function EngineEstimate({ country, billableWeightKg, category, price, priceCurre
       )}
 
       <div className={styles.estimateSub} style={{ marginTop: 8 }}>
-        {billableWeightKg} kg {weightNote} · billed per {b.weightUnit} · Final price confirmed by ShipIQ
+        Billed weight: {b.effectiveWeight} {b.weightUnit}{b.effectiveWeight > b.billableWeight ? ' (min applied)' : ''} · {billableWeightKg} kg {weightNote} · Final price confirmed by ShipIQ
       </div>
     </div>
   )

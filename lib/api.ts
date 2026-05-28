@@ -298,6 +298,7 @@ export async function savePricingConfig(config: CountryPricingConfig): Promise<{
       shipping_per_category: config.shipping_per_category,
       shipping_flat_rate: config.shipping_flat_rate,
       shipping_category_rates: config.shipping_category_rates,
+      min_billable_weight: config.min_billable_weight,
       service_fee_mode: config.service_fee_mode,
       service_fee_percent: config.service_fee_percent,
       service_fee_min: config.service_fee_min,

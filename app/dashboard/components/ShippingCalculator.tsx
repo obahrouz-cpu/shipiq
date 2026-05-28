@@ -481,7 +481,11 @@ export default function ShippingCalculator() {
           )}
 
           <div style={{ textAlign: 'center' }}>
-            <div className={styles.billable}>Billable weight: <strong>{result.billableKg.toFixed(2)} kg</strong> → billed per {b.weightUnit}</div>
+            <div className={styles.billable}>
+              Billed weight: <strong>{b.effectiveWeight} {b.weightUnit}</strong>
+              {b.effectiveWeight > b.billableWeight && <> (minimum applied)</>}
+              {' · '}{result.billableKg.toFixed(2)} kg actual
+            </div>
             <div className={styles.disclaimer} style={{ marginTop: 8 }}>
               * Estimate only — final total confirmed by ShipIQ after reviewing your order ·{' '}
               <span className="ar">تقدير فقط — السعر النهائي يتم تأكيده من شيب آي كيو</span>

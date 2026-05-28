@@ -205,6 +205,15 @@ export default function AdminPricing() {
             onChange={v => update({ shipping_flat_rate: v })}
           />
         )}
+        <div style={{ ...hintStyle, margin: '6px 0 8px' }}>
+          Billable weight is floored at this minimum before × rate. <strong>0</strong> = no minimum.
+        </div>
+        <NumberRow
+          label={`Minimum weight (${unit})`}
+          suffix={unit}
+          value={cfg.min_billable_weight}
+          onChange={v => update({ min_billable_weight: v })}
+        />
 
         {/* ── Service fee ── */}
         <SubHeading>🧾 Service Fee</SubHeading>

@@ -38,6 +38,7 @@ export interface CountryPricingConfig {
   shipping_per_category: boolean
   shipping_flat_rate: number              // per weight-unit, used when per_category = false
   shipping_category_rates: CategoryAmounts // per weight-unit, used when per_category = true
+  min_billable_weight: number             // floor in weight_unit (one per country); 0 = no minimum
 
   // Service fee — admin picks ONE mode
   service_fee_mode: ServiceFeeMode
@@ -75,7 +76,8 @@ export interface PricingBreakdown {
   qty: number
 
   itemPrice: number | null
-  billableWeight: number      // total, converted to weightUnit (kg→unit × qty)
+  billableWeight: number      // raw total, converted to weightUnit (kg→unit × qty)
+  effectiveWeight: number     // billableWeight floored at min_billable_weight — the weight ACTUALLY billed
 
   shipping: number | null     // null when ratesUnavailable (rate not set yet — TBD)
   shippingRate: number        // the per-unit rate actually used (0 when unavailable)
@@ -137,6 +139,7 @@ export function defaultConfig(country: OriginCountry): CountryPricingConfig {
     shipping_per_category: false,
     shipping_flat_rate: 0,
     shipping_category_rates: EMPTY_CATEGORY_AMOUNTS(),
+    min_billable_weight: 0,
     service_fee_mode: 'percentage',
     service_fee_percent: 0,
     service_fee_min: 0,
@@ -159,6 +162,7 @@ export function normalizeConfig(row: Record<string, unknown>): CountryPricingCon
     shipping_per_category: row.shipping_per_category === true || row.shipping_per_category === 'true',
     shipping_flat_rate: num(row.shipping_flat_rate),
     shipping_category_rates: toCategoryAmounts(row.shipping_category_rates),
+    min_billable_weight: num(row.min_billable_weight),
     service_fee_mode: row.service_fee_mode === 'per_piece' ? 'per_piece' : 'percentage',
     service_fee_percent: num(row.service_fee_percent),
     service_fee_min: num(row.service_fee_min),
@@ -179,15 +183,17 @@ export function calculatePricing(config: CountryPricingConfig, input: PricingInp
   const price = hasPrice ? Math.max(0, input.itemPrice as number) : 0
 
   // ── Shipping (needs no price; unavailable when the rate is unset/TBD = 0) ──
+  // Order: kg → convert to country unit → floor at min_billable_weight → × rate.
   const totalBillableKg = Math.max(0, num(input.billableWeightKg)) * qty
   const billableWeight = round2(kgToUnit(totalBillableKg, config.weight_unit))
+  const effectiveWeight = round2(Math.max(billableWeight, num(config.min_billable_weight)))
   const shippingRate = config.shipping_per_category
     ? num(config.shipping_category_rates[category], config.shipping_category_rates.uncategorized)
     : config.shipping_flat_rate
   // A rate of 0 (or less) means "not set yet" — surface ratesUnavailable instead
   // of a misleading $0 shipping line.
   const ratesUnavailable = !(shippingRate > 0)
-  const shipping: number | null = ratesUnavailable ? null : round2(billableWeight * shippingRate)
+  const shipping: number | null = ratesUnavailable ? null : round2(effectiveWeight * shippingRate)
 
   // ── Customs (always computable; needs no price) ──
   const customs = round2(
@@ -253,6 +259,7 @@ export function calculatePricing(config: CountryPricingConfig, input: PricingInp
     qty,
     itemPrice: hasPrice ? round2(price) : null,
     billableWeight,
+    effectiveWeight,
     shipping,
     shippingRate,
     ratesUnavailable,

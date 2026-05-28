@@ -574,7 +574,7 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
             </div>
 
             <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 8 }}>
-              {engineBillableKg} kg {engineWeightNote}{form.qty > 1 ? ` × ${form.qty}` : ''} · billed per {breakdown.weightUnit}
+              Billed weight: {breakdown.effectiveWeight} {breakdown.weightUnit}{breakdown.effectiveWeight > breakdown.billableWeight ? ' (min applied)' : ''} · {engineBillableKg} kg {engineWeightNote}{form.qty > 1 ? ` × ${form.qty}` : ''}
             </div>
           </div>
         )}
