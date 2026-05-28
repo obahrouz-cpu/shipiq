@@ -2,12 +2,30 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import type { Store, ScrapeResult } from '@/lib/types'
-import { STORES, SUPPORTED_SITES, SHIPPING_RATES } from '@/lib/constants'
+import { STORES, SUPPORTED_SITES } from '@/lib/constants'
+import { getPricingConfig } from '@/lib/api'
+import {
+  calculatePricing, defaultConfig, ORIGIN_COUNTRIES,
+  type CountryPricingConfig, type OriginCountry, type PricingCategory,
+} from '@/lib/pricing'
 import styles from './ShopSection.module.css'
 import DealsSection from './DealsSection'
 import TrendyolWeightEstimator from './TrendyolWeightEstimator'
 
-const IQD_PER_USD = 1540
+// FX for converting a scraped price into the engine's config currency (USD).
+const FALLBACK_FX = { iqd: 1540, EUR: 0.92, GBP: 0.79, TRY: 32.5, AED: 3.67 }
+type FxRates = typeof FALLBACK_FX
+
+function toUsd(price: number, currency: string, fx: FxRates): number {
+  switch ((currency || 'USD').toUpperCase()) {
+    case 'USD': return price
+    case 'EUR': return price / fx.EUR
+    case 'GBP': return price / fx.GBP
+    case 'TRY': return price / fx.TRY
+    case 'AED': return price / fx.AED
+    default:    return price
+  }
+}
 
 // ── Brand logo: Clearbit → gstatic → emoji ───────────────────────────────────
 
@@ -138,6 +156,164 @@ function safeBg(hex: string): string {
   return lum > 0.55 ? '#555555' : hex
 }
 
+// ── EngineEstimate ─ full breakdown from the shared pricing engine ─────────────
+// Uses the SAME engine (lib/pricing.ts) as the website calculator and
+// /api/calculate, so the Shop popups can't diverge from the rest of the app.
+
+function EstRow({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(201,168,76,0.10)' }}>
+      <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: gold ? 'var(--gold)' : 'var(--text)' }}>{value}</span>
+    </div>
+  )
+}
+
+function EstNote({ label, note }: { label: string; note: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid rgba(201,168,76,0.10)' }}>
+      <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ fontSize: 11, color: 'var(--text-dim)', fontStyle: 'italic', textAlign: 'right', maxWidth: '62%' }}>{note}</span>
+    </div>
+  )
+}
+
+function EngineEstimate({ country, billableWeightKg, category, price, priceCurrency, productName, weightNote = 'billable weight' }: {
+  country?: string | null
+  billableWeightKg: number
+  category?: PricingCategory | null
+  price?: number | null
+  priceCurrency?: string | null
+  productName?: string | null
+  weightNote?: string
+}) {
+  const [configs, setConfigs] = useState<Record<OriginCountry, CountryPricingConfig> | null>(null)
+  const [fx, setFx] = useState<FxRates>(FALLBACK_FX)
+  const [insuranceOptIn, setInsuranceOptIn] = useState(false)
+
+  useEffect(() => {
+    getPricingConfig().then(({ configs }) => {
+      const map = {} as Record<OriginCountry, CountryPricingConfig>
+      for (const c of configs) map[c.country] = c
+      setConfigs(map)
+    })
+    ;(async () => {
+      try {
+        const [iqdRes, fxRes] = await Promise.all([
+          fetch('/api/exchange-rate'),
+          fetch('https://open.er-api.com/v6/latest/USD'),
+        ])
+        const iqdData = await iqdRes.json()
+        const fxData = await fxRes.json()
+        const r = fxData?.rates ?? {}
+        setFx({
+          iqd: iqdData.rate || FALLBACK_FX.iqd,
+          EUR: r.EUR || FALLBACK_FX.EUR,
+          GBP: r.GBP || FALLBACK_FX.GBP,
+          TRY: r.TRY || FALLBACK_FX.TRY,
+          AED: r.AED || FALLBACK_FX.AED,
+        })
+      } catch { /* keep fallback */ }
+    })()
+  }, [])
+
+  const origin = country && (ORIGIN_COUNTRIES as readonly string[]).includes(country) ? country as OriginCountry : null
+
+  // Engine only covers USA/UAE/Turkey/China — other origins (UK/Germany/Canada) quote manually.
+  if (!origin) {
+    return (
+      <div className={styles.estimateInfo}>
+        ℹ️ Paste this URL when submitting your order — our team will confirm the exact shipping cost.
+      </div>
+    )
+  }
+  if (!configs) {
+    return <div className={styles.estimateLoading}><span className={styles.spinner} /> Calculating estimate...</div>
+  }
+
+  const config = configs[origin] ?? defaultConfig(origin)
+  const priceUsd = price != null && !isNaN(price) && price > 0 ? toUsd(price, priceCurrency || 'USD', fx) : null
+  const b = calculatePricing(config, {
+    billableWeightKg: billableWeightKg || 0,
+    qty: 1,
+    category: category || 'uncategorized',
+    itemPrice: priceUsd,
+    insuranceOptIn,
+  })
+
+  const money = (n: number) => `$${n.toFixed(2)}`
+  const showInsurance = config.insurance_percent > 0
+
+  return (
+    <div className={styles.estimateBox}>
+      <div className={styles.estimateHeader}>
+        <span className={styles.estimateLabel}>≈ Full Estimate · تقدير التكلفة</span>
+        <span className={styles.estimateBadge}>APPROXIMATE</span>
+      </div>
+
+      {productName && <div className={styles.estimateProduct} style={{ marginBottom: 10 }}>📦 {productName}</div>}
+
+      {/* Insurance opt-in — only shown when the country has an insurance rate set */}
+      {showInsurance && (
+        <label
+          onClick={() => setInsuranceOptIn(v => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', marginBottom: 10, cursor: 'pointer',
+            background: insuranceOptIn ? 'rgba(201,168,76,0.10)' : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${insuranceOptIn ? 'rgba(201,168,76,0.35)' : 'var(--border)'}`, borderRadius: 8,
+          }}
+        >
+          <span style={{
+            width: 18, height: 18, flexShrink: 0, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: insuranceOptIn ? 'var(--gold)' : 'transparent',
+            border: `2px solid ${insuranceOptIn ? 'var(--gold)' : 'var(--border)'}`, color: '#0f0e0c', fontSize: 12, fontWeight: 800,
+          }}>{insuranceOptIn ? '✓' : ''}</span>
+          <span style={{ fontSize: 12, color: 'var(--text)' }}>🛡️ Add insurance ({config.insurance_percent}% of item price)</span>
+        </label>
+      )}
+
+      {/* Breakdown */}
+      <div style={{ marginBottom: 10 }}>
+        {b.itemPrice != null && <EstRow label="Item Price · المنتج" value={money(b.itemPrice)} />}
+        {b.shipping != null
+          ? <EstRow label="Shipping · الشحن" value={money(b.shipping)} gold />
+          : <EstNote label="Shipping · الشحن" note="Rates not set — contact us" />}
+        {b.serviceFee != null
+          ? <EstRow label="Service Fee · الخدمة" value={money(b.serviceFee)} />
+          : <EstNote label="Service Fee · الخدمة" note={b.serviceFeeMessage ?? 'Enter item price'} />}
+        <EstRow label="Customs · الجمارك" value={money(b.customs)} />
+        {b.insuranceOptIn && (b.insurance != null
+          ? <EstRow label="Insurance · التأمين" value={money(b.insurance)} />
+          : <EstNote label="Insurance · التأمين" note={b.insuranceMessage ?? 'Enter item price'} />)}
+      </div>
+
+      {/* Total */}
+      {b.ratesUnavailable ? (
+        <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--orange)' }}>Contact us for a quote</div>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>تواصل معنا للحصول على عرض سعر</div>
+        </div>
+      ) : (
+        <>
+          <div className={styles.estimateRange}>
+            {b.partialTotal ? '~' : ''}{money(b.total)}<span className={styles.estimateCurrency}> USD</span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+            ≈ {Math.round(b.total * fx.iqd).toLocaleString()} IQD
+          </div>
+          {b.partialTotal && b.totalMessage && (
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', fontStyle: 'italic', marginTop: 6 }}>{b.totalMessage}</div>
+          )}
+        </>
+      )}
+
+      <div className={styles.estimateSub} style={{ marginTop: 8 }}>
+        {billableWeightKg} kg {weightNote} · billed per {b.weightUnit} · Final price confirmed by ShipIQ
+      </div>
+    </div>
+  )
+}
+
 // ── AutoCalcModal ─────────────────────────────────────────────────────────────
 
 function AutoCalcModal({ onClose }: { onClose: () => void }) {
@@ -172,17 +348,6 @@ function AutoCalcModal({ onClose }: { onClose: () => void }) {
     }
     setLoading(false)
   }
-
-  const rates = SHIPPING_RATES[result?.site?.country ?? ''] ?? { min: 10000, max: 18000 }
-  const totalKg = result?.billable_weight_kg ?? 0
-  const estimate = totalKg > 0
-    ? { min: Math.round(rates.min * totalKg), max: Math.round(rates.max * totalKg), kg: totalKg }
-    : null
-
-  const turkeyRates = SHIPPING_RATES['Turkey'] ?? { min: 5000, max: 8000 }
-  const trendyolEstimate = !estimate && trendyolKg && trendyolKg > 0
-    ? { min: Math.round(turkeyRates.min * trendyolKg), max: Math.round(turkeyRates.max * trendyolKg), kg: trendyolKg }
-    : null
 
   if (typeof document === 'undefined') return null
 
@@ -247,41 +412,21 @@ function AutoCalcModal({ onClose }: { onClose: () => void }) {
             <div className={styles.estimateError}>⚠️ {error}</div>
           )}
 
-          {/* Scraper estimate */}
-          {estimate && !loading && (
-            <div className={styles.estimateBox}>
-              <div className={styles.estimateHeader}>
-                <span className={styles.estimateLabel}>≈ Shipping Estimate</span>
-                <span className={styles.estimateBadge}>APPROXIMATE</span>
-              </div>
-              <div className={styles.estimateRange}>
-                ${(estimate.min / IQD_PER_USD).toFixed(2)} – ${(estimate.max / IQD_PER_USD).toFixed(2)}
-                <span className={styles.estimateCurrency}> USD</span>
-              </div>
-              <div className={styles.estimateSub}>
-                {estimate.kg} kg billable weight · Final price confirmed by ShipIQ
-              </div>
-              {result?.product_name && (
-                <div className={styles.estimateProduct}>📦 {result.product_name}</div>
-              )}
-            </div>
+          {/* Full engine estimate — scraped product */}
+          {result && !loading && (
+            <EngineEstimate
+              country={result.site?.country}
+              billableWeightKg={result.billable_weight_kg ?? 0}
+              category={result.mappedCategory ?? undefined}
+              price={result.price ?? null}
+              priceCurrency={result.currency ?? null}
+              productName={result.product_name ?? null}
+            />
           )}
 
-          {/* Trendyol estimate */}
-          {trendyolEstimate && !loading && (
-            <div className={styles.estimateBox}>
-              <div className={styles.estimateHeader}>
-                <span className={styles.estimateLabel}>≈ Shipping Estimate</span>
-                <span className={styles.estimateBadge}>APPROXIMATE</span>
-              </div>
-              <div className={styles.estimateRange}>
-                ${(trendyolEstimate.min / IQD_PER_USD).toFixed(2)} – ${(trendyolEstimate.max / IQD_PER_USD).toFixed(2)}
-                <span className={styles.estimateCurrency}> USD</span>
-              </div>
-              <div className={styles.estimateSub}>
-                {trendyolEstimate.kg} kg estimated weight · Final price confirmed by ShipIQ
-              </div>
-            </div>
+          {/* Full engine estimate — Trendyol manual weight selection */}
+          {!result && trendyolKg && trendyolKg > 0 && !loading && (
+            <EngineEstimate country="Turkey" billableWeightKg={trendyolKg} weightNote="estimated weight" />
           )}
 
           {/* Supported sites */}
@@ -348,17 +493,6 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
     }, 800)
     return () => clearTimeout(timer)
   }, [url]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const rates = SHIPPING_RATES[scrapeResult?.site?.country ?? ''] ?? { min: 10000, max: 18000 }
-  const totalKg = scrapeResult?.billable_weight_kg ?? 0
-  const estimate = totalKg > 0
-    ? { min: Math.round(rates.min * totalKg), max: Math.round(rates.max * totalKg), kg: totalKg }
-    : null
-
-  const turkeyRates = SHIPPING_RATES['Turkey'] ?? { min: 5000, max: 8000 }
-  const trendyolEstimate = !estimate && trendyolKg && trendyolKg > 0
-    ? { min: Math.round(turkeyRates.min * trendyolKg), max: Math.round(turkeyRates.max * trendyolKg), kg: trendyolKg }
-    : null
 
   if (typeof document === 'undefined') return null
 
@@ -440,41 +574,21 @@ function StorePanel({ store, onClose, userId, onWishlistSave }: { store: Store; 
             <TrendyolWeightEstimator onWeightSelect={kg => setTrendyolKg(kg)} />
           )}
 
-          {/* Estimate from scraper */}
-          {estimate && !scrapeLoading && (
-            <div className={styles.estimateBox}>
-              <div className={styles.estimateHeader}>
-                <span className={styles.estimateLabel}>≈ Shipping Estimate · تقدير الشحن</span>
-                <span className={styles.estimateBadge}>APPROXIMATE</span>
-              </div>
-              <div className={styles.estimateRange}>
-                ${(estimate.min / IQD_PER_USD).toFixed(2)} – ${(estimate.max / IQD_PER_USD).toFixed(2)}
-                <span className={styles.estimateCurrency}> USD</span>
-              </div>
-              <div className={styles.estimateSub}>
-                {estimate.kg} kg billable weight · Final price confirmed by ShipIQ
-              </div>
-              {scrapeResult?.product_name && (
-                <div className={styles.estimateProduct}>📦 {scrapeResult.product_name}</div>
-              )}
-            </div>
+          {/* Full engine estimate — scraped product */}
+          {scrapeResult && !scrapeLoading && (
+            <EngineEstimate
+              country={scrapeResult.site?.country}
+              billableWeightKg={scrapeResult.billable_weight_kg ?? 0}
+              category={scrapeResult.mappedCategory ?? undefined}
+              price={scrapeResult.price ?? null}
+              priceCurrency={scrapeResult.currency ?? null}
+              productName={scrapeResult.product_name ?? null}
+            />
           )}
 
-          {/* Estimate from Trendyol estimator selection */}
-          {trendyolEstimate && !scrapeLoading && (
-            <div className={styles.estimateBox}>
-              <div className={styles.estimateHeader}>
-                <span className={styles.estimateLabel}>≈ Shipping Estimate · تقدير الشحن</span>
-                <span className={styles.estimateBadge}>APPROXIMATE</span>
-              </div>
-              <div className={styles.estimateRange}>
-                ${(trendyolEstimate.min / IQD_PER_USD).toFixed(2)} – ${(trendyolEstimate.max / IQD_PER_USD).toFixed(2)}
-                <span className={styles.estimateCurrency}> USD</span>
-              </div>
-              <div className={styles.estimateSub}>
-                {trendyolEstimate.kg} kg estimated weight · Final price confirmed by ShipIQ
-              </div>
-            </div>
+          {/* Full engine estimate — Trendyol manual weight selection */}
+          {!scrapeResult && trendyolKg && trendyolKg > 0 && !scrapeLoading && (
+            <EngineEstimate country="Turkey" billableWeightKg={trendyolKg} weightNote="estimated weight" />
           )}
 
           {url && !isSupported && !scrapeLoading && (
