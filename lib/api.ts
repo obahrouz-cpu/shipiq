@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import { createClient } from './supabase'
 import type { Order, OrderForm, Profile, Transaction, TierSettings, WishlistItem, DeliveryRequest, Notification, OrderNote } from './types'
+import { type CountryPricingConfig, ORIGIN_COUNTRIES, normalizeConfig, defaultConfig } from './pricing'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -264,6 +265,51 @@ export async function saveAppSettings(keys: string[], values: Record<string, str
   const supabase = createClient()
   const rows = keys.map(k => ({ key: k, value: values[k] ?? '', updated_at: new Date().toISOString() }))
   const { error } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
+  return { error: error?.message ?? null }
+}
+
+// ── Pricing config (configurable pricing engine) ───────────────────────────────
+// Rows are public-readable (calculator + Flutter), admin-writable. Always returns
+// one config per origin country — falling back to an all-zero default for any
+// country without a row yet (e.g. before the SQL seed has run).
+
+export async function getPricingConfig(): Promise<{ configs: CountryPricingConfig[]; error: string | null }> {
+  const supabase = createClient()
+  const { data, error } = await supabase.from('pricing_config').select('*')
+  if (error) {
+    // Table missing / not seeded yet → degrade gracefully to defaults.
+    return { configs: ORIGIN_COUNTRIES.map(defaultConfig), error: error.message }
+  }
+  const byCountry = new Map((data ?? []).map(row => {
+    const c = normalizeConfig(row as Record<string, unknown>)
+    return [c.country, c] as const
+  }))
+  const configs = ORIGIN_COUNTRIES.map(country => byCountry.get(country) ?? defaultConfig(country))
+  return { configs, error: null }
+}
+
+export async function savePricingConfig(config: CountryPricingConfig): Promise<{ error: string | null }> {
+  const supabase = createClient()
+  const { error } = await supabase.from('pricing_config').upsert(
+    {
+      country: config.country,
+      currency: config.currency,
+      weight_unit: config.weight_unit,
+      shipping_per_category: config.shipping_per_category,
+      shipping_flat_rate: config.shipping_flat_rate,
+      shipping_category_rates: config.shipping_category_rates,
+      service_fee_mode: config.service_fee_mode,
+      service_fee_percent: config.service_fee_percent,
+      service_fee_min: config.service_fee_min,
+      service_fee_per_piece: config.service_fee_per_piece,
+      customs_per_category: config.customs_per_category,
+      customs_flat: config.customs_flat,
+      customs_category_amounts: config.customs_category_amounts,
+      insurance_percent: config.insurance_percent,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'country' }
+  )
   return { error: error?.message ?? null }
 }
 

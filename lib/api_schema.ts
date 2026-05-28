@@ -61,6 +61,51 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     },
   },
 
+  // ── Pricing Engine ────────────────────────────────────────────────────────
+  {
+    path: '/api/calculate',
+    method: 'POST',
+    auth: 'none',
+    description:
+      'Compute the full price breakdown for an order from the admin-configured rates ' +
+      '(public.pricing_config). Rules live in lib/pricing.ts (shared with the website ' +
+      'calculator) so web + app never diverge. All amounts are in `currency` (USD).',
+    body: {
+      country: "string ('USA' | 'UAE' | 'Turkey' | 'China')",
+      billableWeightKg: 'number (from /api/scrape billable_weight_kg, per item, in kg)',
+      qty: 'number (default 1)',
+      category: 'string (cosmetics|supplements|clothing|electronics|accessories|uncategorized)',
+      itemPrice: 'number? (in `currency`; null/omit when unknown — Noon / skipped price)',
+      insuranceOptIn: 'boolean (customer opt-in checkbox)',
+    },
+    response: {
+      ok: 'boolean',
+      country: 'string',
+      currency: "string (e.g. 'USD')",
+      weightUnit: "string ('lb' | 'kg' — the country's billing unit)",
+      category: 'string',
+      qty: 'number',
+      itemPrice: 'number? (echoed; null when not provided)',
+      billableWeight: 'number (total, converted to weightUnit, × qty)',
+      shipping: 'number? (null when ratesUnavailable — rate not set yet / TBD)',
+      shippingRate: 'number (per-unit rate used; 0 when unavailable)',
+      ratesUnavailable: 'boolean (true → country/category has no shipping rate set; show "contact us")',
+      serviceFee: 'number? (null when percentage mode + no item price yet)',
+      serviceFeeMode: "string ('percentage' | 'per_piece')",
+      serviceFeePending: 'boolean (true → show serviceFeeMessage, not a number)',
+      serviceFeeMessage: 'string? ("Service fee is X% of item price — enter item price…")',
+      customs: 'number (always present — needs no price)',
+      insuranceOptIn: 'boolean',
+      insurance: 'number? (null when opted-in + no price; 0 when not opted in)',
+      insurancePending: 'boolean',
+      insuranceMessage: 'string? ("Insurance is X% of item price — enter item price…")',
+      total: 'number (sum of the calculable parts; excludes shipping when unavailable)',
+      partialTotal: 'boolean (true when a part can\'t be computed yet — blank price or unset rate)',
+      pending: "string[] (subset of 'shipping' | 'item_price' | 'service_fee' | 'insurance')",
+      totalMessage: 'string? (hint, e.g. "+ service fee & insurance once price entered")',
+    },
+  },
+
   // ── Product Image ─────────────────────────────────────────────────────────
   {
     path: '/api/product-image',
@@ -146,4 +191,5 @@ export const SUPABASE_TABLES = {
   delivery_requests: 'delivery_requests',
   tier_settings: 'tier_settings',
   app_settings: 'app_settings',
+  pricing_config: 'pricing_config',   // one row per origin country — read directly for offline quoting
 } as const

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { getAppSettings, saveAppSettings } from '@/lib/api'
+import AdminPricing from './AdminPricing'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -187,6 +188,9 @@ export default function AdminSettings() {
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', paddingBottom: 80 }}>
+
+      {/* ── Pricing Engine (configurable rates, shared with Flutter app) ── */}
+      <AdminPricing />
 
       {/* ── SECTION 1+2: WhatsApp Notifications (collapsible) ── */}
       <div style={{
