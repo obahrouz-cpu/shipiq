@@ -9,10 +9,14 @@ import {
   updateOrder, topUpBalance, deductBalance, signOut,
   getTierSettings, getWishlist, addToWishlist, removeFromWishlist,
   getUserDeliveryRequests, getAdminDeliveryRequests,
-  getOrderUnreadCounts, getAppSettings,
+  getOrderUnreadCounts, getAppSettings, getPricingConfig,
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase'
-import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, SHIPPING_RATES, TIER_CONFIG } from '@/lib/constants'
+import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, TIER_CONFIG } from '@/lib/constants'
+import {
+  calculatePricing, defaultConfig, ORIGIN_COUNTRIES,
+  type CountryPricingConfig, type OriginCountry, type PricingCategory,
+} from '@/lib/pricing'
 import type { Profile, Order, Transaction, Toast, NavItem, OrderForm, ScrapeResult, WishlistItem, DeliveryRequest, OrderNote } from '@/lib/types'
 import { useLanguage } from '@/lib/useLanguage'
 import { useIqdRate } from '@/lib/hooks/useIqdRate'
@@ -47,6 +51,54 @@ import { appendAffiliateTag } from '@/lib/affiliateLinks'
 const FALLBACK_TIERS: TierSettings[] = TIER_CONFIG
 
 const IQD_PER_USD = 1540
+
+// ── Pricing-engine helpers (shared math lives in lib/pricing.ts) ───────────────
+
+const PRICE_FX_FALLBACK = { iqd: 1540, EUR: 0.92, GBP: 0.79, TRY: 32.5, AED: 3.67 }
+type PriceFx = typeof PRICE_FX_FALLBACK
+
+// Converts an entered/scraped price into the engine's config currency (USD).
+function priceToUsd(price: number, currency: string, fx: PriceFx): number {
+  switch ((currency || 'USD').toUpperCase()) {
+    case 'USD': return price
+    case 'IQD': return price / fx.iqd
+    case 'EUR': return price / fx.EUR
+    case 'GBP': return price / fx.GBP
+    case 'TRY': return price / fx.TRY
+    case 'AED': return price / fx.AED
+    default:    return price
+  }
+}
+
+// Order-form category dropdown → pricing-engine category bucket.
+const DROPDOWN_TO_PRICING_CATEGORY: Record<string, PricingCategory> = {
+  Electronics: 'electronics',
+  Clothing: 'clothing',
+  Cosmetics: 'cosmetics',
+  Books: 'uncategorized',
+  'Home & Kitchen': 'uncategorized',
+  Toys: 'uncategorized',
+  Sports: 'uncategorized',
+  Other: 'uncategorized',
+}
+
+// Compact breakdown-row renderers for the New Order estimate.
+function EstLine({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: gold ? 'var(--gold)' : 'var(--text)' }}>{value}</span>
+    </div>
+  )
+}
+function EstLineNote({ label, note }: { label: string; note: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ fontSize: 11, color: 'var(--text-dim)', fontStyle: 'italic', textAlign: 'right', maxWidth: '60%' }}>{note}</span>
+    </div>
+  )
+}
 
 // ── URL → country-of-origin detection (used by admin filter) ──────────────────
 
@@ -258,8 +310,52 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
   const [aliexpressKg, setAliexpressKg] = useState<number | null>(null)
   const [thumbUrl, setThumbUrl] = useState<string | null>(prefill?.photo_url ?? null)
   const [thumbLoading, setThumbLoading] = useState(false)
+  const [pricingConfigs, setPricingConfigs] = useState<Record<OriginCountry, CountryPricingConfig> | null>(null)
+  const [priceFx, setPriceFx] = useState<PriceFx>(PRICE_FX_FALLBACK)
+  const [insuranceOptIn, setInsuranceOptIn] = useState(false)
 
   const handle = <K extends keyof OrderForm>(k: K, v: OrderForm[K]) => setForm(p => ({ ...p, [k]: v }))
+
+  // Load pricing config + FX once — same engine the calculator and /api/calculate use.
+  useEffect(() => {
+    getPricingConfig().then(({ configs }) => {
+      const map = {} as Record<OriginCountry, CountryPricingConfig>
+      for (const c of configs) map[c.country] = c
+      setPricingConfigs(map)
+    })
+    ;(async () => {
+      try {
+        const [iqdRes, fxRes] = await Promise.all([
+          fetch('/api/exchange-rate'),
+          fetch('https://open.er-api.com/v6/latest/USD'),
+        ])
+        const iqdData = await iqdRes.json()
+        const fxData = await fxRes.json()
+        const r = fxData?.rates ?? {}
+        setPriceFx({
+          iqd: iqdData.rate || PRICE_FX_FALLBACK.iqd,
+          EUR: r.EUR || PRICE_FX_FALLBACK.EUR,
+          GBP: r.GBP || PRICE_FX_FALLBACK.GBP,
+          TRY: r.TRY || PRICE_FX_FALLBACK.TRY,
+          AED: r.AED || PRICE_FX_FALLBACK.AED,
+        })
+      } catch { /* keep fallback */ }
+    })()
+  }, [])
+
+  // Autofill the item price from the scrape — only when the field is still empty,
+  // so a manual entry is never overwritten. Never fabricated (Noon etc. stay blank).
+  useEffect(() => {
+    const p = scrapeResult?.price
+    if (p != null && !isNaN(p) && p > 0) {
+      const cur = scrapeResult?.currency ?? ''
+      setForm(prev => prev.itemPrice ? prev : {
+        ...prev,
+        itemPrice: String(p),
+        itemPriceCurrency: ['USD', 'IQD', 'EUR', 'GBP', 'TRY', 'AED'].includes(cur) ? cur : prev.itemPriceCurrency,
+      })
+    }
+  }, [scrapeResult])
 
   const isTrendyolUrl     = form.url.toLowerCase().includes('trendyol.com')
   const isBoutiqaatUrl    = form.url.toLowerCase().includes('boutiqaat.com')
@@ -331,31 +427,34 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
   }
 
   const isUrlSupported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
-  const uaeCategoryKey = scrapeResult?.category ? `UAE_${scrapeResult.category}` : null
-  const rates = (uaeCategoryKey ? SHIPPING_RATES[uaeCategoryKey] : null) ?? SHIPPING_RATES[scrapeResult?.site?.country ?? ''] ?? { min: 10000, max: 18000 }
-  const totalKg = scrapeResult?.billable_weight_kg ? scrapeResult.billable_weight_kg * form.qty : 0
-  const shippingEstimate = totalKg > 0 ? { min: Math.round(rates.min * totalKg), max: Math.round(rates.max * totalKg), kg: totalKg } : null
 
-  // Estimate from Trendyol estimator when scraper finds no weight
-  const turkeyRates = SHIPPING_RATES['Turkey'] ?? { min: 5000, max: 8000 }
-  const trendyolTotalKg = trendyolKg ? trendyolKg * form.qty : 0
-  const trendyolEstimate = !shippingEstimate && trendyolTotalKg > 0
-    ? { min: Math.round(turkeyRates.min * trendyolTotalKg), max: Math.round(turkeyRates.max * trendyolTotalKg), kg: trendyolTotalKg }
-    : null
-  const uaeEstimatorRates = SHIPPING_RATES['UAE_Cosmetics'] ?? { min: 10513, max: 10513 }
-  const boutiqaatTotalKg  = boutiqaatKg ? boutiqaatKg * form.qty : 0
-  const boutiqaatEstimate = !shippingEstimate && !trendyolEstimate && boutiqaatTotalKg > 0
-    ? { min: Math.round(uaeEstimatorRates.min * boutiqaatTotalKg), max: Math.round(uaeEstimatorRates.max * boutiqaatTotalKg), kg: boutiqaatTotalKg }
-    : null
-  const chinaRates = SHIPPING_RATES['China'] ?? { min: 8000, max: 14000 }
-  const aliexpressTotalKg = aliexpressKg ? aliexpressKg * form.qty : 0
-  const aliexpressEstimate = !shippingEstimate && !trendyolEstimate && !boutiqaatEstimate && aliexpressTotalKg > 0
-    ? { min: Math.round(chinaRates.min * aliexpressTotalKg), max: Math.round(chinaRates.max * aliexpressTotalKg), kg: aliexpressTotalKg }
-    : null
-  const activeEstimate = shippingEstimate || trendyolEstimate || boutiqaatEstimate || aliexpressEstimate
+  // ── Pricing engine: derive origin country + billable weight, then run it ──
+  // Weight comes from the scrape (billable_weight_kg) or a manual estimator pick.
+  let engineOrigin: OriginCountry | null = null
+  let engineBillableKg = 0
+  let engineWeightNote = 'billable weight'
+  if (scrapeResult?.billable_weight_kg && (ORIGIN_COUNTRIES as readonly string[]).includes(scrapeResult.site?.country ?? '')) {
+    engineOrigin = scrapeResult.site!.country as OriginCountry
+    engineBillableKg = scrapeResult.billable_weight_kg
+  } else if (trendyolKg) {
+    engineOrigin = 'Turkey'; engineBillableKg = trendyolKg; engineWeightNote = 'estimated weight'
+  } else if (boutiqaatKg) {
+    engineOrigin = 'UAE'; engineBillableKg = boutiqaatKg; engineWeightNote = 'estimated weight'
+  } else if (aliexpressKg) {
+    engineOrigin = 'China'; engineBillableKg = aliexpressKg; engineWeightNote = 'estimated weight'
+  }
 
-  const deliveryOptModal = DELIVERY_OPTIONS_MODAL.find(d => d.id === form.deliveryPreference)
-  const estimateDeliveryFeeIqd = deliveryOptModal?.fee ?? 0
+  const engineConfig = engineOrigin && pricingConfigs ? (pricingConfigs[engineOrigin] ?? defaultConfig(engineOrigin)) : null
+  const priceNum = parseFloat(form.itemPrice)
+  const itemPriceUsd = !isNaN(priceNum) && priceNum > 0 ? priceToUsd(priceNum, form.itemPriceCurrency, priceFx) : null
+  const pricingCategory: PricingCategory = DROPDOWN_TO_PRICING_CATEGORY[form.category] ?? 'uncategorized'
+  const breakdown = engineConfig
+    ? calculatePricing(engineConfig, {
+        billableWeightKg: engineBillableKg, qty: form.qty, category: pricingCategory,
+        itemPrice: itemPriceUsd, insuranceOptIn,
+      })
+    : null
+  const showInsurance = (engineConfig?.insurance_percent ?? 0) > 0
 
   return (
     <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
@@ -416,36 +515,66 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
             <BoutiqaatWeightEstimator onWeightSelect={kg => setAliexpressKg(kg)} />
           </div>
         )}
-        {activeEstimate && !estimateLoading && (
+        {breakdown && !estimateLoading && (
           <div style={{ padding: '14px 16px', background: 'rgba(201,168,76,0.06)', border: '1px dashed rgba(201,168,76,0.35)', borderRadius: 10, marginTop: -12, marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>≈ Cost Estimate · تقدير التكلفة</span>
               <span style={{ fontSize: 10, color: 'var(--gold-dim)', background: 'rgba(201,168,76,0.12)', padding: '2px 8px', borderRadius: 20, border: '1px solid rgba(201,168,76,0.2)', fontWeight: 600, letterSpacing: '0.5px' }}>APPROXIMATE</span>
             </div>
-            {form.itemPrice && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid rgba(201,168,76,0.12)' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Item Price · سعر المنتج</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{form.itemPrice} {form.itemPriceCurrency}</span>
-              </div>
+
+            {/* Insurance opt-in — only when the origin country has an insurance rate set */}
+            {showInsurance && (
+              <label
+                onClick={() => setInsuranceOptIn(v => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', marginBottom: 10, cursor: 'pointer',
+                  background: insuranceOptIn ? 'rgba(201,168,76,0.12)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${insuranceOptIn ? 'rgba(201,168,76,0.35)' : 'var(--border)'}`, borderRadius: 8,
+                }}
+              >
+                <span style={{
+                  width: 18, height: 18, flexShrink: 0, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: insuranceOptIn ? 'var(--gold)' : 'transparent',
+                  border: `2px solid ${insuranceOptIn ? 'var(--gold)' : 'var(--border)'}`, color: '#0f0e0c', fontSize: 12, fontWeight: 800,
+                }}>{insuranceOptIn ? '✓' : ''}</span>
+                <span style={{ fontSize: 12, color: 'var(--text)' }}>🛡️ Add insurance ({engineConfig!.insurance_percent}% of item price) · إضافة تأمين</span>
+              </label>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Shipping · الشحن</span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)' }}>
-                ~${(activeEstimate.min / IQD_PER_USD).toFixed(2)} – ${(activeEstimate.max / IQD_PER_USD).toFixed(2)} USD
-              </span>
+
+            {breakdown.itemPrice != null && <EstLine label="Item Price · سعر المنتج" value={`$${breakdown.itemPrice.toFixed(2)}`} />}
+            {breakdown.shipping != null
+              ? <EstLine label="Shipping · الشحن" value={`$${breakdown.shipping.toFixed(2)}`} gold />
+              : <EstLineNote label="Shipping · الشحن" note="Rates not set — contact us" />}
+            {breakdown.serviceFee != null
+              ? <EstLine label="Service Fee · رسوم الخدمة" value={`$${breakdown.serviceFee.toFixed(2)}`} />
+              : <EstLineNote label="Service Fee · رسوم الخدمة" note={breakdown.serviceFeeMessage ?? 'Enter item price'} />}
+            <EstLine label="Customs · الجمارك" value={`$${breakdown.customs.toFixed(2)}`} />
+            {breakdown.insuranceOptIn && (breakdown.insurance != null
+              ? <EstLine label="Insurance · التأمين" value={`$${breakdown.insurance.toFixed(2)}`} />
+              : <EstLineNote label="Insurance · التأمين" note={breakdown.insuranceMessage ?? 'Enter item price'} />)}
+
+            <div style={{ borderTop: '1px solid rgba(201,168,76,0.18)', marginTop: 8, paddingTop: 8 }}>
+              {breakdown.ratesUnavailable ? (
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--orange)' }}>Contact us for a quote · تواصل معنا</div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      {breakdown.partialTotal ? 'Partial Total' : 'Estimated Total'}
+                    </span>
+                    <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)' }}>
+                      {breakdown.partialTotal ? '~' : ''}${breakdown.total.toFixed(2)} USD
+                    </span>
+                  </div>
+                  {breakdown.partialTotal && breakdown.totalMessage && (
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', fontStyle: 'italic', marginTop: 4 }}>{breakdown.totalMessage}</div>
+                  )}
+                </>
+              )}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Iraq Delivery · التوصيل</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-                {deliveryOptModal?.fee === null ? 'Contact us' : deliveryOptModal?.fee === 0 ? 'Free' : `~$${(estimateDeliveryFeeIqd / IQD_PER_USD).toFixed(2)}`}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 6, marginBottom: 8, borderTop: '1px solid rgba(201,168,76,0.12)' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Service Fee · رسوم الخدمة</span>
-              <span style={{ fontSize: 11, color: 'var(--text-dim)', fontStyle: 'italic' }}>TBD</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-              {activeEstimate.kg} kg {trendyolEstimate ? 'estimated' : 'billable'} weight{form.qty > 1 ? ` × ${form.qty} items` : ''} · Final price confirmed by ShipIQ
+
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 8 }}>
+              {engineBillableKg} kg {engineWeightNote}{form.qty > 1 ? ` × ${form.qty}` : ''} · billed per {breakdown.weightUnit}
             </div>
           </div>
         )}
@@ -478,6 +607,8 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
               <option value="IQD">IQD — دينار</option>
               <option value="EUR">EUR — يورو</option>
               <option value="GBP">GBP — جنيه</option>
+              <option value="TRY">TRY — ليرة</option>
+              <option value="AED">AED — درهم</option>
             </select>
           </div>
         </div>
