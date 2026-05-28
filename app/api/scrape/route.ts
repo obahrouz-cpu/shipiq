@@ -42,11 +42,15 @@ async function oxylabs(payload: Record<string, unknown>): Promise<{ content: unk
 }
 
 // Rendered-HTML fetch for any site (source: universal, render: html).
-async function oxylabsHtml(url: string): Promise<string | null> {
-  const r = await oxylabs({ source: 'universal', url, render: 'html' })
+// `extra` merges into the payload — e.g. { geo_location: 'United Arab Emirates' }
+// for region-locked sites (Noon/Boutiqaat block non-UAE IPs with status 613).
+async function oxylabsHtml(url: string, extra: Record<string, unknown> = {}): Promise<string | null> {
+  const r = await oxylabs({ source: 'universal', url, render: 'html', ...extra })
   if (!r || typeof r.content !== 'string') return null
   return r.content
 }
+
+const UAE_GEO = { geo_location: 'United Arab Emirates' } as const
 
 const WEIGHT_KEYS = [
   'Item Weight', 'Weight', 'Package Weight', 'Shipping Weight',
@@ -81,6 +85,127 @@ function detectAliExpressCategory(cat: string): string {
   if (/clothing|fashion|apparel|dress|shirt|shoes|footwear|pants|jeans|women.*wear|men.*wear|tops|skirt/.test(c)) return 'Clothing'
   if (/beauty|hair|skin|makeup|cosmetic|perfume|fragrance|nail|lip|foundation|serum/.test(c)) return 'Cosmetics'
   return 'Electronics'
+}
+
+// ── Category normalization ────────────────────────────────────────────────────
+// Maps a raw breadcrumb/title to one of the buckets below. Easy to extend: just
+// add keywords (lowercase) to a bucket. Bilingual (EN/TR/AR) because Trendyol
+// returns Turkish taxonomy and Noon/Boutiqaat sometimes return Arabic.
+// First bucket (in CATEGORY_PRIORITY order) with a matching keyword wins.
+type MappedCategory = 'cosmetics' | 'supplements' | 'clothing' | 'electronics' | 'accessories' | 'uncategorized'
+
+const CATEGORY_KEYWORDS: Record<Exclude<MappedCategory, 'uncategorized'>, string[]> = {
+  supplements: ['vitamin', 'protein', 'supplement', 'nutrition', 'creatine', 'collagen', 'omega',
+    'takviye', 'gıda takviyesi', 'مكمل', 'فيتامين'],
+  cosmetics: ['makeup', 'make-up', 'skincare', 'skin care', 'perfume', 'fragrance', 'cosmetic', 'beauty',
+    'lipstick', 'mascara', 'foundation', 'serum', 'moisturizer',
+    'parfüm', 'kozmetik', 'makyaj', 'cilt', 'güzellik', 'ruj',
+    'عطر', 'مكياج', 'تجميل', 'عناية بالبشرة'],
+  clothing: ['shirt', 'dress', 'shoes', 'apparel', 'jacket', 'pants', 'clothing', 'footwear', 'trouser',
+    't-shirt', 'hoodie', 'jeans', 'skirt', 'coat',
+    'giyim', 'elbise', 'ayakkabı', 'gömlek', 'pantolon', 'ceket', 'tişört',
+    'ملابس', 'حذاء', 'فستان'],
+  electronics: ['phone', 'smartphone', 'laptop', 'tablet', 'headphone', 'earphone', 'earbud', 'camera',
+    'console', 'controller', 'speaker', 'monitor', 'electronic', 'gadget', 'charger', 'smartwatch',
+    'ssd', 'hard drive', 'gpu', 'graphics card', 'mouse', 'keyboard', 'television', ' tv',
+    'telefon', 'bilgisayar', 'kulaklık', 'elektronik', 'kamera', 'şarj',
+    'إلكترونيات', 'هاتف', 'لابتوب'],
+  accessories: ['case', 'cable', 'watch band', 'strap', 'bag', 'wallet', 'jewelry', 'jewellery', 'accessory',
+    'accessories', 'cover', 'sticker', 'keychain',
+    'kılıf', 'çanta', 'cüzdan', 'aksesuar', 'kablo',
+    'حقيبة', 'محفظة', 'اكسسوار', 'مجوهرات'],
+}
+
+// accessories last — it's the catch-all bucket per spec.
+const CATEGORY_PRIORITY: Array<Exclude<MappedCategory, 'uncategorized'>> = [
+  'supplements', 'cosmetics', 'clothing', 'electronics', 'accessories',
+]
+
+function mapCategory(rawCategory: string | null, productTitle?: string | null): MappedCategory {
+  // Prefer the breadcrumb (authoritative); fall back to the product title.
+  const text = `${rawCategory || ''} ${productTitle || ''}`.toLowerCase()
+  if (!text.trim()) return 'uncategorized'
+  for (const bucket of CATEGORY_PRIORITY) {
+    if (CATEGORY_KEYWORDS[bucket].some(kw => text.includes(kw))) return bucket
+  }
+  return 'uncategorized'
+}
+
+// ── JSON-LD helpers (price + breadcrumb live here on most non-Amazon sites) ───
+function parseJsonLdNodes(html: string): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  const tags = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || []
+  for (const tag of tags) {
+    try {
+      const parsed = JSON.parse(tag.replace(/<script[^>]*>|<\/script>/gi, ''))
+      const arr = Array.isArray(parsed) ? parsed : [parsed]
+      for (const node of arr) {
+        if (node && typeof node === 'object') {
+          out.push(node)
+          const graph = (node as Record<string, unknown>)['@graph']
+          if (Array.isArray(graph)) for (const g of graph) if (g && typeof g === 'object') out.push(g)
+        }
+      }
+    } catch { /* skip malformed */ }
+  }
+  return out
+}
+
+function jsonLdBreadcrumb(html: string): string | null {
+  for (const node of parseJsonLdNodes(html)) {
+    if (node['@type'] === 'BreadcrumbList' && Array.isArray(node.itemListElement)) {
+      const names = (node.itemListElement as Array<Record<string, unknown>>)
+        .map(e => {
+          const item = e.item as Record<string, unknown> | undefined
+          return (e.name ?? item?.name ?? '') as string
+        })
+        .filter(Boolean)
+        .filter(n => n.toLowerCase() !== 'home')
+      if (names.length) return names.join(' > ')
+    }
+  }
+  return null
+}
+
+function jsonLdOffer(html: string): { price: number | null; currency: string | null } {
+  for (const node of parseJsonLdNodes(html)) {
+    const type = node['@type']
+    const isProduct = type === 'Product' || (Array.isArray(type) && type.includes('Product'))
+    if (!isProduct && !node.offers) continue
+    const offers = Array.isArray(node.offers) ? node.offers[0] : node.offers
+    if (offers && typeof offers === 'object') {
+      const o = offers as Record<string, unknown>
+      const price = parseFloat(String(o.price ?? o.lowPrice ?? ''))
+      const currency = o.priceCurrency ? String(o.priceCurrency) : null
+      if (!isNaN(price) && price > 0) return { price, currency }
+      if (currency) return { price: null, currency }
+    }
+  }
+  return { price: null, currency: null }
+}
+
+// Amazon: price reflects the buy-box winner, which is often a 3rd-party seller,
+// and price_buybox can be -1. Prefer an Amazon (1P) offer, then fall back to the
+// resolved top-level price. Never use the "New & Used from $X" lowest figure.
+const AMAZON_SELLER_IDS = new Set(['ATVPDKIKX0DER'])
+
+function isAmazonSeller(o: Record<string, unknown> | undefined): boolean {
+  if (!o) return false
+  const name = String(o.seller_name ?? o.name ?? '').toLowerCase()
+  return name === 'amazon.com' || name.startsWith('amazon') ||
+    AMAZON_SELLER_IDS.has(String(o.seller_id ?? '')) || o.is_amazon_fulfilled === true
+}
+
+function extractAmazonPrice(content: Record<string, unknown>): { price: number | null; currency: string | null } {
+  const currency = content.currency ? String(content.currency) : null
+  const buybox = Array.isArray(content.buybox) ? content.buybox as Record<string, unknown>[] : []
+  const amazonOffer = buybox.find(o => isAmazonSeller(o) && Number(o?.price) > 0)
+  if (amazonOffer) return { price: Number(amazonOffer.price), currency }
+  for (const key of ['price', 'price_buybox', 'price_upper'] as const) {
+    const n = Number(content[key])
+    if (n > 0) return { price: n, currency }
+  }
+  return { price: null, currency }
 }
 
 function stripTags(html: string): string {
@@ -276,6 +401,11 @@ function buildWeightResponse(opts: {
   weightKg: number | null
   dims: { l: number; w: number; h: number } | null
   imageUrl?: string | null
+  // ── scrape-contract additions (see Step 2–4) ──
+  price?: number | null
+  currency?: string | null
+  rawCategory?: string | null
+  rawWeight?: string | null
 }) {
   const { siteInfo, productName, category, imageUrl } = opts
   const actualWeightKg = validateWeight(opts.weightKg)
@@ -300,7 +430,7 @@ function buildWeightResponse(opts: {
     found: true,
     site: siteInfo,
     product_name: productName,
-    category: category ?? undefined,
+    category: category ?? undefined,            // unchanged — feeds existing UAE rate buckets
     actual_weight_kg: weightKg,
     length_cm: dims?.l ?? null,
     width_cm: dims?.w ?? null,
@@ -308,6 +438,13 @@ function buildWeightResponse(opts: {
     dimensional_weight_kg: dimensionalWeightKg,
     billable_weight_kg: billableWeightKg,
     image_url: imageUrl ?? null,
+    // ── new scrape contract ──
+    price: opts.price ?? null,
+    currency: opts.currency ?? null,
+    rawCategory: opts.rawCategory ?? null,
+    mappedCategory: mapCategory(opts.rawCategory ?? null, productName),
+    weightUnit: weightKg != null ? 'kg' : null,  // all weights normalized to kg
+    raw_weight: opts.rawWeight ?? null,           // native source string, for debugging
   }, {
     // A product's weight/dimensions don't change — cache successful scrapes 30 min.
     headers: { 'Cache-Control': 'public, s-maxage=1800, max-age=1800, stale-while-revalidate=3600' },
@@ -366,14 +503,24 @@ export async function POST(req: NextRequest) {
       const images = content.images
       const imageUrl = Array.isArray(images) ? String(images[0] ?? '') || null : (content.main_image ? String(content.main_image) : null)
 
-      let category: string | null = null
+      // Raw breadcrumb from the amazon_product parser's category ladder (often
+      // populated, but empty for some 3P/variant pages — then fall back to title).
+      let rawCategory: string | null = null
+      try {
+        const catArr = content.category as Array<{ ladder?: Array<{ name?: string }> }> | undefined
+        if (Array.isArray(catArr)) {
+          const names: string[] = []
+          for (const c of catArr) for (const l of (c.ladder || [])) if (l?.name) names.push(String(l.name))
+          if (names.length) rawCategory = names.join(' > ')
+        }
+      } catch { /* ignore */ }
+
+      // Seller-aware price: prefer the Amazon (1P) offer over a 3P buy-box.
+      const { price, currency } = extractAmazonPrice(content)
+
+      let category: string | null = null   // unchanged — existing UAE rate bucket
       if (siteInfo.country === 'UAE') {
-        let catText = ''
-        try {
-          const catArr = content.category as Array<{ ladder?: Array<{ name?: string }> }> | undefined
-          if (Array.isArray(catArr)) catText = catArr.map(c => (c.ladder || []).map(l => l.name).join(' ')).join(' ')
-        } catch { /* ignore */ }
-        category = detectUaeCategory(`${catText} ${productName}`)
+        category = detectUaeCategory(`${rawCategory || ''} ${productName}`)
       }
 
       if (!rawWeight && !rawDimensions) {
@@ -383,12 +530,16 @@ export async function POST(req: NextRequest) {
           product_name: productName,
           category: category ?? undefined,
           image_url: imageUrl,
+          price,
+          currency,
+          rawCategory,
+          mappedCategory: mapCategory(rawCategory, productName),
         })
       }
 
       const weightKg = validateWeight(rawWeight ? parseWeightToKg(rawWeight) : null)
       const dims = validateDims(rawDimensions ? parseDimensionsToCm(rawDimensions) : null)
-      return buildWeightResponse({ siteInfo, productName, category, weightKg, dims, imageUrl })
+      return buildWeightResponse({ siteInfo, productName, category, weightKg, dims, imageUrl, price, currency, rawCategory, rawWeight })
     }
 
     // ── EBAY — source: ebay_product ─────────────────────────────────────────────
@@ -397,6 +548,10 @@ export async function POST(req: NextRequest) {
         let productName = 'eBay Product'
         let weightKg: number | null = null
         let imageUrl: string | null = null
+        let rawWeightStr: string | null = null
+        let price: number | null = null
+        let currency: string | null = null
+        let rawCategory: string | null = null
 
         const r = await oxylabs({ source: 'ebay_product', url, parse: true })
         if (r && r.content && typeof r.content === 'object') {
@@ -404,20 +559,36 @@ export async function POST(req: NextRequest) {
           const kv: Record<string, string> = {}
           collectKeyValues(content, kv)
           productName = String(content.title || content.product_name || kv.title || productName)
-          const rawWeight = findFuzzy(kv, /weight/i)
-          if (rawWeight) weightKg = parseWeightToKg(rawWeight)
+          rawWeightStr = findFuzzy(kv, /weight/i)
+          if (rawWeightStr) weightKg = parseWeightToKg(rawWeightStr)
           const images = content.images
           imageUrl = Array.isArray(images) ? String(images[0] ?? '') || null : null
+          // eBay parser: price is a number or { value, currency }
+          const p = content.price as unknown
+          if (typeof p === 'number') price = p
+          else if (p && typeof p === 'object') {
+            const po = p as Record<string, unknown>
+            const v = parseFloat(String(po.value ?? po.amount ?? ''))
+            if (!isNaN(v) && v > 0) price = v
+            if (po.currency) currency = String(po.currency)
+          } else if (typeof p === 'string') {
+            const v = parseFloat(p.replace(/[^0-9.]/g, '')); if (!isNaN(v) && v > 0) price = v
+          }
+          if (!currency && content.currency) currency = String(content.currency)
+          const cat = content.categories ?? content.category ?? content.breadcrumbs
+          if (Array.isArray(cat)) rawCategory = cat.map(c => (typeof c === 'string' ? c : (c as Record<string, unknown>)?.name)).filter(Boolean).join(' > ') || null
         }
 
         // Fallback to rendered HTML if the parsed source gave us nothing useful.
-        if (!weightKg) {
+        if (!weightKg || price == null || !rawCategory) {
           const html = await oxylabsHtml(url)
           if (html) {
             const scan = genericHtmlScan(html)
             if (scan.productName) productName = scan.productName
-            if (scan.weightKg) weightKg = scan.weightKg
-            if (scan.imageUrl) imageUrl = scan.imageUrl
+            if (scan.weightKg && !weightKg) weightKg = scan.weightKg
+            if (scan.imageUrl && !imageUrl) imageUrl = scan.imageUrl
+            if (price == null) { const o = jsonLdOffer(html); if (o.price) { price = o.price; currency = currency || o.currency } }
+            if (!rawCategory) rawCategory = jsonLdBreadcrumb(html)
           }
         }
 
@@ -429,10 +600,14 @@ export async function POST(req: NextRequest) {
             reason: 'Weight not listed for this eBay item. Please enter manually.',
             product_name: productName,
             image_url: imageUrl,
+            price,
+            currency,
+            rawCategory,
+            mappedCategory: mapCategory(rawCategory, productName),
           })
         }
 
-        return buildWeightResponse({ siteInfo, productName, weightKg, dims: null, imageUrl })
+        return buildWeightResponse({ siteInfo, productName, weightKg, dims: null, imageUrl, price, currency, rawCategory, rawWeight: rawWeightStr })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
         console.error('[scrape] eBay error:', msg)
@@ -453,8 +628,25 @@ export async function POST(req: NextRequest) {
         let weightKg: number | null = null
         let dims = scan.dims
 
+        // Category: prefer JSON-LD breadcrumb, then Trendyol's embedded category
+        // fields. NOTE: Trendyol's taxonomy is Turkish (e.g. "iPhone IOS Cep
+        // Telefonları") — mapCategory() carries Turkish keywords to handle it.
         const catMatch = html.match(/"categoryName"\s*:\s*"([^"]+)"/) || html.match(/"pattern"\s*:\s*"([^"]+)"/)
-        const category = catMatch ? catMatch[1] : null
+        const rawCategory = jsonLdBreadcrumb(html) || (catMatch ? catMatch[1] : null)
+        const category = rawCategory   // unchanged downstream usage
+
+        // Price: Trendyol exposes it in JSON-LD offers and embedded sellingPrice.
+        let price: number | null = null
+        let currency: string | null = null
+        const offer = jsonLdOffer(html)
+        if (offer.price) { price = offer.price; currency = offer.currency }
+        if (price == null) {
+          const pm = html.match(/"sellingPrice"\s*:\s*\{[^}]*?"(?:value|text)"\s*:\s*"?([0-9.,]+)/)
+            || html.match(/"sellingPrice"\s*:\s*"?([0-9.,]+)/)
+            || html.match(/"price"\s*:\s*"?([0-9]+(?:[.,][0-9]+)?)"?/)
+          if (pm) { const v = parseFloat(pm[1].replace(/\.(?=\d{3}\b)/g, '').replace(',', '.')); if (!isNaN(v) && v > 0) price = v }
+          if (!currency) currency = 'TRY'
+        }
 
         // 1. Spec table rows — Trendyol stores weight in grams in these rows
         const weightTableKeys = ['Ağırlık', 'Net Ağırlık', 'Paket Ağırlığı']
@@ -512,10 +704,14 @@ export async function POST(req: NextRequest) {
             reason: 'Could not extract weight/dimensions from Trendyol. Trendyol does not always include shipping specs — please enter manually.',
             product_name: productName,
             category,
+            price,
+            currency,
+            rawCategory,
+            mappedCategory: mapCategory(rawCategory, productName),
           })
         }
 
-        return buildWeightResponse({ siteInfo, productName, category, weightKg, dims, imageUrl: scan.imageUrl })
+        return buildWeightResponse({ siteInfo, productName, category, weightKg, dims, imageUrl: scan.imageUrl, price, currency, rawCategory })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
         console.error('[scrape] Trendyol error:', msg)
@@ -535,6 +731,9 @@ export async function POST(req: NextRequest) {
         let dims = scan.dims
         const imageUrl = scan.imageUrl
         let category: string | null = null
+        let rawCategory: string | null = jsonLdBreadcrumb(html)
+        let price: number | null = null
+        let currency: string | null = null
 
         // window.runParams — main product JSON embedded in the page
         const runParamsM = html.match(/window\.runParams\s*=\s*(\{[\s\S]{10,200000}?\});\s*(?:window|var|let|const|<\/script>)/m)
@@ -549,6 +748,17 @@ export async function POST(req: NextRequest) {
             const crumbs = breadcrumbModule?.breadcrumbs
             if (Array.isArray(crumbs) && crumbs.length >= 1) {
               category = String(crumbs[crumbs.length - 2]?.name || crumbs[crumbs.length - 1]?.name || '')
+              const path = crumbs.map(c => c?.name).filter(Boolean).join(' > ')
+              if (path) rawCategory = rawCategory || path
+            }
+
+            const priceModule = data.priceModule as Record<string, unknown> | undefined
+            if (priceModule) {
+              const min = priceModule.minActivAmount ?? priceModule.minAmount
+              const v = parseFloat(String((min as Record<string, unknown>)?.value ?? priceModule.formatedActivityPrice ?? priceModule.formatedPrice ?? '').replace(/[^0-9.]/g, ''))
+              if (!isNaN(v) && v > 0) price = v
+              const cur = (min as Record<string, unknown>)?.currency ?? priceModule.currencyCode
+              if (cur) currency = String(cur)
             }
 
             const specsModule = data.specsModule as { props?: Array<Record<string, unknown>> } | undefined
@@ -581,6 +791,7 @@ export async function POST(req: NextRequest) {
         }
 
         const detectedCategory = detectAliExpressCategory(category || productName)
+        if (!rawCategory && category) rawCategory = category
         weightKg = validateWeight(weightKg)
         dims = validateDims(dims)
 
@@ -591,10 +802,14 @@ export async function POST(req: NextRequest) {
             product_name: productName,
             category: detectedCategory,
             image_url: imageUrl,
+            price,
+            currency,
+            rawCategory,
+            mappedCategory: mapCategory(rawCategory, productName),
           })
         }
 
-        return buildWeightResponse({ siteInfo, productName, category: detectedCategory, weightKg, dims, imageUrl })
+        return buildWeightResponse({ siteInfo, productName, category: detectedCategory, weightKg, dims, imageUrl, price, currency, rawCategory })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
         console.error('[scrape] AliExpress error:', msg)
@@ -603,9 +818,10 @@ export async function POST(req: NextRequest) {
     }
 
     // ── NOON — source: universal (render html) ──────────────────────────────────
+    // Region-locked: needs UAE geo or Oxylabs returns status 613 / empty.
     if (siteInfo.site === 'noon.com') {
       try {
-        const html = await oxylabsHtml(url)
+        const html = await oxylabsHtml(url, UAE_GEO)
         if (!html) {
           return NextResponse.json({ found: false, reason: 'Could not fetch Noon page. Please select an estimated weight below.', category: 'Accessories' })
         }
@@ -614,11 +830,22 @@ export async function POST(req: NextRequest) {
         const productName = scan.productName ? scan.productName.replace(/\s*[|\-–]\s*noon.*$/i, '').trim() : 'Noon Product'
         let weightKg = validateWeight(scan.weightKg)
 
-        let categoryRaw = ''
+        // Category: JSON-LD breadcrumb is cleanest on Noon; fall back to embedded fields.
         const catMatch = html.match(/"categoryName"\s*:\s*"([^"]+)"/)
           || html.match(/<meta[^>]+property=["']product:category["'][^>]+content=["']([^"']+)["']/)
-        if (catMatch) categoryRaw = catMatch[1]
-        const category = detectUaeCategory(`${categoryRaw} ${productName}`)
+        const rawCategory = jsonLdBreadcrumb(html) || (catMatch ? catMatch[1] : null)
+        const category = detectUaeCategory(`${rawCategory || ''} ${productName}`)
+
+        // Price: JSON-LD offers, then embedded salePrice/sellingPrice (AED).
+        const offer = jsonLdOffer(html)
+        let price: number | null = offer.price
+        let currency: string | null = offer.currency
+        if (price == null) {
+          const pm = html.match(/"salePrice"\s*:\s*"?([0-9]+(?:\.[0-9]+)?)/)
+            || html.match(/"sellingPrice"\s*:\s*"?([0-9]+(?:\.[0-9]+)?)/)
+          if (pm) { const v = parseFloat(pm[1]); if (!isNaN(v) && v > 0) price = v }
+        }
+        if (!currency && price != null) currency = 'AED'
 
         if (!weightKg) {
           return NextResponse.json({
@@ -626,10 +853,14 @@ export async function POST(req: NextRequest) {
             reason: 'Could not extract weight from Noon. Please select an estimated weight below.',
             product_name: productName,
             category,
+            price,
+            currency,
+            rawCategory,
+            mappedCategory: mapCategory(rawCategory, productName),
           })
         }
 
-        return buildWeightResponse({ siteInfo, productName, category, weightKg, dims: scan.dims, imageUrl: scan.imageUrl })
+        return buildWeightResponse({ siteInfo, productName, category, weightKg, dims: scan.dims, imageUrl: scan.imageUrl, price, currency, rawCategory })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
         console.error('[scrape] Noon error:', msg)
@@ -638,10 +869,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ── BOUTIQAAT — source: universal (render html) ─────────────────────────────
+    // Region-locked (UAE), like Noon — pass UAE geo.
     if (siteInfo.site === 'boutiqaat.com') {
       try {
         const category = 'Cosmetics'
-        const html = await oxylabsHtml(url)
+        const html = await oxylabsHtml(url, UAE_GEO)
         if (!html) {
           return NextResponse.json({ found: false, reason: 'Could not fetch Boutiqaat page. Please select an estimated weight below.', category })
         }
@@ -649,6 +881,10 @@ export async function POST(req: NextRequest) {
         const scan = genericHtmlScan(html)
         const productName = scan.productName ? scan.productName.replace(/\s*[|\-–]\s*(boutiqaat|بوتيكات).*$/i, '').trim() : 'Boutiqaat Product'
         const weightKg = validateWeight(scan.weightKg)
+        const rawCategory = jsonLdBreadcrumb(html)
+        const offer = jsonLdOffer(html)
+        const price = offer.price
+        const currency = offer.currency || (price != null ? 'AED' : null)
 
         if (!weightKg) {
           return NextResponse.json({
@@ -656,10 +892,14 @@ export async function POST(req: NextRequest) {
             reason: 'Could not extract weight from Boutiqaat. Please select an estimated weight below.',
             product_name: productName,
             category,
+            price,
+            currency,
+            rawCategory,
+            mappedCategory: 'cosmetics',
           })
         }
 
-        return buildWeightResponse({ siteInfo, productName, category, weightKg, dims: scan.dims, imageUrl: scan.imageUrl })
+        return buildWeightResponse({ siteInfo, productName, category, weightKg, dims: scan.dims, imageUrl: scan.imageUrl, price, currency, rawCategory: rawCategory || 'cosmetics' })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
         console.error('[scrape] Boutiqaat error:', msg)
@@ -683,6 +923,11 @@ export async function POST(req: NextRequest) {
 
         const validWeightKg = validateWeight(scan.weightKg)
         const validDims = validateDims(scan.dims)
+        // Both expose a clean JSON-LD breadcrumb + offer price in raw HTML.
+        const rawCategory = jsonLdBreadcrumb(html)
+        const offer = jsonLdOffer(html)
+        const price = offer.price
+        const currency = offer.currency || (price != null ? 'USD' : null)
 
         if (!validWeightKg && !validDims) {
           return NextResponse.json({
@@ -690,10 +935,14 @@ export async function POST(req: NextRequest) {
             reason: `Could not extract weight/dimensions from ${label}. Specs vary by product — please enter manually.`,
             product_name: productName,
             category,
+            price,
+            currency,
+            rawCategory,
+            mappedCategory: mapCategory(rawCategory, productName),
           })
         }
 
-        return buildWeightResponse({ siteInfo, productName, category, weightKg: validWeightKg, dims: validDims, imageUrl: scan.imageUrl })
+        return buildWeightResponse({ siteInfo, productName, category, weightKg: validWeightKg, dims: validDims, imageUrl: scan.imageUrl, price, currency, rawCategory })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Scrape error'
         console.error(`[scrape] ${label} error:`, msg)
@@ -706,6 +955,10 @@ export async function POST(req: NextRequest) {
       const html = await oxylabsHtml(url)
       if (html) {
         const scan = genericHtmlScan(html)
+        const rawCategory = jsonLdBreadcrumb(html)
+        const offer = jsonLdOffer(html)
+        const price = offer.price
+        const currency = offer.currency
         if (scan.weightKg || scan.dims) {
           return buildWeightResponse({
             siteInfo,
@@ -713,6 +966,9 @@ export async function POST(req: NextRequest) {
             weightKg: scan.weightKg,
             dims: scan.dims,
             imageUrl: scan.imageUrl,
+            price,
+            currency,
+            rawCategory,
           })
         }
         return NextResponse.json({
@@ -720,6 +976,10 @@ export async function POST(req: NextRequest) {
           reason: 'Weight not listed for this product. Please enter details manually.',
           product_name: scan.productName || undefined,
           image_url: scan.imageUrl,
+          price,
+          currency,
+          rawCategory,
+          mappedCategory: mapCategory(rawCategory, scan.productName),
         })
       }
     } catch (e: unknown) {

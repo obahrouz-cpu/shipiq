@@ -191,6 +191,9 @@ export interface ScrapeResultSite {
   flag: string
 }
 
+export type MappedCategory =
+  | 'cosmetics' | 'supplements' | 'clothing' | 'electronics' | 'accessories' | 'uncategorized'
+
 export interface ScrapeResult {
   found: boolean
   site?: ScrapeResultSite
@@ -204,6 +207,12 @@ export interface ScrapeResult {
   billable_weight_kg?: number | null
   raw_weight?: string | null
   raw_dimensions?: string | null
+  // ── scrape contract (price + normalized category + weight unit) ──
+  price?: number | null
+  currency?: string | null
+  rawCategory?: string | null
+  mappedCategory?: MappedCategory | null
+  weightUnit?: 'kg' | null
   reason?: string
   error?: string
 }
