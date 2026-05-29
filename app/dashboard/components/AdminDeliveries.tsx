@@ -1,35 +1,22 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import type { DeliveryRequest } from '@/lib/types'
-import { getAdminDeliveryRequests, updateDeliveryRequest } from '@/lib/api'
+import { getAdminDeliveryRequests, markBundleDelivered } from '@/lib/api'
 import { displayPhone } from '@/lib/phone'
 import styles from '../dashboard.module.css'
 
+// Bundle statuses. Legacy rows may still carry pending/scheduled/completed.
 const STATUS_CFG: Record<string, { label: string; color: string; icon: string }> = {
   pending:          { label: 'Pending',          color: 'var(--orange)', icon: '⏳' },
   scheduled:        { label: 'Scheduled',        color: 'var(--blue)',   icon: '📅' },
   out_for_delivery: { label: 'Out for Delivery', color: 'var(--gold)',   icon: '🚗' },
+  delivered:        { label: 'Delivered',        color: 'var(--green)',  icon: '✅' },
   completed:        { label: 'Delivered',        color: 'var(--green)',  icon: '✅' },
   cancelled:        { label: 'Cancelled',        color: '#ef4444',       icon: '✕'  },
 }
 
-const NEXT_STATUS: Record<string, string> = {
-  pending:          'scheduled',
-  scheduled:        'out_for_delivery',
-  out_for_delivery: 'completed',
-}
-
-const NEXT_LABEL: Record<string, string> = {
-  pending:          '📅 Mark Scheduled',
-  scheduled:        '🚗 Out for Delivery',
-  out_for_delivery: '✅ Mark Delivered',
-}
-
-const DELIVERY_TYPE_LABEL: Record<string, string> = {
-  pickup:        '🏢 Pickup',
-  home_erbil:    '🚗 Erbil',
-  home_baghdad:  '🚗 Baghdad',
-}
+// A bundle is "active" (still needs delivering) until it's delivered/cancelled.
+const isActive = (status: string) => !['delivered', 'completed', 'cancelled'].includes(status)
 
 interface Props {
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -38,7 +25,7 @@ interface Props {
 export default function AdminDeliveries({ onToast }: Props) {
   const [requests, setRequests] = useState<DeliveryRequest[]>([])
   const [loading, setLoading] = useState(true)
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('active')
   const [updating, setUpdating] = useState<string | null>(null)
 
   const load = useCallback(() => {
@@ -50,42 +37,32 @@ export default function AdminDeliveries({ onToast }: Props) {
 
   useEffect(() => { load() }, [load])
 
-  const advance = async (req: DeliveryRequest) => {
-    const next = NEXT_STATUS[req.status]
-    if (!next) return
+  const markDelivered = async (req: DeliveryRequest) => {
     setUpdating(req.id)
-    const updates: Record<string, unknown> = { status: next }
-    if (next === 'scheduled')        updates.scheduled_at = new Date().toISOString()
-    if (next === 'completed')        updates.completed_at = new Date().toISOString()
-    await updateDeliveryRequest(req.id, updates)
-    const event = next === 'out_for_delivery' ? 'out_for_delivery' : next === 'completed' ? 'delivered' : null
-    if (event) {
-      (req.order_ids ?? []).forEach(orderId => {
-        fetch('/api/whatsapp/notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, event }),
-        }).catch(() => {})
-      })
-    }
-    setRequests(prev => prev.map(r => r.id === req.id ? { ...r, ...updates } : r))
-    onToast(
-      next === 'scheduled' ? 'Delivery scheduled!' :
-      next === 'out_for_delivery' ? 'Marked out for delivery!' :
-      'Delivery completed!'
-    )
+    const { error } = await markBundleDelivered(req.id, req.order_ids ?? [])
+    if (error) { onToast(error, 'error'); setUpdating(null); return }
+    // Notify the customer for each order in the bundle.
+    ;(req.order_ids ?? []).forEach(orderId => {
+      fetch('/api/whatsapp/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, event: 'delivered' }),
+      }).catch(() => {})
+    })
+    setRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'delivered', completed_at: new Date().toISOString() } : r))
+    onToast('Bundle delivered — all orders marked delivered!')
     setUpdating(null)
   }
 
-  const filtered = statusFilter === 'all'
-    ? requests
-    : requests.filter(r => r.status === statusFilter)
+  const filtered =
+    statusFilter === 'all' ? requests
+    : statusFilter === 'active' ? requests.filter(r => isActive(r.status))
+    : requests.filter(r => r.status === statusFilter || (statusFilter === 'delivered' && r.status === 'completed'))
 
   const statCounts = {
-    pending:          requests.filter(r => r.status === 'pending').length,
-    scheduled:        requests.filter(r => r.status === 'scheduled').length,
-    out_for_delivery: requests.filter(r => r.status === 'out_for_delivery').length,
-    completed:        requests.filter(r => r.status === 'completed').length,
+    active:    requests.filter(r => isActive(r.status)).length,
+    delivered: requests.filter(r => ['delivered', 'completed'].includes(r.status)).length,
+    orders:    requests.reduce((n, r) => n + (r.order_ids?.length ?? 0), 0),
   }
 
   return (
@@ -93,7 +70,7 @@ export default function AdminDeliveries({ onToast }: Props) {
       <div className={styles.pageHeader}>
         <div>
           <div className={styles.pageHeading}>🚚 Last Mile Deliveries</div>
-          <div className={styles.pageSub}>Manage delivery requests from Iraq warehouse to customer door</div>
+          <div className={styles.pageSub}>Delivery bundles from the in-city warehouse to the customer&apos;s door</div>
         </div>
         <button className={styles.btnGhost} style={{ fontSize: 12, padding: '6px 14px' }} onClick={load}>↻ Refresh</button>
       </div>
@@ -101,10 +78,9 @@ export default function AdminDeliveries({ onToast }: Props) {
       {/* Stat cards */}
       <div className={styles.statsGrid} style={{ marginBottom: 20 }}>
         {([
-          { label: 'Pending',          value: statCounts.pending,          color: 'var(--orange)', bg: 'rgba(224,123,58,0.1)',  icon: '⏳' },
-          { label: 'Scheduled',        value: statCounts.scheduled,        color: 'var(--blue)',   bg: 'rgba(91,155,213,0.1)',  icon: '📅' },
-          { label: 'Out for Delivery', value: statCounts.out_for_delivery, color: 'var(--gold)',   bg: 'rgba(201,168,76,0.1)', icon: '🚗' },
-          { label: 'Delivered',        value: statCounts.completed,        color: 'var(--green)',  bg: 'rgba(34,197,94,0.1)',   icon: '✅' },
+          { label: 'Out for Delivery', value: statCounts.active,    color: 'var(--gold)',  bg: 'rgba(201,168,76,0.1)', icon: '🚗' },
+          { label: 'Delivered',        value: statCounts.delivered, color: 'var(--green)', bg: 'rgba(34,197,94,0.1)',  icon: '✅' },
+          { label: 'Orders Bundled',   value: statCounts.orders,    color: 'var(--blue)',  bg: 'rgba(91,155,213,0.1)', icon: '📦' },
         ] as const).map((s, i) => (
           <div key={i} className={styles.statCard} style={{ animationDelay: `${i * 60}ms` }}>
             <div className={styles.statIcon} style={{ background: s.bg, color: s.color }}>{s.icon}</div>
@@ -116,19 +92,23 @@ export default function AdminDeliveries({ onToast }: Props) {
 
       {/* Status filter tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {(['all', 'pending', 'scheduled', 'out_for_delivery', 'completed', 'cancelled'] as const).map(s => (
+        {([
+          { id: 'active',    label: 'Active' },
+          { id: 'delivered', label: 'Delivered' },
+          { id: 'all',       label: 'All' },
+        ] as const).map(s => (
           <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
+            key={s.id}
+            onClick={() => setStatusFilter(s.id)}
             style={{
               padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
               cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-              background: statusFilter === s ? 'rgba(201,168,76,0.15)' : 'var(--surface2)',
-              color: statusFilter === s ? 'var(--gold)' : 'var(--text-dim)',
-              border: statusFilter === s ? '1px solid rgba(201,168,76,0.35)' : '1px solid var(--border)',
+              background: statusFilter === s.id ? 'rgba(201,168,76,0.15)' : 'var(--surface2)',
+              color: statusFilter === s.id ? 'var(--gold)' : 'var(--text-dim)',
+              border: statusFilter === s.id ? '1px solid rgba(201,168,76,0.35)' : '1px solid var(--border)',
             }}
           >
-            {s === 'all' ? 'All' : STATUS_CFG[s]?.label ?? s}
+            {s.label}
           </button>
         ))}
       </div>
@@ -138,14 +118,13 @@ export default function AdminDeliveries({ onToast }: Props) {
       ) : filtered.length === 0 ? (
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>🚚</div>
-          <div className={styles.emptyTitle}>No delivery requests{statusFilter !== 'all' ? ` with status "${STATUS_CFG[statusFilter]?.label ?? statusFilter}"` : ''}</div>
+          <div className={styles.emptyTitle}>No delivery bundles{statusFilter !== 'all' ? ` (${statusFilter})` : ''}</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {filtered.map(req => {
             const cfg = STATUS_CFG[req.status] ?? { label: req.status, color: 'var(--text-muted)', icon: '?' }
-            const nextStatus = NEXT_STATUS[req.status]
-            const isHome = req.delivery_preference !== 'pickup'
+            const canDeliver = isActive(req.status)
             return (
               <div key={req.id} className={styles.card} style={{ padding: '16px 20px' }}>
                 {/* Header row */}
@@ -171,14 +150,14 @@ export default function AdminDeliveries({ onToast }: Props) {
                     }}>
                       {cfg.icon} {cfg.label}
                     </span>
-                    {nextStatus && (
+                    {canDeliver && (
                       <button
                         className={styles.btnPrimary}
                         style={{ fontSize: 12, padding: '5px 14px' }}
                         disabled={updating === req.id}
-                        onClick={() => advance(req)}
+                        onClick={() => markDelivered(req)}
                       >
-                        {updating === req.id ? <span className={styles.spinner} style={{ width: 14, height: 14 }} /> : NEXT_LABEL[req.status]}
+                        {updating === req.id ? <span className={styles.spinner} style={{ width: 14, height: 14 }} /> : '✅ Mark Delivered'}
                       </button>
                     )}
                   </div>
@@ -187,23 +166,17 @@ export default function AdminDeliveries({ onToast }: Props) {
                 {/* Details grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 12 }}>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Orders</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Orders ({req.order_ids?.length ?? 0})</div>
                     <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>
-                      {req.order_ids.map((id, i) => (
+                      {(req.order_ids ?? []).map((id, i) => (
                         <div key={i} style={{ fontFamily: 'monospace', fontSize: 12 }}>{id}</div>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Type</div>
-                    <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>
-                      {DELIVERY_TYPE_LABEL[req.delivery_preference] ?? req.delivery_preference}
-                    </div>
-                  </div>
-                  <div>
                     <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Fee</div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: req.delivery_fee > 0 ? 'var(--gold)' : 'var(--green)' }}>
-                      {req.delivery_fee > 0 ? `${req.delivery_fee.toLocaleString()} IQD` : 'Free'}
+                      {req.delivery_fee > 0 ? `$${req.delivery_fee.toFixed(2)}` : 'Free'}
                     </div>
                   </div>
                   <div>
@@ -213,7 +186,7 @@ export default function AdminDeliveries({ onToast }: Props) {
                 </div>
 
                 {/* Address */}
-                {isHome && req.delivery_address && (
+                {req.delivery_address && (
                   <div style={{ padding: '10px 14px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8 }}>
                     <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4 }}>📍 Delivery Address</div>
                     <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>{req.delivery_address}</div>
@@ -237,19 +210,12 @@ export default function AdminDeliveries({ onToast }: Props) {
                   </div>
                 )}
 
-                {/* Timestamps */}
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                  {req.scheduled_at && (
-                    <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                      📅 Scheduled: {new Date(req.scheduled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </div>
-                  )}
-                  {req.completed_at && (
-                    <div style={{ fontSize: 11, color: 'var(--green)' }}>
-                      ✅ Delivered: {new Date(req.completed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </div>
-                  )}
-                </div>
+                {/* Delivered timestamp */}
+                {req.completed_at && (
+                  <div style={{ fontSize: 11, color: 'var(--green)' }}>
+                    ✅ Delivered: {new Date(req.completed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </div>
+                )}
               </div>
             )
           })}

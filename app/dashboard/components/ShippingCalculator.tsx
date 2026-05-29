@@ -7,13 +7,6 @@ import {
   type CountryPricingConfig, type OriginCountry, type PricingCategory, type PricingBreakdown,
 } from '@/lib/pricing'
 
-const DELIVERY_OPTIONS = [
-  { id: 'pickup',       label: 'Pickup at office',          sub: 'Free · مجاناً',             feeIqd: 0    },
-  { id: 'home_erbil',   label: 'Home delivery — Erbil',     sub: '3,000 IQD',                  feeIqd: 3000 },
-  { id: 'home_baghdad', label: 'Home delivery — Baghdad',   sub: '5,000 IQD',                  feeIqd: 5000 },
-  { id: 'other',        label: 'Other city',                 sub: 'Contact us · تواصل معنا',    feeIqd: null },
-] as const
-
 const CATEGORY_OPTIONS: { id: PricingCategory; label: string }[] = [
   { id: 'clothing',     label: '👗 Clothing & Fashion' },
   { id: 'cosmetics',    label: '💄 Cosmetics & Beauty' },
@@ -33,8 +26,6 @@ interface FxRates { iqd: number; EUR: number; GBP: number; TRY: number; AED: num
 interface CalcResult {
   breakdown: PricingBreakdown
   billableKg: number
-  deliveryFeeUsd: number | null
-  deliveryContactOnly: boolean
   iqdPerUsd: number
 }
 
@@ -65,7 +56,6 @@ export default function ShippingCalculator() {
   const [itemPrice, setItemPrice]   = useState('')
   const [itemCurrency, setItemCurrency] = useState<Currency>('USD')
   const [insurance, setInsurance]   = useState(false)
-  const [delivery, setDelivery]     = useState('pickup')
   const [result, setResult]         = useState<CalcResult | null>(null)
   const [fx, setFx]                 = useState<FxRates>(FALLBACK_FX)
 
@@ -118,7 +108,7 @@ export default function ShippingCalculator() {
   function reset() {
     setUnit('metric'); setCountry('UAE'); setCategory('uncategorized'); setQty('1')
     setWeight(''); setLength(''); setWidth(''); setHeight('')
-    setItemPrice(''); setItemCurrency('USD'); setInsurance(false); setDelivery('pickup')
+    setItemPrice(''); setItemCurrency('USD'); setInsurance(false)
     setResult(null)
   }
 
@@ -150,15 +140,9 @@ export default function ShippingCalculator() {
       insuranceOptIn: insurance,
     })
 
-    const deliveryOpt = DELIVERY_OPTIONS.find(d => d.id === delivery)
-    const deliveryFeeIqd = deliveryOpt?.feeIqd ?? null
-    const deliveryFeeUsd = deliveryFeeIqd !== null ? deliveryFeeIqd / fx.iqd : null
-
     setResult({
       breakdown,
       billableKg: Math.round(billableKgPerItem * quantity * 100) / 100,
-      deliveryFeeUsd,
-      deliveryContactOnly: deliveryFeeIqd === null,
       iqdPerUsd: fx.iqd,
     })
   }
@@ -169,10 +153,10 @@ export default function ShippingCalculator() {
   // Display helpers — engine amounts are in the config currency (USD by default).
   const money = (n: number) => `$${n.toFixed(2)}`
 
-  // Grand total shown to the customer = engine total + Iraq delivery (a separate add-on).
+  // Grand total = engine total. (Home delivery is a separate flat last-mile fee,
+  // charged later when the customer chooses to deliver arrived items.)
   const b = result?.breakdown
-  const deliveryAdd = result && !result.deliveryContactOnly ? (result.deliveryFeeUsd ?? 0) : 0
-  const grandTotalUsd = b ? b.total + deliveryAdd : 0
+  const grandTotalUsd = b ? b.total : 0
 
   return (
     <div className={styles.root}>
@@ -353,38 +337,6 @@ export default function ShippingCalculator() {
         </div>
       </div>
 
-      {/* Delivery in Iraq */}
-      <div style={{ marginBottom: 28 }}>
-        <div className={styles.dimLabel}>
-          Delivery in Iraq
-          <span className={styles.labelAr}>التوصيل في العراق</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-          {DELIVERY_OPTIONS.map((opt, i) => (
-            <label
-              key={opt.id}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: 'pointer',
-                borderBottom: i < DELIVERY_OPTIONS.length - 1 ? '1px solid var(--border)' : 'none',
-                background: delivery === opt.id ? 'rgba(201,168,76,0.07)' : 'transparent',
-                transition: 'background 0.15s',
-              }}
-            >
-              <input
-                type="radio" name="calcDelivery" value={opt.id}
-                checked={delivery === opt.id}
-                onChange={() => { setDelivery(opt.id); setResult(null) }}
-                style={{ accentColor: 'var(--gold)', width: 16, height: 16, flexShrink: 0 }}
-              />
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{opt.label}</div>
-                <div style={{ fontSize: 11, color: opt.feeIqd === 0 ? 'var(--green)' : 'var(--text-dim)', marginTop: 1 }}>{opt.sub}</div>
-              </div>
-            </label>
-          ))}
-        </div>
-      </div>
-
       {/* Buttons */}
       <div className={styles.actions}>
         <button className={styles.calcBtn} onClick={calculate} disabled={!weight}>
@@ -428,17 +380,9 @@ export default function ShippingCalculator() {
             {/* Insurance (only when opted in) */}
             {b.insuranceOptIn && (
               b.insurance != null
-                ? <Row label="Insurance · التأمين" value={money(b.insurance)} />
+                ? <Row label="Insurance · التأمين" value={money(b.insurance)} last />
                 : <RowNote label="Insurance · التأمين" note={b.insuranceMessage ?? 'Enter item price'} />
             )}
-
-            {/* Iraq delivery (separate add-on, not part of the engine) */}
-            <Row
-              label="Iraq Delivery · التوصيل"
-              value={result.deliveryContactOnly ? 'Contact us' : (result.deliveryFeeUsd === 0 ? 'Free' : money(result.deliveryFeeUsd ?? 0))}
-              valueColor={result.deliveryFeeUsd === 0 ? 'var(--green)' : undefined}
-              last
-            />
           </div>
 
           {/* Total */}
@@ -474,7 +418,7 @@ export default function ShippingCalculator() {
             </div>
           )}
 
-          {(result.deliveryContactOnly || b.ratesUnavailable) && (
+          {b.ratesUnavailable && (
             <a href={WA_URL} target="_blank" rel="noopener noreferrer" className={styles.waBtn} style={{ display: 'inline-flex', marginBottom: 14 }}>
               💬 WhatsApp Us · تواصل واتساب
             </a>

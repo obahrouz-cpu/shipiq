@@ -12,7 +12,7 @@ import {
   getOrderUnreadCounts, getAppSettings, getPricingConfig,
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase'
-import { CATEGORIES, STATUS_CONFIG, SUPPORTED_SITES, TIER_CONFIG } from '@/lib/constants'
+import { STATUS_CONFIG, SUPPORTED_SITES, TIER_CONFIG } from '@/lib/constants'
 import {
   calculatePricing, defaultConfig, ORIGIN_COUNTRIES,
   type CountryPricingConfig, type OriginCountry, type PricingCategory,
@@ -70,16 +70,14 @@ function priceToUsd(price: number, currency: string, fx: PriceFx): number {
   }
 }
 
-// Order-form category dropdown → pricing-engine category bucket.
-const DROPDOWN_TO_PRICING_CATEGORY: Record<string, PricingCategory> = {
-  Electronics: 'electronics',
-  Clothing: 'clothing',
-  Cosmetics: 'cosmetics',
-  Books: 'uncategorized',
-  'Home & Kitchen': 'uncategorized',
-  Toys: 'uncategorized',
-  Sports: 'uncategorized',
-  Other: 'uncategorized',
+// Currency a manually-entered item price is assumed to be in, by origin country.
+// (The engine knows the origin's currency — used when the scrape can't fetch a price.)
+function originCurrencyOf(origin: OriginCountry | null): string {
+  switch (origin) {
+    case 'UAE':    return 'AED'
+    case 'Turkey': return 'TRY'
+    default:       return 'USD'  // USA, China (AliExpress quotes USD), and fallback
+  }
 }
 
 // Compact breakdown-row renderers for the New Order estimate.
@@ -275,13 +273,6 @@ const NEXT_LABEL: Record<string, string> = {
   out_for_delivery: 'Mark as Delivered 📬',
 }
 
-const DELIVERY_OPTIONS_MODAL = [
-  { id: 'pickup',       label: 'Pickup at office',        fee: 0    },
-  { id: 'home_erbil',   label: 'Home delivery — Erbil',   fee: 3000 },
-  { id: 'home_baghdad', label: 'Home delivery — Baghdad', fee: 5000 },
-  { id: 'other',        label: 'Other city — contact us', fee: null },
-] as const
-
 // ── SubmitOrderModal ──────────────────────────────────────────────────────────
 
 function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: {
@@ -294,7 +285,6 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
   const [form, setForm] = useState<OrderForm>({
     url: prefill?.url || '', description: prefill?.description || '', category: 'Electronics', qty: 1,
     itemPrice: '', itemPriceCurrency: 'USD', note: prefill?.note || '', urgency: false,
-    deliveryPreference: 'pickup', deliveryCity: '',
   })
   const [photo, setPhoto] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
@@ -406,26 +396,6 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
     return () => clearTimeout(timer)
   }, [form.url])
 
-  const submit = async () => {
-    if (!form.url || !form.description) { setError('URL and description are required'); return }
-    if (!form.url.startsWith('http')) { setError('URL must start with http:// or https://'); return }
-    setLoading(true); setError('')
-    const { error: err, orderId } = await createOrder(userId, form, photo, thumbUrl)
-    setLoading(false)
-    if (err) { setError(err); return }
-    if (orderId) notifyWhatsapp(orderId, 'order_received')
-    onDone(); onClose()
-  }
-
-  const saveToWishlist = async () => {
-    if (!form.url) { setError('Enter a URL first'); return }
-    setWishSaving(true)
-    await onWishlistSave?.({ url: form.url, description: form.description, notes: form.note, photo_url: thumbUrl ?? undefined })
-    setWishSaving(false)
-    setWishSaved(true)
-    setTimeout(() => setWishSaved(false), 3000)
-  }
-
   const isUrlSupported = SUPPORTED_SITES.some(s => form.url.toLowerCase().includes(s))
 
   // ── Pricing engine: derive origin country + billable weight, then run it ──
@@ -445,9 +415,18 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
   }
 
   const engineConfig = engineOrigin && pricingConfigs ? (pricingConfigs[engineOrigin] ?? defaultConfig(engineOrigin)) : null
+  // Item price comes from the scrape when available. When the scrape can't fetch one
+  // (Noon, manual weight estimators…), the user types it below — assumed to be in the
+  // origin country's currency, which the engine converts to USD.
+  const priceFromScrape = scrapeResult?.price != null && scrapeResult.price > 0
+  const effectiveItemCurrency = priceFromScrape ? form.itemPriceCurrency : originCurrencyOf(engineOrigin)
   const priceNum = parseFloat(form.itemPrice)
-  const itemPriceUsd = !isNaN(priceNum) && priceNum > 0 ? priceToUsd(priceNum, form.itemPriceCurrency, priceFx) : null
-  const pricingCategory: PricingCategory = DROPDOWN_TO_PRICING_CATEGORY[form.category] ?? 'uncategorized'
+  const itemPriceUsd = !isNaN(priceNum) && priceNum > 0 ? priceToUsd(priceNum, effectiveItemCurrency, priceFx) : null
+  // Category is auto-detected from the scrape and passed to the engine silently.
+  const pricingCategory: PricingCategory =
+    scrapeResult?.mappedCategory && scrapeResult.mappedCategory !== 'uncategorized'
+      ? scrapeResult.mappedCategory
+      : 'uncategorized'
   const breakdown = engineConfig
     ? calculatePricing(engineConfig, {
         billableWeightKg: engineBillableKg, qty: form.qty, category: pricingCategory,
@@ -455,6 +434,36 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
       })
     : null
   const showInsurance = (engineConfig?.insurance_percent ?? 0) > 0
+  // Re-surface a price input only when there's an estimate but the scrape gave no price.
+  const showManualPrice = !!breakdown && !priceFromScrape
+
+  const submit = async () => {
+    if (!form.url) { setError('Product URL is required'); return }
+    if (!form.url.startsWith('http')) { setError('URL must start with http:// or https://'); return }
+    setLoading(true); setError('')
+    // Description + category are auto-derived from the scrape (no longer user-entered).
+    // Notes carries any size/color/variant detail; description falls back to it.
+    const submitForm: OrderForm = {
+      ...form,
+      description: scrapeResult?.product_name?.trim() || form.description?.trim() || form.note?.trim() || 'Product order',
+      category: scrapeResult?.category?.trim() || 'Other',
+      itemPriceCurrency: effectiveItemCurrency,
+    }
+    const { error: err, orderId } = await createOrder(userId, submitForm, photo, thumbUrl)
+    setLoading(false)
+    if (err) { setError(err); return }
+    if (orderId) notifyWhatsapp(orderId, 'order_received')
+    onDone(); onClose()
+  }
+
+  const saveToWishlist = async () => {
+    if (!form.url) { setError('Enter a URL first'); return }
+    setWishSaving(true)
+    await onWishlistSave?.({ url: form.url, description: scrapeResult?.product_name?.trim() || form.description?.trim() || undefined, notes: form.note, photo_url: thumbUrl ?? undefined })
+    setWishSaving(false)
+    setWishSaved(true)
+    setTimeout(() => setWishSaved(false), 3000)
+  }
 
   return (
     <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
@@ -578,43 +587,21 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
             </div>
           </div>
         )}
+        {/* Price couldn't be auto-fetched — ask for it so the service fee/insurance can be calculated. */}
+        {showManualPrice && (
+          <div className={styles.formGroup}>
+            <label className={styles.label}>Item Price ({effectiveItemCurrency}) · سعر المنتج</label>
+            <input className={styles.input} type="number" min="0" placeholder="0.00" value={form.itemPrice} onChange={e => handle('itemPrice', e.target.value)} />
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 5 }}>We couldn&apos;t fetch the price automatically — enter it to calculate the service fee.</div>
+          </div>
+        )}
         <div className={styles.formGroup}>
-          <label className={styles.label}>Description · الوصف *</label>
-          <input className={styles.input} placeholder="e.g. Nike Air Max 270 - Size 42 - Black" value={form.description} onChange={e => handle('description', e.target.value)} />
-          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 5 }}>Include size, color, model number, and any variant details</div>
-        </div>
-        <div className={styles.grid2}>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Category · الفئة</label>
-            <select className={styles.input} value={form.category} onChange={e => handle('category', e.target.value)}>
-              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Quantity · الكمية</label>
-            <input className={styles.input} type="number" min="1" value={form.qty} onChange={e => handle('qty', parseInt(e.target.value) || 1)} />
-          </div>
-        </div>
-        <div className={styles.grid2}>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Item Price · سعر المنتج</label>
-            <input className={styles.input} type="number" placeholder="0.00" value={form.itemPrice} onChange={e => handle('itemPrice', e.target.value)} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Currency · العملة</label>
-            <select className={styles.input} value={form.itemPriceCurrency} onChange={e => handle('itemPriceCurrency', e.target.value)}>
-              <option value="USD">USD — دولار</option>
-              <option value="IQD">IQD — دينار</option>
-              <option value="EUR">EUR — يورو</option>
-              <option value="GBP">GBP — جنيه</option>
-              <option value="TRY">TRY — ليرة</option>
-              <option value="AED">AED — درهم</option>
-            </select>
-          </div>
+          <label className={styles.label}>Quantity · الكمية</label>
+          <input className={styles.input} type="number" min="1" value={form.qty} onChange={e => handle('qty', parseInt(e.target.value) || 1)} />
         </div>
         <div className={styles.formGroup}>
           <label className={styles.label}>Notes · ملاحظات</label>
-          <textarea className={styles.textarea} placeholder="Color, size, special instructions..." value={form.note} onChange={e => handle('note', e.target.value)} />
+          <textarea className={styles.textarea} placeholder="Color, size, model number, special instructions..." value={form.note} onChange={e => handle('note', e.target.value)} />
         </div>
         <div className={styles.formGroup}>
           <label className={styles.label}>Photo (optional) · صورة اختيارية</label>
@@ -624,41 +611,6 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
             <div className={styles.uploadSub}>PNG, JPG up to 5MB</div>
           </div>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setPhoto(e.target.files?.[0] || null)} />
-        </div>
-        <div className={styles.formGroup}>
-          <label className={styles.label}>Delivery in Iraq · التوصيل في العراق</label>
-          <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-            {DELIVERY_OPTIONS_MODAL.map((opt, i) => (
-              <label
-                key={opt.id}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', cursor: 'pointer',
-                  borderBottom: i < DELIVERY_OPTIONS_MODAL.length - 1 ? '1px solid var(--border)' : 'none',
-                  background: form.deliveryPreference === opt.id ? 'rgba(201,168,76,0.06)' : 'transparent',
-                }}
-              >
-                <input
-                  type="radio" name="deliveryPref" value={opt.id}
-                  checked={form.deliveryPreference === opt.id}
-                  onChange={() => handle('deliveryPreference', opt.id)}
-                  style={{ accentColor: 'var(--gold)', width: 15, height: 15, flexShrink: 0 }}
-                />
-                <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>{opt.label}</span>
-                <span style={{ fontSize: 11, color: opt.fee === 0 ? 'var(--green)' : 'var(--text-dim)', marginLeft: 'auto' }}>
-                  {opt.fee === null ? 'Contact us' : opt.fee === 0 ? 'Free' : `~$${(opt.fee / IQD_PER_USD).toFixed(2)}`}
-                </span>
-              </label>
-            ))}
-          </div>
-          {form.deliveryPreference === 'other' && (
-            <input
-              className={styles.input}
-              style={{ marginTop: 8 }}
-              placeholder="Enter your city · اكتب مدينتك"
-              value={form.deliveryCity}
-              onChange={e => handle('deliveryCity', e.target.value)}
-            />
-          )}
         </div>
         <div className={styles.urgencyRow} onClick={() => handle('urgency', !form.urgency)}>
           <div className={`${styles.checkbox} ${form.urgency ? styles.checked : ''}`}>{form.urgency && <span>✓</span>}</div>
@@ -684,7 +636,7 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
               {wishSaved ? '✓ Saved!' : wishSaving ? '...' : '❤️ Wishlist'}
             </button>
           )}
-          <button className={styles.btnPrimary} onClick={submit} disabled={loading || !form.url || !form.description}>
+          <button className={styles.btnPrimary} onClick={submit} disabled={loading || !form.url}>
             {loading ? <Spinner /> : 'Submit Order · إرسال'}
           </button>
         </div>
@@ -1825,7 +1777,8 @@ export default function Dashboard() {
 
   if (isAgent && profile) return <AgentDashboard profile={profile} onSignOut={logout} />
 
-  const pendingDeliveryCount = deliveryRequests.filter(d => d.status === 'pending').length
+  // Bundles awaiting an admin "mark delivered" action (and customer's in-progress deliveries).
+  const pendingDeliveryCount = deliveryRequests.filter(d => !['delivered','completed','cancelled'].includes(d.status)).length
   const activeDeliveryCount  = deliveryRequests.filter(d => d.status === 'out_for_delivery').length
 
   const navItems: NavItem[] = isAdmin
@@ -1961,10 +1914,10 @@ export default function Dashboard() {
                 </div>
               )}
               {!isAdmin && (() => {
-                const pendingDelivReqs = deliveryRequests.filter(d => !['completed','cancelled'].includes(d.status))
+                const activeDelivReqs = deliveryRequests.filter(d => !['delivered','completed','cancelled'].includes(d.status))
                 const unscheduled = orders.filter(o =>
                   o.status === 'arrived' &&
-                  !pendingDelivReqs.some(d => d.order_ids.includes(o.id))
+                  !activeDelivReqs.some(d => d.order_ids.includes(o.id))
                 )
                 if (unscheduled.length === 0) return null
                 return (
@@ -1982,7 +1935,7 @@ export default function Dashboard() {
                         {unscheduled.length} order{unscheduled.length > 1 ? 's' : ''} arrived in Iraq!
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
-                        Tap to schedule pickup or home delivery · اضغط لجدولة التوصيل
+                        Tap to deliver your products to your door · اضغط لتوصيل منتجاتك
                       </div>
                     </div>
                     <span style={{ color: 'var(--green)', fontSize: 20, flexShrink: 0 }}>›</span>
@@ -2064,10 +2017,12 @@ export default function Dashboard() {
                   setWishlist(wl)
                   toast('Saved to wishlist! · تم الحفظ', 'success')
                 } : undefined}
-                onOrderPlaced={profile ? (orderId: string) => {
-                  notifyWhatsapp(orderId, 'order_received')
-                  fetchData()
-                  toast('Order submitted! · تم إرسال الطلب', 'success')
+                onStartOrder={profile ? (url: string) => {
+                  // Route shop/auto-calculate submits into the one New Order form,
+                  // prefilled with the URL (the modal re-fetches image/price/weight).
+                  setWishlistOrderPrefill({ id: '', user_id: profile.id, url, created_at: '' })
+                  setPage('orders')
+                  setShowNewOrder(true)
                 } : undefined}
               />
             </div>
@@ -2452,10 +2407,10 @@ export default function Dashboard() {
                   <div className={styles.pageSub}>Track your delivery requests from warehouse to door</div>
                 </div>
                 {(() => {
-                  const pendingDelivReqs = deliveryRequests.filter(d => !['completed','cancelled'].includes(d.status))
-                  const hasUnscheduled = orders.some(o => o.status === 'arrived' && !pendingDelivReqs.some(d => d.order_ids.includes(o.id)))
+                  const activeDelivReqs = deliveryRequests.filter(d => !['delivered','completed','cancelled'].includes(d.status))
+                  const hasUnscheduled = orders.some(o => o.status === 'arrived' && !activeDelivReqs.some(d => d.order_ids.includes(o.id)))
                   return hasUnscheduled ? (
-                    <button className={styles.btnPrimary} onClick={() => setShowDeliveryModal(true)}>📦 New Request</button>
+                    <button className={styles.btnPrimary} onClick={() => setShowDeliveryModal(true)}>📦 Deliver my products</button>
                   ) : null
                 })()}
               </div>
@@ -2472,10 +2427,10 @@ export default function Dashboard() {
                       pending:          { label: 'Pending',          color: 'var(--orange)', icon: '⏳' },
                       scheduled:        { label: 'Scheduled',        color: 'var(--blue)',   icon: '📅' },
                       out_for_delivery: { label: 'Out for Delivery', color: 'var(--gold)',   icon: '🚗' },
+                      delivered:        { label: 'Delivered',        color: 'var(--green)',  icon: '✅' },
                       completed:        { label: 'Delivered',        color: 'var(--green)',  icon: '✅' },
                       cancelled:        { label: 'Cancelled',        color: '#ef4444',       icon: '✕'  },
                     } as Record<string, { label: string; color: string; icon: string }>)[req.status] ?? { label: req.status, color: 'var(--text-dim)', icon: '?' }
-                    const typeLabel = ({ pickup: '🏢 Pickup from office', home_erbil: '🚗 Home delivery — Erbil', home_baghdad: '🚗 Home delivery — Baghdad' } as Record<string, string>)[req.delivery_preference] ?? req.delivery_preference
                     return (
                       <div key={req.id} className={styles.card} style={{ padding: '16px 20px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
@@ -2496,13 +2451,13 @@ export default function Dashboard() {
                             </div>
                           </div>
                           <div>
-                            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3 }}>Type</div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{typeLabel}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3 }}>Items</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>🚚 Home delivery</div>
                           </div>
                           <div>
                             <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3 }}>Fee</div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: req.delivery_fee > 0 ? 'var(--gold)' : 'var(--green)' }}>
-                              {req.delivery_fee > 0 ? `$${(req.delivery_fee / IQD_PER_USD).toFixed(2)}` : 'Free'}
+                              {req.delivery_fee > 0 ? `$${req.delivery_fee.toFixed(2)}` : 'Free'}
                             </div>
                           </div>
                           <div>
@@ -2728,11 +2683,13 @@ export default function Dashboard() {
           profile={profile}
           arrivedOrders={orders.filter(o => {
             if (o.status !== 'arrived') return false
-            const active = deliveryRequests.filter(d => !['completed','cancelled'].includes(d.status))
+            const active = deliveryRequests.filter(d => !['delivered','completed','cancelled'].includes(d.status))
             return !active.some(d => d.order_ids.includes(o.id))
           })}
+          inTransitOrders={orders.filter(o => ['ordered','warehouse','transit'].includes(o.status))}
+          iqdRate={iqdRate}
           onClose={() => setShowDeliveryModal(false)}
-          onDone={() => { fetchData(); toast('Delivery request submitted! · تم إرسال طلب التوصيل') }}
+          onDone={() => { fetchData(); toast('Delivery confirmed! · تم تأكيد التوصيل') }}
         />
       )}
       {showNewOrder && profile && (

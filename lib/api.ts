@@ -152,8 +152,8 @@ export async function createOrder(
     urgency: form.urgency,
     photo_url: photoUrl ?? autoImageUrl ?? null,
     country_origin: detectCountryFromUrl(form.url),
-    delivery_preference: form.deliveryPreference || 'pickup',
-    delivery_city: form.deliveryCity || null,
+    // delivery_* columns are intentionally left unset on new orders — the customer
+    // chooses delivery later via the "Deliver my products" bundle flow.
     status: 'pending',
   }).select('id').single()
 
@@ -435,25 +435,82 @@ export async function removeFromWishlist(itemId: string): Promise<void> {
   await supabase.from('wishlist').delete().eq('id', itemId)
 }
 
-// ── Delivery Requests ─────────────────────────────────────────────────────────
+// ── Delivery fee config (flat, nationwide, USD) ────────────────────────────────
+// Stored as a single app_settings row so the website and the Flutter app read the
+// same value via the API. Admin edits it from the Pricing tab.
 
-export async function createDeliveryRequest(
+const DELIVERY_FEE_KEY = 'delivery_flat_fee_usd'
+const DEFAULT_DELIVERY_FEE_USD = 4
+
+export async function getDeliveryFeeUsd(): Promise<number> {
+  const { settings } = await getAppSettings()
+  const v = parseFloat(settings[DELIVERY_FEE_KEY])
+  return Number.isFinite(v) && v >= 0 ? v : DEFAULT_DELIVERY_FEE_USD
+}
+
+export async function saveDeliveryFeeUsd(feeUsd: number): Promise<{ error: string | null }> {
+  return saveAppSettings([DELIVERY_FEE_KEY], { [DELIVERY_FEE_KEY]: String(feeUsd) })
+}
+
+// ── Delivery bundles ───────────────────────────────────────────────────────────
+// A bundle groups many "arrived" orders under one address + one flat fee. Creating
+// it moves the selected orders arrived → out_for_delivery and opens the bundle at
+// 'out_for_delivery'. Admin later marks the whole bundle delivered.
+
+export async function createDeliveryBundle(
   userId: string,
   data: {
     order_ids: string[]
-    delivery_preference: string
     delivery_address?: string
+    delivery_lat?: number
+    delivery_lng?: number
     delivery_notes?: string
     delivery_fee: number
   }
+): Promise<{ error: string | null; id: string | null }> {
+  const supabase = createClient()
+  const { data: row, error } = await supabase
+    .from('delivery_requests')
+    .insert({
+      user_id: userId,
+      status: 'out_for_delivery',
+      delivery_preference: 'home', // legacy NOT-NULL column — single delivery-only mode
+      ...data,
+    })
+    .select('id')
+    .single()
+  if (error) return { error: error.message, id: null }
+
+  // Move the bundled orders arrived → out_for_delivery (guard on current status).
+  const { error: ordErr } = await supabase
+    .from('orders')
+    .update({ status: 'out_for_delivery' })
+    .in('id', data.order_ids)
+    .eq('status', 'arrived')
+  if (ordErr) return { error: ordErr.message, id: row?.id ?? null }
+
+  return { error: null, id: row?.id ?? null }
+}
+
+// Marks a whole bundle delivered and transitions all its orders to delivered.
+export async function markBundleDelivered(
+  id: string,
+  orderIds: string[]
 ): Promise<{ error: string | null }> {
   const supabase = createClient()
-  const { error } = await supabase.from('delivery_requests').insert({
-    user_id: userId,
-    status: 'pending',
-    ...data,
-  })
-  return { error: error?.message ?? null }
+  const { error } = await supabase
+    .from('delivery_requests')
+    .update({ status: 'delivered', completed_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) return { error: error.message }
+  if (orderIds.length > 0) {
+    const { error: ordErr } = await supabase
+      .from('orders')
+      .update({ status: 'delivered' })
+      .in('id', orderIds)
+    if (ordErr) return { error: ordErr.message }
+  }
+  return { error: null }
 }
 
 export async function getUserDeliveryRequests(userId: string): Promise<DeliveryRequest[]> {
@@ -473,11 +530,6 @@ export async function getAdminDeliveryRequests(): Promise<DeliveryRequest[]> {
     .select('*, profiles!user_id(full_name, email, phone)')
     .order('created_at', { ascending: false })
   return data || []
-}
-
-export async function updateDeliveryRequest(id: string, updates: Record<string, unknown>): Promise<void> {
-  const supabase = createClient()
-  await supabase.from('delivery_requests').update(updates).eq('id', id)
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────

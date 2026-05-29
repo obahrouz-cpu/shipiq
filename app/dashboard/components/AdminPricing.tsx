@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { getPricingConfig, savePricingConfig } from '@/lib/api'
+import { getPricingConfig, savePricingConfig, getDeliveryFeeUsd, saveDeliveryFeeUsd } from '@/lib/api'
 import {
   type CountryPricingConfig, type OriginCountry, type PricingCategory,
   ORIGIN_COUNTRIES, PRICING_CATEGORIES, defaultConfig,
@@ -83,6 +83,12 @@ export default function AdminPricing() {
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  // ── Flat nationwide delivery fee (global, USD) ──
+  const [deliveryFee, setDeliveryFee] = useState(4)
+  const [deliverySaving, setDeliverySaving] = useState(false)
+  const [deliverySaved, setDeliverySaved] = useState(false)
+  const [deliveryError, setDeliveryError] = useState<string | null>(null)
+
   useEffect(() => {
     getPricingConfig().then(({ configs, error }) => {
       const map = {} as Record<OriginCountry, CountryPricingConfig>
@@ -92,7 +98,17 @@ export default function AdminPricing() {
       setLoadError(error)
       setLoaded(true)
     })
+    getDeliveryFeeUsd().then(setDeliveryFee)
   }, [])
+
+  async function handleSaveDelivery() {
+    setDeliverySaving(true); setDeliveryError(null)
+    const { error } = await saveDeliveryFeeUsd(deliveryFee)
+    setDeliverySaving(false)
+    if (error) { setDeliveryError(error); return }
+    setDeliverySaved(true)
+    setTimeout(() => setDeliverySaved(false), 2500)
+  }
 
   const cfg = configs[active]
 
@@ -125,6 +141,40 @@ export default function AdminPricing() {
   const cur = cfg.currency || 'USD'
 
   return (
+    <>
+    {/* ── Flat nationwide delivery fee ── */}
+    <div style={{
+      background: 'var(--surface2)', border: '1px solid var(--border)',
+      borderRadius: 14, overflow: 'hidden', marginBottom: 16,
+    }}>
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
+        🚚 Delivery
+      </div>
+      <div style={{ padding: 16 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 14 }}>
+          Single flat last-mile fee charged to the customer when they deliver arrived items home.
+          Applies nationwide and is shared by the website and the Flutter app.
+        </div>
+        <div style={{ maxWidth: 280 }}>
+          <NumberRow label="Flat delivery fee" suffix="USD" value={deliveryFee} onChange={v => { setDeliveryFee(v); setDeliverySaved(false) }} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6 }}>
+          <button
+            onClick={handleSaveDelivery}
+            disabled={deliverySaving}
+            style={{
+              padding: '9px 20px', fontSize: 13, fontWeight: 700,
+              background: deliverySaved ? '#16a34a' : 'var(--gold)', color: deliverySaved ? '#fff' : 'var(--bg)',
+              border: 'none', borderRadius: 8, cursor: deliverySaving ? 'not-allowed' : 'pointer', opacity: deliverySaving ? 0.7 : 1,
+            }}
+          >
+            {deliverySaving ? 'Saving…' : deliverySaved ? '✓ Saved' : '💾 Save delivery fee'}
+          </button>
+          {deliveryError && <span style={{ fontSize: 12, color: '#ef4444' }}>❌ {deliveryError}</span>}
+        </div>
+      </div>
+    </div>
+
     <div style={{
       background: 'var(--surface2)', border: '1px solid var(--border)',
       borderRadius: 14, overflow: 'hidden', marginBottom: 16,
@@ -285,5 +335,6 @@ export default function AdminPricing() {
         </div>
       </div>
     </div>
+    </>
   )
 }

@@ -1,9 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import type { Store, ScrapeResult, OrderForm } from '@/lib/types'
+import type { Store, ScrapeResult } from '@/lib/types'
 import { STORES, SUPPORTED_SITES } from '@/lib/constants'
-import { getPricingConfig, createOrder } from '@/lib/api'
+import { getPricingConfig } from '@/lib/api'
 import {
   calculatePricing, defaultConfig, ORIGIN_COUNTRIES,
   type CountryPricingConfig, type OriginCountry, type PricingCategory,
@@ -338,7 +338,7 @@ function EngineEstimate({ country, billableWeightKg, category, price, priceCurre
 
 // ── AutoCalcModal ─────────────────────────────────────────────────────────────
 
-function AutoCalcModal({ onClose }: { onClose: () => void }) {
+function AutoCalcModal({ onClose, userId, onStartOrder }: { onClose: () => void; userId?: string; onStartOrder?: (url: string) => void }) {
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<ScrapeResult | null>(null)
@@ -451,6 +451,19 @@ function AutoCalcModal({ onClose }: { onClose: () => void }) {
             <EngineEstimate country="Turkey" billableWeightKg={trendyolKg} weightNote="estimated weight" />
           )}
 
+          {/* Submit Order — routes to the New Order form prefilled with this URL */}
+          {userId && onStartOrder && url.startsWith('http') && (
+            <button
+              onClick={() => { onStartOrder(url); onClose() }}
+              style={{
+                marginTop: 12, width: '100%', padding: '11px', fontSize: 14, fontWeight: 700,
+                background: 'var(--gold)', color: '#0f0e0c', border: 'none', borderRadius: 8, cursor: 'pointer',
+              }}
+            >
+              ✓ Submit Order · إرسال الطلب
+            </button>
+          )}
+
           {/* Supported sites */}
           <div className={styles.autoCalcNote}>
             Works best with Amazon, eBay, Trendyol, Noon and more
@@ -470,42 +483,24 @@ function AutoCalcModal({ onClose }: { onClose: () => void }) {
 
 // ── StorePanel ────────────────────────────────────────────────────────────────
 
-function StorePanel({ store, onClose, userId, onWishlistSave, onOrderPlaced }: { store: Store; onClose: () => void; userId?: string; onWishlistSave?: (url: string) => void; onOrderPlaced?: (orderId: string) => void }) {
+function StorePanel({ store, onClose, userId, onWishlistSave, onStartOrder }: { store: Store; onClose: () => void; userId?: string; onWishlistSave?: (url: string) => void; onStartOrder?: (url: string) => void }) {
   const [url, setUrl] = useState('')
   const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null)
   const [scrapeLoading, setScrapeLoading] = useState(false)
   const [scrapeError, setScrapeError] = useState('')
   const [trendyolKg, setTrendyolKg] = useState<number | null>(null)
   const [wishSaved, setWishSaved] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [submitErr, setSubmitErr] = useState('')
 
   const detectedStore = url ? STORES.find(s => url.toLowerCase().includes(s.domain)) ?? null : null
   const displayStore = detectedStore ?? store
   const isSupported = SUPPORTED_SITES.some((s: string) => url.toLowerCase().includes(s))
   const isTrendyolUrl = url.toLowerCase().includes('trendyol.com')
 
-  // Place an order from the popup — same fields/behavior as the My Orders New Order flow.
-  const submitOrder = async () => {
-    if (!userId || !url.startsWith('http') || submitting) return
-    setSubmitting(true); setSubmitErr('')
-    const cur = scrapeResult?.currency ?? ''
-    const orderForm: OrderForm = {
-      url,
-      description: scrapeResult?.product_name || `Product from ${displayStore.name}`,
-      category: displayStore.category,
-      qty: 1,
-      itemPrice: scrapeResult?.price != null && scrapeResult.price > 0 ? String(scrapeResult.price) : '',
-      itemPriceCurrency: ['USD', 'IQD', 'EUR', 'GBP', 'TRY', 'AED'].includes(cur) ? cur : 'USD',
-      note: '',
-      urgency: false,
-      deliveryPreference: 'pickup',
-      deliveryCity: '',
-    }
-    const { error, orderId } = await createOrder(userId, orderForm, null, scrapeResult?.image_url ?? null)
-    setSubmitting(false)
-    if (error) { setSubmitErr(error); return }
-    if (orderId) onOrderPlaced?.(orderId)
+  // Route to the New Order form prefilled with this URL — the customer reviews the
+  // fetched details, adds a photo/note, and submits there (one intake shape).
+  const submitOrder = () => {
+    if (!userId || !url.startsWith('http')) return
+    onStartOrder?.(url)
     onClose()
   }
 
@@ -645,21 +640,18 @@ function StorePanel({ store, onClose, userId, onWishlistSave, onOrderPlaced }: {
             </div>
           )}
 
-          {/* Submit Order — below the breakdown; same behavior as the New Order flow */}
-          {userId && url.startsWith('http') && (
+          {/* Submit Order — routes to the New Order form prefilled with this URL */}
+          {userId && onStartOrder && url.startsWith('http') && (
             <button
               onClick={submitOrder}
-              disabled={submitting}
               style={{
                 marginTop: 12, width: '100%', padding: '11px', fontSize: 14, fontWeight: 700,
-                background: 'var(--gold)', color: '#0f0e0c', border: 'none', borderRadius: 8,
-                cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1,
+                background: 'var(--gold)', color: '#0f0e0c', border: 'none', borderRadius: 8, cursor: 'pointer',
               }}
             >
-              {submitting ? 'Submitting…' : '✓ Submit Order · إرسال الطلب'}
+              ✓ Submit Order · إرسال الطلب
             </button>
           )}
-          {submitErr && <div className={styles.estimateError} style={{ marginTop: 8 }}>⚠️ {submitErr}</div>}
 
           {url && url.startsWith('http') && onWishlistSave && (
             <button
@@ -706,7 +698,7 @@ function StorePanel({ store, onClose, userId, onWishlistSave, onOrderPlaced }: {
 
 // ── ShopSection ───────────────────────────────────────────────────────────────
 
-export default function ShopSection({ userId, onWishlistSave, onOrderPlaced }: { userId?: string; onWishlistSave?: (url: string) => void; onOrderPlaced?: (orderId: string) => void }) {
+export default function ShopSection({ userId, onWishlistSave, onStartOrder }: { userId?: string; onWishlistSave?: (url: string) => void; onStartOrder?: (url: string) => void }) {
   const [countryFilter, setCountryFilter] = useState('All')
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
   const [autoCalcOpen, setAutoCalcOpen] = useState(false)
@@ -767,12 +759,12 @@ export default function ShopSection({ userId, onWishlistSave, onOrderPlaced }: {
 
       {/* Auto Calculate modal */}
       {autoCalcOpen && (
-        <AutoCalcModal onClose={() => setAutoCalcOpen(false)} />
+        <AutoCalcModal onClose={() => setAutoCalcOpen(false)} userId={userId} onStartOrder={onStartOrder} />
       )}
 
       {/* Store panel */}
       {selectedStore && (
-        <StorePanel store={selectedStore} onClose={() => setSelectedStore(null)} userId={userId} onWishlistSave={onWishlistSave} onOrderPlaced={onOrderPlaced} />
+        <StorePanel store={selectedStore} onClose={() => setSelectedStore(null)} userId={userId} onWishlistSave={onWishlistSave} onStartOrder={onStartOrder} />
       )}
     </div>
   )

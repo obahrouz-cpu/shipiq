@@ -98,21 +98,24 @@ export interface WishlistItem {
   created_at: string
 }
 
+// A delivery "bundle": one address, one flat fee, one status, many orders.
+// Bundle status: 'out_for_delivery' (created on customer confirm) → 'delivered'.
+// Legacy rows may still carry 'pending'/'scheduled'/'completed'/'cancelled'.
 export interface DeliveryRequest {
   id: string
   user_id: string
   order_ids: string[]
-  delivery_preference: string
+  delivery_preference?: string   // legacy column — no longer set on new bundles
   delivery_city?: string
   delivery_address?: string
   delivery_lat?: number
   delivery_lng?: number
   delivery_notes?: string
-  delivery_fee: number
+  delivery_fee: number           // flat last-mile fee, stored in USD
   status: string
   created_at: string
   scheduled_at?: string
-  completed_at?: string
+  completed_at?: string          // serves as delivered_at
   profiles?: Pick<Profile, 'full_name' | 'email' | 'phone'>
 }
 
@@ -172,8 +175,6 @@ export interface OrderForm {
   itemPriceCurrency: string
   note: string
   urgency: boolean
-  deliveryPreference: string
-  deliveryCity: string
 }
 
 export interface AuthForm {
