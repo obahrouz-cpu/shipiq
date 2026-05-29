@@ -435,27 +435,31 @@ export async function removeFromWishlist(itemId: string): Promise<void> {
   await supabase.from('wishlist').delete().eq('id', itemId)
 }
 
-// ── Delivery fee config (flat, nationwide, USD) ────────────────────────────────
+// ── Delivery fee config (flat, nationwide, IQD) ────────────────────────────────
 // Stored as a single app_settings row so the website and the Flutter app read the
-// same value via the API. Admin edits it from the Pricing tab.
+// same value via the API. Admin edits it from the Pricing tab. Kept in IQD because
+// customers usually pay this last-mile fee in cash on delivery.
 
-const DELIVERY_FEE_KEY = 'delivery_flat_fee_usd'
-const DEFAULT_DELIVERY_FEE_USD = 4
+const DELIVERY_FEE_KEY = 'delivery_flat_fee_iqd'
+const DEFAULT_DELIVERY_FEE_IQD = 5000
 
-export async function getDeliveryFeeUsd(): Promise<number> {
+export async function getDeliveryFeeIqd(): Promise<number> {
   const { settings } = await getAppSettings()
   const v = parseFloat(settings[DELIVERY_FEE_KEY])
-  return Number.isFinite(v) && v >= 0 ? v : DEFAULT_DELIVERY_FEE_USD
+  return Number.isFinite(v) && v >= 0 ? v : DEFAULT_DELIVERY_FEE_IQD
 }
 
-export async function saveDeliveryFeeUsd(feeUsd: number): Promise<{ error: string | null }> {
-  return saveAppSettings([DELIVERY_FEE_KEY], { [DELIVERY_FEE_KEY]: String(feeUsd) })
+export async function saveDeliveryFeeIqd(feeIqd: number): Promise<{ error: string | null }> {
+  return saveAppSettings([DELIVERY_FEE_KEY], { [DELIVERY_FEE_KEY]: String(feeIqd) })
 }
 
 // ── Delivery bundles ───────────────────────────────────────────────────────────
-// A bundle groups many "arrived" orders under one address + one flat fee. Creating
-// it moves the selected orders arrived → out_for_delivery and opens the bundle at
-// 'out_for_delivery'. Admin later marks the whole bundle delivered.
+// A bundle groups many "arrived" orders under one address + one flat fee (IQD).
+// Creating it moves the selected orders arrived → out_for_delivery and opens the
+// bundle at 'out_for_delivery'. The fee is either paid in cash on delivery or
+// deducted from balance (payment_method); admin later marks the bundle delivered.
+// payment_method is stored in the legacy delivery_preference column to avoid a
+// schema change: 'cash' (collect on handover) | 'balance' (already deducted).
 
 export async function createDeliveryBundle(
   userId: string,
@@ -465,17 +469,19 @@ export async function createDeliveryBundle(
     delivery_lat?: number
     delivery_lng?: number
     delivery_notes?: string
-    delivery_fee: number
+    delivery_fee: number          // IQD
+    payment_method: 'cash' | 'balance'
   }
 ): Promise<{ error: string | null; id: string | null }> {
   const supabase = createClient()
+  const { payment_method, ...rest } = data
   const { data: row, error } = await supabase
     .from('delivery_requests')
     .insert({
       user_id: userId,
       status: 'out_for_delivery',
-      delivery_preference: 'home', // legacy NOT-NULL column — single delivery-only mode
-      ...data,
+      delivery_preference: payment_method, // reuses legacy NOT-NULL column for pay method
+      ...rest,
     })
     .select('id')
     .single()

@@ -189,8 +189,8 @@ export const SUPABASE_TABLES = {
   notifications: 'notifications',
   order_notes: 'order_notes',
   wishlist: 'wishlist',
-  delivery_requests: 'delivery_requests',  // delivery bundles: order_ids[], delivery_fee (USD), status out_for_delivery→delivered
+  delivery_requests: 'delivery_requests',  // delivery bundles: order_ids[], delivery_fee (IQD), delivery_preference = pay method 'cash'|'balance', status out_for_delivery→delivered
   tier_settings: 'tier_settings',
-  app_settings: 'app_settings',            // key 'delivery_flat_fee_usd' holds the flat last-mile fee (USD)
+  app_settings: 'app_settings',            // key 'delivery_flat_fee_iqd' holds the flat last-mile fee (IQD)
   pricing_config: 'pricing_config',   // one row per origin country — read directly for offline quoting
 } as const

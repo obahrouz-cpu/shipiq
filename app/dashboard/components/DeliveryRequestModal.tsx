@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import type { Order, Profile } from '@/lib/types'
-import { createDeliveryBundle, deductBalance, getDeliveryFeeUsd } from '@/lib/api'
+import { createDeliveryBundle, deductBalance, getDeliveryFeeIqd } from '@/lib/api'
 import styles from '../dashboard.module.css'
 
 const MapPicker = dynamic(() => import('./MapPicker'), { ssr: false })
@@ -35,7 +35,9 @@ interface Props {
 export default function DeliveryRequestModal({ profile, arrivedOrders, inTransitOrders, iqdRate, onClose, onDone }: Props) {
   // Default to everything that's arrived selected — the common case is "send it all".
   const [selectedIds, setSelectedIds] = useState<string[]>(() => arrivedOrders.map(o => o.id))
-  const [feeUsd, setFeeUsd] = useState<number | null>(null)
+  const [feeIqd, setFeeIqd] = useState<number | null>(null)
+  // Default: pay the fee in cash on handover. Opt in to deduct from balance instead.
+  const [payFromBalance, setPayFromBalance] = useState(false)
 
   // Address — pre-filled from the customer's saved profile address, overridable per bundle.
   const hasSavedAddress = !!(profile.delivery_lat && profile.delivery_lng)
@@ -49,7 +51,7 @@ export default function DeliveryRequestModal({ profile, arrivedOrders, inTransit
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => { getDeliveryFeeUsd().then(setFeeUsd) }, [])
+  useEffect(() => { getDeliveryFeeIqd().then(setFeeIqd) }, [])
 
   const handleMapMove = useCallback((newLat: number, newLng: number) => {
     setLat(newLat); setLng(newLng)
@@ -64,14 +66,16 @@ export default function DeliveryRequestModal({ profile, arrivedOrders, inTransit
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
   const balanceUsd = profile.balance_usd ?? 0
-  const fee = feeUsd ?? 0
-  const insufficient = balanceUsd + 0.001 < fee
+  const feeIqdVal = feeIqd ?? 0
+  const feeUsdEquiv = iqdRate > 0 ? feeIqdVal / iqdRate : 0
+  // Balance only matters when the customer chooses to pay from balance.
+  const insufficient = payFromBalance && balanceUsd + 0.001 < feeUsdEquiv
   const hasAddress = !!address.trim() || (lat !== DEFAULT_LAT || lng !== DEFAULT_LNG)
 
   const confirm = async () => {
     if (selectedIds.length === 0) { setError('Select at least one order to deliver'); return }
     if (!hasAddress) { setError('Set your delivery address'); return }
-    if (insufficient) { setError(`Insufficient balance. You need $${fee.toFixed(2)}.`); return }
+    if (insufficient) { setError(`Insufficient balance. You need $${feeUsdEquiv.toFixed(2)} to pay from balance.`); return }
     setLoading(true); setError('')
     const { error: createErr } = await createDeliveryBundle(profile.id, {
       order_ids: selectedIds,
@@ -79,11 +83,12 @@ export default function DeliveryRequestModal({ profile, arrivedOrders, inTransit
       delivery_lat: lat,
       delivery_lng: lng,
       delivery_notes: notes || undefined,
-      delivery_fee: fee,
+      delivery_fee: feeIqdVal,
+      payment_method: payFromBalance ? 'balance' : 'cash',
     })
     if (createErr) { setError(createErr); setLoading(false); return }
-    if (fee > 0) {
-      await deductBalance(profile.id, balanceUsd, fee, iqdRate, 'Home delivery fee')
+    if (payFromBalance && feeUsdEquiv > 0) {
+      await deductBalance(profile.id, balanceUsd, feeUsdEquiv, iqdRate, 'Home delivery fee')
     }
     // Notify the customer their items are out for delivery (fire-and-forget).
     selectedIds.forEach(orderId => {
@@ -228,21 +233,48 @@ export default function DeliveryRequestModal({ profile, arrivedOrders, inTransit
           </div>
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 15 }}>
             <span style={{ color: 'var(--text-muted)' }}>Flat Delivery Fee · رسوم التوصيل</span>
-            <span style={{ color: 'var(--gold)' }}>
-              {feeUsd === null ? '…' : fee === 0 ? 'Free' : `$${fee.toFixed(2)}`}
+            <span style={{ color: 'var(--gold)', textAlign: 'right' }}>
+              {feeIqd === null ? '…' : feeIqdVal === 0 ? 'Free' : (
+                <>
+                  {feeIqdVal.toLocaleString()} IQD
+                  <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-dim)' }}>≈ ${feeUsdEquiv.toFixed(2)}</span>
+                </>
+              )}
             </span>
           </div>
-          {fee > 0 && (
-            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-              <span style={{ color: 'var(--text-muted)' }}>Balance after payment</span>
-              <span style={{ fontWeight: 700, color: insufficient ? '#ef4444' : 'var(--text)' }}>${(balanceUsd - fee).toFixed(2)}</span>
-            </div>
+
+          {/* Payment method — cash on delivery by default, or deduct from balance */}
+          {feeIqdVal > 0 && (
+            <>
+              <label
+                onClick={() => setPayFromBalance(v => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 9, padding: '9px 10px', marginTop: 12, cursor: 'pointer',
+                  background: payFromBalance ? 'rgba(201,168,76,0.10)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${payFromBalance ? 'rgba(201,168,76,0.35)' : 'var(--border)'}`, borderRadius: 8,
+                }}
+              >
+                <span style={{
+                  width: 18, height: 18, flexShrink: 0, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: payFromBalance ? 'var(--gold)' : 'transparent',
+                  border: `2px solid ${payFromBalance ? 'var(--gold)' : 'var(--border)'}`, color: '#0f0e0c', fontSize: 12, fontWeight: 800,
+                }}>{payFromBalance ? '✓' : ''}</span>
+                <span style={{ fontSize: 12, color: 'var(--text)' }}>💳 Pay now from my balance · ادفع من رصيدي</span>
+              </label>
+              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-dim)' }}>
+                {payFromBalance ? (
+                  <span>Balance after payment: <strong style={{ color: insufficient ? '#ef4444' : 'var(--text)' }}>${(balanceUsd - feeUsdEquiv).toFixed(2)}</strong></span>
+                ) : (
+                  <span>💵 Pay {feeIqdVal.toLocaleString()} IQD in cash when your order is handed over.</span>
+                )}
+              </div>
+            </>
           )}
         </div>
 
-        {fee > 0 && insufficient && (
+        {insufficient && (
           <div className={styles.errorBox} style={{ marginBottom: 12 }}>
-            ⚠️ Insufficient balance. You need ${(fee - balanceUsd).toFixed(2)} more.
+            ⚠️ Insufficient balance to pay from balance — you need ${(feeUsdEquiv - balanceUsd).toFixed(2)} more, or pay cash on delivery instead.
           </div>
         )}
 
@@ -251,7 +283,7 @@ export default function DeliveryRequestModal({ profile, arrivedOrders, inTransit
           <button
             className={styles.btnPrimary}
             onClick={confirm}
-            disabled={loading || feeUsd === null || selectedIds.length === 0 || insufficient}
+            disabled={loading || feeIqd === null || selectedIds.length === 0 || insufficient}
           >
             {loading ? <span className={styles.spinner} /> : '✅ Confirm Delivery · تأكيد التوصيل'}
           </button>

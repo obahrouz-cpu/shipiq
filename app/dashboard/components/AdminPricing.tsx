@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { getPricingConfig, savePricingConfig, getDeliveryFeeUsd, saveDeliveryFeeUsd } from '@/lib/api'
+import { getPricingConfig, savePricingConfig, getDeliveryFeeIqd, saveDeliveryFeeIqd } from '@/lib/api'
 import {
   type CountryPricingConfig, type OriginCountry, type PricingCategory,
   ORIGIN_COUNTRIES, PRICING_CATEGORIES, defaultConfig,
@@ -83,8 +83,8 @@ export default function AdminPricing() {
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // ── Flat nationwide delivery fee (global, USD) ──
-  const [deliveryFee, setDeliveryFee] = useState(4)
+  // ── Flat nationwide delivery fee (global, IQD) ──
+  const [deliveryFee, setDeliveryFee] = useState(5000)
   const [deliverySaving, setDeliverySaving] = useState(false)
   const [deliverySaved, setDeliverySaved] = useState(false)
   const [deliveryError, setDeliveryError] = useState<string | null>(null)
@@ -98,12 +98,12 @@ export default function AdminPricing() {
       setLoadError(error)
       setLoaded(true)
     })
-    getDeliveryFeeUsd().then(setDeliveryFee)
+    getDeliveryFeeIqd().then(setDeliveryFee)
   }, [])
 
   async function handleSaveDelivery() {
     setDeliverySaving(true); setDeliveryError(null)
-    const { error } = await saveDeliveryFeeUsd(deliveryFee)
+    const { error } = await saveDeliveryFeeIqd(deliveryFee)
     setDeliverySaving(false)
     if (error) { setDeliveryError(error); return }
     setDeliverySaved(true)
@@ -152,11 +152,12 @@ export default function AdminPricing() {
       </div>
       <div style={{ padding: 16 }}>
         <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 14 }}>
-          Single flat last-mile fee charged to the customer when they deliver arrived items home.
-          Applies nationwide and is shared by the website and the Flutter app.
+          Single flat last-mile fee charged when a customer delivers arrived items home —
+          paid in cash on handover or deducted from balance. Applies nationwide and is
+          shared by the website and the Flutter app.
         </div>
         <div style={{ maxWidth: 280 }}>
-          <NumberRow label="Flat delivery fee" suffix="USD" value={deliveryFee} onChange={v => { setDeliveryFee(v); setDeliverySaved(false) }} />
+          <NumberRow label="Flat delivery fee" suffix="IQD" value={deliveryFee} onChange={v => { setDeliveryFee(v); setDeliverySaved(false) }} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6 }}>
           <button

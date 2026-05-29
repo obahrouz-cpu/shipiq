@@ -176,8 +176,13 @@ export default function AdminDeliveries({ onToast }: Props) {
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Fee</div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: req.delivery_fee > 0 ? 'var(--gold)' : 'var(--green)' }}>
-                      {req.delivery_fee > 0 ? `$${req.delivery_fee.toFixed(2)}` : 'Free'}
+                      {req.delivery_fee > 0 ? `${req.delivery_fee.toLocaleString()} IQD` : 'Free'}
                     </div>
+                    {req.delivery_fee > 0 && (
+                      <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, color: req.delivery_preference === 'balance' ? 'var(--green)' : 'var(--orange)' }}>
+                        {req.delivery_preference === 'balance' ? '✓ Paid from balance' : '💵 Collect cash on delivery'}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Requested</div>
