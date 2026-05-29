@@ -460,7 +460,7 @@ function AutoCalcModal({ onClose, userId, onStartOrder }: { onClose: () => void;
                 background: 'var(--gold)', color: '#0f0e0c', border: 'none', borderRadius: 8, cursor: 'pointer',
               }}
             >
-              ✓ Submit Order · إرسال الطلب
+              ✓ Proceed with Order · متابعة الطلب
             </button>
           )}
 
@@ -649,7 +649,7 @@ function StorePanel({ store, onClose, userId, onWishlistSave, onStartOrder }: { 
                 background: 'var(--gold)', color: '#0f0e0c', border: 'none', borderRadius: 8, cursor: 'pointer',
               }}
             >
-              ✓ Submit Order · إرسال الطلب
+              ✓ Proceed with Order · متابعة الطلب
             </button>
           )}
 
