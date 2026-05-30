@@ -1,6 +1,10 @@
 // ── Domain types ─────────────────────────────────────────────────────────────
 
-export type OrderStatus = 'pending' | 'calculated' | 'confirmed' | 'ordered' | 'warehouse' | 'transit' | 'arrived' | 'out_for_delivery' | 'delivered' | 'rejected'
+export type OrderStatus = 'pending' | 'calculated' | 'confirmed' | 'ordered' | 'warehouse' | 'transit' | 'arrived' | 'out_for_delivery' | 'delivered' | 'rejected' | 'cancelled' | 'expired'
+
+// Terminal statuses an order can no longer progress from. 'expired' is set by
+// the hourly order-expiry cron when a 'calculated' order ages past the window.
+export const TERMINAL_STATUSES: OrderStatus[] = ['rejected', 'cancelled', 'expired']
 
 export interface StatusConfigEntry {
   label: string

@@ -13,6 +13,7 @@ import {
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase'
 import { STATUS_CONFIG, SUPPORTED_SITES, TIER_CONFIG } from '@/lib/constants'
+import { TERMINAL_STATUSES } from '@/lib/types'
 import {
   calculatePricing, defaultConfig, ORIGIN_COUNTRIES,
   type CountryPricingConfig, type OriginCountry, type PricingCategory,
@@ -647,7 +648,7 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
 
 // ── OrderDetailModal ──────────────────────────────────────────────────────────
 
-function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, onRefresh, onNotesRead }: { order: Order; isAdmin: boolean; adminName?: string; currentUserId: string; onClose: () => void; onRefresh: () => void; onNotesRead?: () => void }) {
+function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, onRefresh, onNotesRead, onReorder }: { order: Order; isAdmin: boolean; adminName?: string; currentUserId: string; onClose: () => void; onRefresh: () => void; onNotesRead?: () => void; onReorder?: (order: Order) => void }) {
   const [view, setView] = useState<'detail' | 'calculate' | 'reject' | 'billing' | 'notes'>('detail')
   const [notesUnread, setNotesUnread] = useState(0)
   const autoDeliveryFee =
@@ -671,6 +672,7 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
     order.wave_sync_status === 'synced' ? 'synced' : order.wave_sync_status === 'failed' ? 'failed' : 'idle'
   )
   const [copied, setCopied] = useState(false)
+  const [urlCopied, setUrlCopied] = useState(false)
 
   // Affiliate URL (admin only)
   const [affSettings, setAffSettings] = useState<Record<string, string>>({})
@@ -773,6 +775,7 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
     const totalCost     = shippingPrice + serviceFee + customsFee + deliveryFee
     applyUpdate({
       status: 'calculated',
+      calculated_at: new Date().toISOString(),  // starts the auto-expiry clock (also enforced by DB trigger)
       shipping_price: shippingPrice,
       shipping_currency: 'IQD',
       weight: shipping.weight,
@@ -1057,13 +1060,49 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
               if (affUrl !== order.url) return (
                 <div className={styles.detailRow} style={{ background: 'rgba(201,168,76,0.06)', borderRadius: 8, padding: '6px 10px', marginBottom: 6 }}>
                   <span className={styles.detailKey}>🔗 Affiliate URL</span>
-                  <a href={affUrl} target="_blank" rel="noopener noreferrer" className={styles.detailLink} style={{ fontSize: 11, color: 'var(--gold)', wordBreak: 'break-all' }}>{affUrl}</a>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <a href={affUrl} target="_blank" rel="noopener noreferrer" className={styles.detailLink} style={{ fontSize: 12, maxWidth: 180 }}>Open affiliate link ↗</a>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(affUrl)}
+                      title="Copy affiliate URL"
+                      style={{ fontSize: 11, padding: '3px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', flexShrink: 0 }}
+                    >Copy</button>
+                  </div>
                 </div>
               )
               return null
             })()}
+            {/* Clean product link — never show the raw URL; offer open + copy. */}
+            {order.url && (
+              <div className={styles.detailRow}>
+                <span className={styles.detailKey}>Product</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <a
+                    href={order.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.detailLink}
+                    style={{ maxWidth: 180 }}
+                    title={order.description || order.url}
+                  >
+                    {(order.description?.trim() || 'View product')} ↗
+                  </a>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(order.url).then(() => {
+                        setUrlCopied(true)
+                        setTimeout(() => setUrlCopied(false), 2000)
+                      })
+                    }}
+                    title="Copy product URL"
+                    style={{ fontSize: 11, padding: '3px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, color: urlCopied ? 'var(--green)' : 'var(--text-dim)', cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    {urlCopied ? '✓ Copied' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+            )}
             {([
-              ['Product URL', order.url, true],
               ['Description', order.description],
               ['Category', order.category],
               ['Quantity', order.qty],
@@ -1201,6 +1240,22 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
               >
                 {loading ? <Spinner /> : 'Confirm & Proceed · تأكيد المضي قدماً'}
               </button>
+            )}
+            {!isAdmin && onReorder && TERMINAL_STATUSES.includes(order.status) && (
+              <div style={{ marginTop: 20 }}>
+                {order.status === 'expired' && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, padding: '8px 12px', background: 'rgba(217,83,79,0.08)', border: '1px solid rgba(217,83,79,0.25)', borderRadius: 8 }}>
+                    ⌛ This order expired before it was confirmed. Reorder to fetch a fresh price.
+                  </div>
+                )}
+                <button
+                  className={styles.btnPrimary}
+                  style={{ width: '100%' }}
+                  onClick={() => onReorder(order)}
+                >
+                  🔄 Reorder · إعادة الطلب
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -1707,6 +1762,17 @@ export default function Dashboard() {
   const haptic = useCallback((ms = 10) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(ms)
   }, [])
+
+  // Reorder a terminal-status order (expired/cancelled/rejected): open the New
+  // Order flow prefilled with ONLY the product URL. The modal re-scrapes for a
+  // fresh price — the old item_price is intentionally never carried over.
+  const startReorder = useCallback((order: Order) => {
+    if (!profile) return
+    setSelectedOrder(null)
+    setWishlistOrderPrefill({ id: '', user_id: profile.id, url: order.url, created_at: '' })
+    setPage('orders')
+    setShowNewOrder(true)
+  }, [profile])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -2234,6 +2300,12 @@ export default function Dashboard() {
                                 {o.status === 'pending' && (
                                   <button className={styles.processBadge} onClick={e => { e.stopPropagation(); setSelectedOrder(o) }}>{t('orders', 'process')}</button>
                                 )}
+                                {!isAdmin && TERMINAL_STATUSES.includes(o.status) && (
+                                  <button
+                                    className={styles.processBadge}
+                                    onClick={e => { e.stopPropagation(); startReorder(o) }}
+                                  >🔄 Reorder</button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -2710,7 +2782,7 @@ export default function Dashboard() {
         />
       )}
       {showTopUp && profile && <WalletTopUp userId={profile.id} open={true} onClose={() => setShowTopUp(false)} onSuccess={() => { fetchData(); toast('Top-up request sent! · تم إرسال طلب الشحن') }} />}
-      {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} adminName={isAdmin ? (profile?.full_name || 'Admin') : undefined} currentUserId={profile?.id || ''} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} onNotesRead={() => setNoteUnreadCounts(prev => ({ ...prev, [selectedOrder.id]: 0 }))} />}
+      {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} adminName={isAdmin ? (profile?.full_name || 'Admin') : undefined} currentUserId={profile?.id || ''} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} onNotesRead={() => setNoteUnreadCounts(prev => ({ ...prev, [selectedOrder.id]: 0 }))} onReorder={startReorder} />}
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}
       {selectedCustomer && isAdmin && profile && (
         <AdminCustomerProfile

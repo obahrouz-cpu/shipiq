@@ -300,7 +300,7 @@ export default function AdminAnalytics() {
       const idx = STATUS_ORDER.indexOf(s)
       const count = orders.filter(o => {
         if (o.status === 'rejected') return false
-        return STATUS_ORDER.indexOf(o.status) >= idx
+        return (STATUS_ORDER as readonly string[]).indexOf(o.status) >= idx
       }).length
       return { status: s, count, pct: Math.round((count / total) * 100) }
     })

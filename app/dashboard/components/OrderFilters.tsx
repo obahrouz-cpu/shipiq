@@ -41,6 +41,8 @@ const STATUS_OPTS = [
   { v: 'arrived',   l: '🏙️ Arrived' },
   { v: 'delivered', l: '📬 Delivered' },
   { v: 'rejected',  l: '❌ Rejected' },
+  { v: 'expired',   l: '⌛ Expired' },
+  { v: 'cancelled', l: '🚫 Cancelled' },
 ]
 
 const CATEGORY_OPTS = ['All', 'Electronics', 'Clothing', 'Cosmetics', 'Home', 'Gaming', 'Shoes', 'Sports', 'Other']

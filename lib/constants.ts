@@ -66,6 +66,8 @@ export const STATUS_CONFIG: Record<string, StatusConfigEntry> = {
   out_for_delivery: { label: 'Out for Delivery',  labelAr: 'خرج للتوصيل',   cls: 'out_for_delivery', icon: '🛵' },
   delivered:        { label: 'Delivered',         labelAr: 'تم التوصيل',    cls: 'delivered',        icon: '📬' },
   rejected:         { label: 'Rejected',          labelAr: 'مرفوض',         cls: 'rejected',         icon: '❌' },
+  cancelled:        { label: 'Cancelled',         labelAr: 'ملغي',          cls: 'rejected',         icon: '🚫' },
+  expired:          { label: 'Expired',           labelAr: 'منتهي الصلاحية', cls: 'rejected',         icon: '⌛' },
 }
 
 // ── Order form categories ─────────────────────────────────────────────────────
