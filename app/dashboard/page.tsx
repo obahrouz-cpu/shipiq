@@ -647,7 +647,10 @@ function SubmitOrderModal({ userId, onClose, onDone, prefill, onWishlistSave }: 
 
 // ── OrderDetailModal ──────────────────────────────────────────────────────────
 
-function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, onRefresh, onNotesRead }: { order: Order; isAdmin: boolean; adminName?: string; currentUserId: string; onClose: () => void; onRefresh: () => void; onNotesRead?: () => void }) {
+// Terminal statuses a customer can re-order from (a fresh scrape, new order).
+const TERMINAL_STATUSES = ['expired', 'cancelled', 'rejected']
+
+function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, onRefresh, onNotesRead, onReorder }: { order: Order; isAdmin: boolean; adminName?: string; currentUserId: string; onClose: () => void; onRefresh: () => void; onNotesRead?: () => void; onReorder?: (order: Order) => void }) {
   const [view, setView] = useState<'detail' | 'calculate' | 'reject' | 'billing' | 'notes'>('detail')
   const [notesUnread, setNotesUnread] = useState(0)
   const autoDeliveryFee =
@@ -671,6 +674,7 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
     order.wave_sync_status === 'synced' ? 'synced' : order.wave_sync_status === 'failed' ? 'failed' : 'idle'
   )
   const [copied, setCopied] = useState(false)
+  const [urlCopied, setUrlCopied] = useState(false)
 
   // Affiliate URL (admin only)
   const [affSettings, setAffSettings] = useState<Record<string, string>>({})
@@ -1062,8 +1066,25 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
               )
               return null
             })()}
+            {order.url && (
+              <div className={styles.detailRow}>
+                <span className={styles.detailKey}>Product</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <a href={order.url} target="_blank" rel="noopener noreferrer" className={styles.detailLink}>
+                    View product ↗
+                  </a>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(order.url).then(() => { setUrlCopied(true); setTimeout(() => setUrlCopied(false), 2000) }) }}
+                    title="Copy product link"
+                    aria-label="Copy product link"
+                    style={{ fontSize: 11, padding: '2px 8px', background: urlCopied ? 'rgba(22,163,74,0.1)' : 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', color: urlCopied ? '#16a34a' : 'var(--text-muted)', fontWeight: 600 }}
+                  >
+                    {urlCopied ? '✓ Copied' : '📋 Copy link'}
+                  </button>
+                </span>
+              </div>
+            )}
             {([
-              ['Product URL', order.url, true],
               ['Description', order.description],
               ['Category', order.category],
               ['Quantity', order.qty],
@@ -1200,6 +1221,15 @@ function OrderDetailModal({ order, isAdmin, adminName, currentUserId, onClose, o
                 disabled={loading}
               >
                 {loading ? <Spinner /> : 'Confirm & Proceed · تأكيد المضي قدماً'}
+              </button>
+            )}
+            {!isAdmin && TERMINAL_STATUSES.includes(order.status) && order.url && onReorder && (
+              <button
+                className={styles.btnPrimary}
+                style={{ width: '100%', marginTop: 20 }}
+                onClick={() => { onReorder(order); onClose() }}
+              >
+                🔄 Reorder · إعادة الطلب
               </button>
             )}
           </div>
@@ -1623,6 +1653,9 @@ export default function Dashboard() {
   const [showCreateAgent, setShowCreateAgent] = useState(false)
   const [wishlist, setWishlist] = useState<WishlistItem[]>([])
   const [wishlistOrderPrefill, setWishlistOrderPrefill] = useState<WishlistItem | null>(null)
+  // Reorder: open New Order prefilled with a terminal order's URL; the modal
+  // re-scrapes for a fresh price (never reuses the old item_price).
+  const [reorderPrefill, setReorderPrefill] = useState<{ url?: string; description?: string; note?: string; photo_url?: string } | null>(null)
   const fetchingPhotosRef = useRef<Set<string>>(new Set())
   // Search & bulk select (admin)
   const [adminSearch, setAdminSearch] = useState('')
@@ -2700,9 +2733,9 @@ export default function Dashboard() {
       {showNewOrder && profile && (
         <SubmitOrderModal
           userId={profile.id}
-          onClose={() => { setShowNewOrder(false); setWishlistOrderPrefill(null) }}
+          onClose={() => { setShowNewOrder(false); setWishlistOrderPrefill(null); setReorderPrefill(null) }}
           onDone={() => { fetchData(); toast('Order submitted! · تم إرسال الطلب') }}
-          prefill={wishlistOrderPrefill ? { url: wishlistOrderPrefill.url, description: wishlistOrderPrefill.description, note: wishlistOrderPrefill.notes, photo_url: wishlistOrderPrefill.photo_url } : undefined}
+          prefill={reorderPrefill ?? (wishlistOrderPrefill ? { url: wishlistOrderPrefill.url, description: wishlistOrderPrefill.description, note: wishlistOrderPrefill.notes, photo_url: wishlistOrderPrefill.photo_url } : undefined)}
           onWishlistSave={async (data) => {
             const { error } = await addToWishlist(profile.id, data)
             if (!error) { const wl = await getWishlist(profile.id); setWishlist(wl); toast('Saved to wishlist!') }
@@ -2710,7 +2743,7 @@ export default function Dashboard() {
         />
       )}
       {showTopUp && profile && <WalletTopUp userId={profile.id} open={true} onClose={() => setShowTopUp(false)} onSuccess={() => { fetchData(); toast('Top-up request sent! · تم إرسال طلب الشحن') }} />}
-      {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} adminName={isAdmin ? (profile?.full_name || 'Admin') : undefined} currentUserId={profile?.id || ''} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} onNotesRead={() => setNoteUnreadCounts(prev => ({ ...prev, [selectedOrder.id]: 0 }))} />}
+      {selectedOrder && <OrderDetailModal order={selectedOrder} isAdmin={isAdmin} adminName={isAdmin ? (profile?.full_name || 'Admin') : undefined} currentUserId={profile?.id || ''} onClose={() => setSelectedOrder(null)} onRefresh={() => { fetchData(); toast('Order updated!') }} onNotesRead={() => setNoteUnreadCounts(prev => ({ ...prev, [selectedOrder.id]: 0 }))} onReorder={(o) => { setReorderPrefill({ url: o.url, description: o.description, note: o.note ?? undefined, photo_url: o.photo_url ?? undefined }); setPage('orders'); setShowNewOrder(true) }} />}
       {topUpUser && <TopUpModal user={topUpUser} onClose={() => setTopUpUser(null)} onDone={() => { fetchData(); toast('Balance added! · تمت إضافة الرصيد') }} />}
       {selectedCustomer && isAdmin && profile && (
         <AdminCustomerProfile
