@@ -1,0 +1,27 @@
+name: Order Expiry Cron
+
+# Hourly trigger for the order-expiry job. Vercel Hobby only allows daily
+# crons, so GitHub Actions drives the true-hourly schedule by hitting the
+# deployed endpoint with the shared CRON_SECRET.
+on:
+  schedule:
+    # Top of every hour (UTC). GitHub may delay runs under load; that's fine —
+    # the route is idempotent and dedupes per customer.
+    - cron: '0 * * * *'
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call order-expiry endpoint
+        run: |
+          code=$(curl -sS -o /tmp/body.txt -w '%{http_code}' \
+            -X POST "https://shipiq1.vercel.app/api/cron/order-expiry" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $code"
+          cat /tmp/body.txt
+          echo
+          # Fail the run on non-2xx so a broken cron is visible in the Actions tab.
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ]
